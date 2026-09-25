@@ -391,3 +391,16 @@ utility.
 **Meta-lesson:** "I added `hidden`" is not evidence the thing is hidden. For
 CSS changes the browser is the only authority, and the check costs one
 `evaluate_script`.
+
+## Declutter requests: remove only what was named
+
+**Mistake:** Asked to hide "the subtitle of the header and the KPIs and graphs"
+on mobile analytics, I also hid the whole Platform totals panel and the
+Overview tab, reasoning the tab would be "empty". The user wanted the header
+and Overview kept, with only the subtitles gone.
+
+**Rule:**
+- When a "make it simpler" request is ambiguous about scope, pick the
+  **smallest** reading (hide the text lines named), not the largest.
+- Never remove a whole section, tab, or navigation entry that the user did not
+  name. If you think one would end up empty, ask first.

@@ -85,6 +85,7 @@ export function StatTile({
 
       {meta && (
         <p
+          data-slot="stat-meta"
           className={cn(
             'mt-0.5 truncate text-[0.8125rem] text-muted-foreground',
             metaClassName
@@ -211,7 +212,7 @@ export function InsetTile({
         {value}
       </p>
       {meta && (
-        <p className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
+        <p data-slot="stat-meta" className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
       )}
     </div>
   )

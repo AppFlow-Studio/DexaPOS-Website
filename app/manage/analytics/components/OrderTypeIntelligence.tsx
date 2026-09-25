@@ -6,6 +6,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { cn } from '@/lib/utils'
+import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
@@ -15,6 +21,8 @@ import { PanelSection, PanelSubLabel } from '@/components/dashboard/shell/PanelS
 import { InsetTile } from '@/components/dashboard/shell/StatTile'
 import { AnalyticsTooltip, CATEGORY_AXIS_WIDTH, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import type { ChannelStat } from '@/app/manage/actions/hq-platform/analytics'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,12 +54,24 @@ const TYPE_FILL: Record<string, string> = {
   catering: '#ec4899',
 }
 
+/** Mobile column meta for the per-merchant type mix table. */
+const TYPE_MIX_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'dineIn', label: 'Dine In' },
+  { id: 'takeout', label: 'Takeout' },
+  { id: 'delivery', label: 'Delivery', defaultHidden: true },
+  { id: 'online', label: 'Online', defaultHidden: true },
+]
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function OrderTypeIntelligence() {
   const [days, setDays] = useState(30)
   const { data, isLoading } = useOrderTypeIntelligence(days)
   const isMobile = useIsMobile()
+  const merchantPage = useClientPagination(data?.merchantBreakdown ?? [])
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => initialHiddenColumns(TYPE_MIX_COLUMNS))
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
 
   const periodSelect = (
     <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -274,37 +294,56 @@ export function OrderTypeIntelligence() {
           <PanelSection
             label="Per-merchant type mix"
             caption={`Top ${data.merchantBreakdown.length} merchants — share of orders by type`}
+            action={
+              <MobileColumnsButton columns={TYPE_MIX_COLUMNS} hidden={hiddenCols} onChange={setHiddenCols} />
+            }
           >
-            <Table variant="data" className="min-w-[480px]">
+            {/* Min-width lifted on mobile so hidden columns actually shrink the
+                table rather than leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[480px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Dine In</TableHead>
-                  <TableHead className="text-right">Takeout</TableHead>
-                  <TableHead className="text-right">Delivery</TableHead>
-                  <TableHead className="text-right">Online</TableHead>
+                  {showCol('dineIn') && <TableHead className="text-right">Dine In</TableHead>}
+                  {showCol('takeout') && <TableHead className="text-right">Takeout</TableHead>}
+                  {showCol('delivery') && <TableHead className="text-right">Delivery</TableHead>}
+                  {showCol('online') && <TableHead className="text-right">Online</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.merchantBreakdown.map(row => (
+                {merchantPage.pageRows.map(row => (
                   <TableRow key={row.merchantId}>
                     <TableCell className="font-medium">{row.merchantName}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {row.dineInPct > 0 ? `${row.dineInPct}%` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {row.takeoutPct > 0 ? `${row.takeoutPct}%` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {row.deliveryPct > 0 ? `${row.deliveryPct}%` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {row.onlinePct > 0 ? `${row.onlinePct}%` : '—'}
-                    </TableCell>
+                    {showCol('dineIn') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {row.dineInPct > 0 ? `${row.dineInPct}%` : '—'}
+                      </TableCell>
+                    )}
+                    {showCol('takeout') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {row.takeoutPct > 0 ? `${row.takeoutPct}%` : '—'}
+                      </TableCell>
+                    )}
+                    {showCol('delivery') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {row.deliveryPct > 0 ? `${row.deliveryPct}%` : '—'}
+                      </TableCell>
+                    )}
+                    {showCol('online') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {row.onlinePct > 0 ? `${row.onlinePct}%` : '—'}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              className="border-t-0 pt-0"
+              pagination={merchantPage.pagination}
+              onPageChange={merchantPage.setPage}
+              itemLabel="merchants"
+            />
           </PanelSection>
         </Panel>
       )}

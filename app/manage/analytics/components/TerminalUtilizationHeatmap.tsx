@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo } from 'react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
@@ -8,14 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import {
-    MobileColumnsButton,
-    initialHiddenColumns,
-    type ReportColumn,
-} from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import {
     ResponsiveContainer,
     BarChart,
@@ -31,11 +27,8 @@ import {
     Ghost,
     AlertTriangle,
     ShieldCheck,
-    ChevronDown,
     ChevronRight,
-    ArrowUpDown,
     ExternalLink,
-    Recycle,
     Monitor,
     TrendingDown,
     BarChart3,
@@ -77,71 +70,256 @@ const TIER_CONFIG: Record<UtilizationTier, {
 type SortKey = 'utilizationRate' | 'totalStations' | 'zombieStations' | 'merchantName'
 
 /**
- * Mobile column meta for the merchant terminal report.
- *
- * Heatmap is hidden by default on mobile: it is a wrapping grid of 24px squares,
- * one per station, so it cannot narrow — it only overflows. It stays one tap
- * away, and is always present on desktop. Util. Rate is the default sort key and
- * the measure the panel exists for, so it is the number kept beside the name.
+ * The merchant list has no column headers to click, so sorting is one picker.
+ * Each option fixes its own direction — the useful one for that measure.
  */
-const MERCHANT_TERMINAL_COLUMNS: ReportColumn[] = [
-    { id: 'merchant', label: 'Merchant', locked: true },
-    { id: 'stations', label: 'Stations', defaultHidden: true },
-    { id: 'utilRate', label: 'Util. Rate' },
-    { id: 'zombies', label: 'Zombies', defaultHidden: true },
-    { id: 'tier', label: 'Tier', defaultHidden: true },
-    { id: 'heatmap', label: 'Heatmap', defaultHidden: true },
-]
+const SORT_OPTIONS: Record<string, { label: string; key: SortKey; dir: 'asc' | 'desc' }> = {
+    utilization: { label: 'Lowest utilization', key: 'utilizationRate', dir: 'asc' },
+    inactive: { label: 'Most inactive', key: 'zombieStations', dir: 'desc' },
+    stations: { label: 'Most stations', key: 'totalStations', dir: 'desc' },
+    name: { label: 'Name A–Z', key: 'merchantName', dir: 'asc' },
+}
+type SortOption = keyof typeof SORT_OPTIONS
 
 // ============================================================================
-// Heatmap Cell — visual grid of stations per merchant
+// Merchant list pieces
 // ============================================================================
 
-function StationHeatmapGrid({ merchant }: { merchant: MerchantTerminalUtilization }) {
+type Station = MerchantTerminalUtilization['stations'][number]
+
+const STATION_TYPE_LABELS: Record<string, string> = {
+    kds: 'KDS',
+    self_service: 'Self-service',
+}
+
+/** `register` → "Register", `self_service` → "Self-service", `kds` → "KDS". */
+function stationTypeLabel(type: string): string {
+    if (STATION_TYPE_LABELS[type]) return STATION_TYPE_LABELS[type]
+    const words = type.replace(/_/g, ' ')
+    return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function fmtLastTxn(s: Station): string {
+    if (!s.lastTransactionAt) return 'Never'
+    return s.daysSinceLastTxn === 0 ? 'Today' : `${s.daysSinceLastTxn}d ago`
+}
+
+/**
+ * Status in words. Reclaimable folds in here rather than taking a column: it
+ * is exactly the inactive (no txn in 30+ days) condition, so a separate column
+ * only ever repeated this one.
+ */
+function StationStatus({ station }: { station: Station }) {
+    // KDS screens show tickets and never ring up orders, so they get no
+    // usage verdict — and are not counted in the merchant's utilization.
+    if (!station.takesOrders) return <>Kitchen display</>
+    if (station.isZombie) {
+        return (
+            <span title="No transaction in 30+ days">
+                <span className="font-medium text-foreground">Inactive</span> · reclaimable
+            </span>
+        )
+    }
+    if (station.activeDays === 0) return <>Idle</>
+    if (station.avgOrdersPerActiveDay < 1) return <>Low</>
+    return <>Active</>
+}
+
+/**
+ * One merchant's stations. Five columns, not eight: Active Days and Avg/Day
+ * restated Orders, and the table sits indented under the merchant name so it
+ * reads as that row's detail rather than a second report. Location appears
+ * only when the merchant has more than one.
+ */
+function StationDetailTable({ stations }: { stations: Station[] }) {
+    const showLocation = new Set(stations.map(s => s.locationId)).size > 1
     return (
-        <TooltipProvider delayDuration={200}>
-            <div className="flex flex-wrap gap-1">
-                {merchant.stations.map((station) => {
-                    let bg = 'bg-green-500'
-                    let label = `Active — ${station.totalOrders} orders, ${station.activeDays} active days`
-
-                    if (station.isZombie) {
-                        bg = 'bg-red-500'
-                        label = station.lastTransactionAt
-                            ? `Zombie — no txn in ${station.daysSinceLastTxn}d`
-                            : 'Zombie — never processed a txn'
-                    } else if (station.activeDays === 0) {
-                        bg = 'bg-gray-300'
-                        label = 'No activity in period'
-                    } else if (station.avgOrdersPerActiveDay < 1) {
-                        bg = 'bg-yellow-400'
-                        label = `Low usage — ${station.avgOrdersPerActiveDay} avg orders/day`
-                    }
-
-                    return (
-                        <Tooltip key={station.stationId}>
-                            <TooltipTrigger asChild>
-                                <div
-                                    className={`h-6 w-6 rounded-sm ${bg} cursor-default transition-transform hover:scale-125`}
-                                    aria-label={`${station.stationName}: ${label}`}
-                                />
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs max-w-55">
-                                <p className="font-semibold">{station.stationName}</p>
-                                <p className="text-muted-foreground">{station.stationType}</p>
-                                <p className="mt-1">{label}</p>
-                                {station.totalOrders > 0 && (
-                                    <p className="mt-0.5 text-muted-foreground">
-                                        {station.avgOrdersPerActiveDay} avg orders/active day
-                                    </p>
-                                )}
-                            </TooltipContent>
-                        </Tooltip>
-                    )
-                })}
-            </div>
-        </TooltipProvider>
+        <Table variant="data" className="min-w-[560px]">
+            <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                    <TableHead>Station</TableHead>
+                    {showLocation && <TableHead>Location</TableHead>}
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Orders</TableHead>
+                    <TableHead className="text-right">Last Txn</TableHead>
+                    <TableHead>Status</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {stations.map((s) => (
+                    <TableRow key={s.stationId}>
+                        <TableCell className="font-medium"><span className="block truncate">{s.stationName}</span></TableCell>
+                        {showLocation && (
+                            <TableCell className="text-sm text-muted-foreground">{s.locationName ?? '—'}</TableCell>
+                        )}
+                        <TableCell className="text-sm text-muted-foreground">{stationTypeLabel(s.stationType)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{s.totalOrders.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">{fmtLastTxn(s)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground"><StationStatus station={s} /></TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
     )
+}
+
+/**
+ * One station as a card, for phones: name and status on top, then the desktop
+ * table's columns as labelled values — each carries its own label, so nothing
+ * depends on a header. Same shape as Fleet Health's device cards.
+ */
+function StationCard({ station: s, showLocation }: { station: Station; showLocation: boolean }) {
+    const info: Array<{ label: string; value: string; wide?: boolean }> = [
+        { label: 'Type', value: stationTypeLabel(s.stationType) },
+        // Orders and last transaction mean nothing for a screen that never
+        // rings one up.
+        ...(s.takesOrders
+            ? [
+                { label: 'Orders', value: s.totalOrders.toLocaleString() },
+                { label: 'Last txn', value: fmtLastTxn(s) },
+            ]
+            : []),
+        ...(showLocation ? [{ label: 'Location', value: s.locationName ?? '—', wide: true }] : []),
+    ]
+
+    return (
+        <div className="rounded-2xl bg-muted/30 p-3">
+            <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 text-sm font-medium">{s.stationName}</p>
+                <span className="shrink-0 text-xs text-muted-foreground"><StationStatus station={s} /></span>
+            </div>
+            {/* Label above value, three to a row: side-by-side label/value pairs
+                in two columns staggered the values and left gaps. Location is
+                the long one, so it takes the full width. */}
+            <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2.5">
+                {info.map(i => (
+                    <div key={i.label} className={cn('min-w-0', i.wide && 'col-span-3')}>
+                        <dt className="text-[11px] text-muted-foreground">{i.label}</dt>
+                        <dd className="truncate text-sm font-medium tabular-nums">{i.value}</dd>
+                    </div>
+                ))}
+            </dl>
+        </div>
+    )
+}
+
+/**
+ * One merchant as a single line — name, then its numbers right beside it —
+ * that expands into its stations. Same pattern as Fleet Health's All devices:
+ * no column header to read across, no fill on the row, so the station table is
+ * the only surface. Starts collapsed.
+ *
+ * @param nameHint Shown after the name when another merchant in the list has
+ *   the same name (their locations), so the two rows can be told apart.
+ */
+function MerchantUtilizationRow({
+    merchant: m,
+    nameHint,
+    isMobile,
+}: {
+    merchant: MerchantTerminalUtilization
+    nameHint: string | null
+    isMobile: boolean
+}) {
+    const [expanded, setExpanded] = useState(false)
+    const detailId = `terminal-stations-${m.merchantId}`
+
+    return (
+        <div>
+            <div className="flex items-center gap-1 rounded-xl transition-colors hover:bg-muted/40">
+                <button
+                    type="button"
+                    onClick={() => setExpanded(e => !e)}
+                    aria-expanded={expanded}
+                    aria-controls={expanded ? detailId : undefined}
+                    // Every row shares one grid (chevron · name · rate · detail), so
+                    // the rates line up and read straight down the list — the
+                    // header-less look without the ragged starts. A phone shows
+                    // the name alone, and the button hugs it so the merchant link
+                    // sits right beside the name rather than at the far edge.
+                    className={cn(
+                        'grid min-w-0 items-center gap-x-3 rounded-xl px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        isMobile ? 'grid-cols-[1rem_minmax(0,1fr)]' : 'flex-1 grid-cols-[1rem_minmax(0,16rem)_3.5rem_minmax(0,1fr)]'
+                    )}
+                >
+                    <ChevronRight className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
+                    <span
+                        className="min-w-0 truncate text-sm font-semibold"
+                        title={nameHint ? `${m.merchantName} · ${nameHint}` : m.merchantName}
+                    >
+                        {m.merchantName}
+                        {/* A phone shows the name alone. */}
+                        {nameHint && !isMobile && <span className="font-normal text-muted-foreground"> · {nameHint}</span>}
+                    </span>
+                    {!isMobile && (
+                    <>
+                        {/* The rate leads: it is the number being compared. */}
+                        <span className="text-right text-sm font-semibold tabular-nums">{m.utilizationRate}%</span>
+                        {/* Tier is the rate put into a bracket, so it reads as text
+                            beside it. No tier colour — see TIER_CONFIG. */}
+                        <span className="min-w-0 truncate text-xs tabular-nums text-muted-foreground">
+                            {TIER_CONFIG[m.tier].label} · {m.activeStations} of {m.totalStations} stations active
+                            {m.zombieStations > 0 && (
+                                <>
+                                    {' · '}
+                                    <span className="font-medium text-foreground" title="No transaction in 30+ days">
+                                        {m.zombieStations} inactive
+                                    </span>
+                                </>
+                            )}
+                        </span>
+                    </>
+                    )}
+                </button>
+                <Link
+                    href={`/manage/merchants/${m.merchantId}`}
+                    aria-label={`Open ${m.merchantName}`}
+                    title="Open merchant"
+                    className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        !isMobile && 'mr-1'
+                    )}
+                >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+            </div>
+
+            {expanded && (
+                isMobile ? (
+                    <div id={detailId} className="space-y-2 pb-2 pt-1">
+                        {m.stations.map(s => (
+                            <StationCard
+                                key={s.stationId}
+                                station={s}
+                                showLocation={new Set(m.stations.map(st => st.locationId)).size > 1}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div id={detailId} className="pb-2 pl-8 pt-1">
+                        <StationDetailTable stations={m.stations} />
+                    </div>
+                )
+            )}
+        </div>
+    )
+}
+
+/**
+ * For merchants whose name appears more than once in the list, their location
+ * names — the only thing on screen that tells the rows apart.
+ */
+function duplicateNameHints(merchants: MerchantTerminalUtilization[]): Map<string, string> {
+    const byName = new Map<string, number>()
+    merchants.forEach(m => byName.set(m.merchantName, (byName.get(m.merchantName) ?? 0) + 1))
+    const hints = new Map<string, string>()
+    merchants.forEach(m => {
+        if ((byName.get(m.merchantName) ?? 0) < 2) return
+        const names = [...new Set(m.stations.map(s => s.locationName).filter((n): n is string => !!n))]
+        if (names.length === 0) return
+        hints.set(m.merchantId, names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2}` : names.join(', '))
+    })
+    return hints
 }
 
 // ============================================================================
@@ -173,7 +351,7 @@ function ZombieInsightBanner({
         <Panel>
             <PanelSection
                 icon={Ghost}
-                label={`${merchantsWithZombies.length} merchant${merchantsWithZombies.length !== 1 ? 's have' : ' has'} ${totalZombieStations} zombie tablet${totalZombieStations !== 1 ? 's' : ''}`}
+                label={`${merchantsWithZombies.length} merchant${merchantsWithZombies.length !== 1 ? 's have' : ' has'} ${totalZombieStations} inactive tablet${totalZombieStations !== 1 ? 's' : ''}`}
                 caption="No transaction in 30+ days"
                 action={
                     <Link href={`/manage/merchants/${worstMerchant.merchantId}`}>
@@ -206,56 +384,23 @@ function ZombieInsightBanner({
 }
 
 // ============================================================================
-// Main Component
+// Utilization Distribution — rendered by the page beside the stability chart
 // ============================================================================
 
-export default function TerminalUtilizationHeatmap() {
-    const [days, setDays] = useState<number>(30)
-    const [sortKey, setSortKey] = useState<SortKey>('utilizationRate')
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-    const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
-    const [filterTier, setFilterTier] = useState<'all' | UtilizationTier>('all')
+/**
+ * Merchants per utilization bracket. Lives outside the main component because
+ * the page lays it out next to "Stability by app version"; `days` comes from
+ * the page so it still follows Terminal Utilization's range picker. Shares the
+ * main component's query, so it costs no extra fetch.
+ */
+export function UtilizationDistribution({ days }: { days: number }) {
     const isMobile = useIsMobile()
-    const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
-        initialHiddenColumns(MERCHANT_TERMINAL_COLUMNS)
-    )
-    const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
-    // +1 for the chevron column, which has no meta entry but occupies a cell.
-    // The empty state and the expanded drill-down row both span the full width.
-    const visibleColCount = MERCHANT_TERMINAL_COLUMNS.filter(c => showCol(c.id)).length + 1
-
     const { data, isLoading } = useTerminalUtilization(days)
+    // Read into a local so the memo's dependency is exactly what it uses.
+    const merchants = data?.merchants
 
-    const handleSort = (key: SortKey) => {
-        if (sortKey === key) {
-            setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'))
-        } else {
-            setSortKey(key)
-            setSortDir(key === 'merchantName' ? 'asc' : 'asc')
-        }
-    }
-
-    const filteredAndSorted = useMemo(() => {
-        if (!data?.merchants) return []
-        let list = [...data.merchants]
-
-        if (filterTier !== 'all') {
-            list = list.filter(m => m.tier === filterTier)
-        }
-
-        return list.sort((a, b) => {
-            let aVal: number | string = a[sortKey]
-            let bVal: number | string = b[sortKey]
-            if (typeof aVal === 'string' && typeof bVal === 'string') {
-                return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
-            }
-            return sortDir === 'asc' ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal)
-        })
-    }, [data?.merchants, sortKey, sortDir, filterTier])
-
-    // Build chart data for the utilization distribution bar chart
     const chartData = useMemo(() => {
-        if (!data?.merchants) return []
+        if (!merchants) return []
         const buckets = [
             { range: '0-10%', min: 0, max: 10, count: 0, color: '#ef4444' },
             { range: '10-25%', min: 10, max: 25, count: 0, color: '#f97316' },
@@ -263,12 +408,112 @@ export default function TerminalUtilizationHeatmap() {
             { range: '50-75%', min: 50, max: 75, count: 0, color: '#84cc16' },
             { range: '75-100%', min: 75, max: 100.1, count: 0, color: '#22c55e' },
         ]
-        data.merchants.forEach(m => {
+        merchants.forEach(m => {
             const bucket = buckets.find(b => m.utilizationRate >= b.min && m.utilizationRate < b.max)
             if (bucket) bucket.count += 1
         })
         return buckets
-    }, [data?.merchants])
+    }, [merchants])
+
+    if (isLoading) return <Skeleton className="h-75 w-full rounded-3xl" />
+
+    return (
+        <Panel className="min-w-0">
+            <PanelSection
+                label="Utilization distribution"
+                caption={`Merchants per utilization bracket, last ${days} days`}
+            >
+                {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={chartData} barCategoryGap="20%" margin={{ bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis
+                                dataKey="range"
+                                tick={{ fontSize: 10, angle: -35, textAnchor: 'end' }}
+                                tickLine={false}
+                                axisLine={false}
+                                interval={0}
+                                height={48}
+                            />
+                            <YAxis
+                                allowDecimals={false}
+                                tick={{ fontSize: 11 }}
+                                tickLine={false}
+                                axisLine={false}
+                                width={isMobile ? valueAxisWidthMobile(3) : undefined}
+                            />
+                            <RechartsTooltip
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                        const d = payload[0].payload
+                                        return (
+                                            <div className="bg-background border rounded-lg p-3 shadow-sm text-xs">
+                                                <p className="font-medium">{d.range} Utilization</p>
+                                                <p className="text-muted-foreground mt-1">
+                                                    {d.count} merchant{d.count !== 1 ? 's' : ''}
+                                                </p>
+                                            </div>
+                                        )
+                                    }
+                                    return null
+                                }}
+                            />
+                            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                {chartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-65 flex items-center justify-center text-muted-foreground text-sm">
+                        No data available
+                    </div>
+                )}
+            </PanelSection>
+        </Panel>
+    )
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+/** `days` is owned by the page so {@link UtilizationDistribution} can follow it. */
+export default function TerminalUtilizationHeatmap({
+    days,
+    onDaysChange,
+}: {
+    days: number
+    onDaysChange: (days: number) => void
+}) {
+    const [sortOption, setSortOption] = useState<SortOption>('utilization')
+    const [filterTier, setFilterTier] = useState<'all' | UtilizationTier>('all')
+    const isMobile = useIsMobile()
+
+    const { data, isLoading } = useTerminalUtilization(days)
+    // Read into a local so the memos' dependency is exactly what they use.
+    const merchants = data?.merchants
+
+    const filteredAndSorted = useMemo(() => {
+        if (!merchants) return []
+        const { key, dir } = SORT_OPTIONS[sortOption]
+        const list = filterTier === 'all'
+            ? [...merchants]
+            : merchants.filter(m => m.tier === filterTier)
+
+        return list.sort((a, b) => {
+            const aVal = a[key]
+            const bVal = b[key]
+            if (typeof aVal === 'string' && typeof bVal === 'string') {
+                return dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+            }
+            return dir === 'asc' ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal)
+        })
+    }, [merchants, sortOption, filterTier])
+
+    const nameHints = useMemo(() => duplicateNameHints(merchants ?? []), [merchants])
+    const { pageRows, pagination, setPage } = useClientPagination(filteredAndSorted)
 
     return (
         <>
@@ -279,13 +524,6 @@ export default function TerminalUtilizationHeatmap() {
             {/* Section Header */}
             <div className="flex flex-wrap items-center gap-3 justify-between">
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <Tablet className="h-5 w-5 text-primary shrink-0" />
-                    <div className="min-w-0">
-                        <h2 className="text-lg font-semibold">Terminal Utilization</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Identify underused tablets — reclaim hardware or adjust billing
-                        </p>
-                    </div>
                     {!isLoading && data && (
                         <span
                             className={`flex shrink-0 items-center gap-1 text-sm ${
@@ -299,7 +537,7 @@ export default function TerminalUtilizationHeatmap() {
                         </span>
                     )}
                 </div>
-                <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
+                <Select value={String(days)} onValueChange={(v) => onDaysChange(Number(v))}>
                     <SelectTrigger className="w-32.5 shrink-0">
                         <SelectValue />
                     </SelectTrigger>
@@ -326,10 +564,10 @@ export default function TerminalUtilizationHeatmap() {
                         <PanelSection label="Terminal utilization" icon={Monitor}>
                             <StatRow columns={4}>
                                 <StatTile
-                                    label="Total Stations"
+                                    label="Order Stations"
                                     icon={<Monitor />}
                                     value={data.summary.totalStations}
-                                    meta={`${data.summary.totalActiveStations} active across ${data.summary.totalMerchants} merchants`}
+                                    meta={`${data.summary.totalActiveStations} active · kitchen displays not counted`}
                                 />
                                 <StatTile
                                     label="Active Utilization Rate"
@@ -338,7 +576,7 @@ export default function TerminalUtilizationHeatmap() {
                                     meta={`${data.summary.totalActiveStations} of ${data.summary.totalStations} tablets active`}
                                 />
                                 <StatTile
-                                    label="Zombie Tablets"
+                                    label="Inactive Tablets"
                                     icon={<Ghost />}
                                     value={data.summary.totalZombieStations}
                                     meta={
@@ -357,7 +595,7 @@ export default function TerminalUtilizationHeatmap() {
                         </PanelSection>
                     </Panel>
 
-                    {/* Zombie Insight Banner */}
+                    {/* Inactive-tablet banner */}
                     {data.merchants.some(m => m.zombieStations > 0) && (
                         <ZombieInsightBanner
                             merchants={data.merchants}
@@ -367,345 +605,73 @@ export default function TerminalUtilizationHeatmap() {
                         />
                     )}
 
-                    {/* Utilization Distribution Chart + Merchant Table */}
-                    <div className="grid gap-4 lg:grid-cols-7">
-                        {/* Distribution Chart */}
-                        <Panel className="lg:col-span-3">
-                            <PanelSection
-                                label="Utilization distribution"
-                                caption="Number of merchants per utilization bracket"
-                            >
-                                {chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height={280}>
-                                        <BarChart data={chartData} barCategoryGap="20%" margin={{ bottom: 20 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                            <XAxis
-                                                dataKey="range"
-                                                tick={{ fontSize: 10, angle: -35, textAnchor: 'end' }}
-                                                tickLine={false}
-                                                axisLine={false}
-                                                interval={0}
-                                                height={48}
-                                            />
-                                            <YAxis
-                                                allowDecimals={false}
-                                                tick={{ fontSize: 11 }}
-                                                tickLine={false}
-                                                axisLine={false}
-                                                width={isMobile ? valueAxisWidthMobile(3) : undefined}
-                                            />
-                                            <RechartsTooltip
-                                                content={({ active, payload }) => {
-                                                    if (active && payload && payload.length) {
-                                                        const d = payload[0].payload
-                                                        return (
-                                                            <div className="bg-background border rounded-lg p-3 shadow-sm text-xs">
-                                                                <p className="font-medium">{d.range} Utilization</p>
-                                                                <p className="text-muted-foreground mt-1">
-                                                                    {d.count} merchant{d.count !== 1 ? 's' : ''}
-                                                                </p>
-                                                            </div>
-                                                        )
-                                                    }
-                                                    return null
-                                                }}
-                                            />
-                                            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                                                {chartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))}
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <div className="h-65 flex items-center justify-center text-muted-foreground text-sm">
-                                        No data available
-                                    </div>
-                                )}
-                            </PanelSection>
-                        </Panel>
-
-                        {/* Merchant Table */}
-                        <Panel className="lg:col-span-4">
-                            <PanelSection
-                                label="Merchant terminal report"
-                                caption={
-                                    filterTier === 'all'
-                                        ? `All ${data.summary.totalMerchants} merchants`
-                                        : `${filteredAndSorted.length} ${filterTier} merchants`
-                                }
-                                action={
-                                    <div className="flex items-center gap-2">
-                                        <MobileColumnsButton
-                                            columns={MERCHANT_TERMINAL_COLUMNS}
-                                            hidden={hiddenCols}
-                                            onChange={setHiddenCols}
-                                        />
-                                        <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
-                                            <SelectTrigger className="h-9 w-40 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Tiers</SelectItem>
-                                                <SelectItem value="critical">Critical (&lt;25%)</SelectItem>
-                                                <SelectItem value="underutilized">Underutilized (&lt;50%)</SelectItem>
-                                                <SelectItem value="healthy">Healthy (≥50%)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                }
-                            >
-                                <div className="max-h-112.5 overflow-auto">
-                                    {/* Min-width lifted on mobile so hidden columns actually
-                                        narrow the table instead of scrolling sideways. */}
-                                    <Table variant="data" className={cn(!isMobile && 'min-w-[860px]')}>
-                                        <TableHeader className="[&_tr]:border-0">
-                                            <TableRow>
-                                                <TableHead className="w-6"></TableHead>
-                                                <TableHead
-                                                    className="cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('merchantName')}
-                                                >
-                                                    <span className="flex items-center gap-1">
-                                                        Merchant
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                {showCol('stations') && (
-                                                    <TableHead
-                                                        className="text-center cursor-pointer select-none hover:text-foreground"
-                                                        onClick={() => handleSort('totalStations')}
-                                                    >
-                                                        <span className="flex items-center justify-center gap-1">
-                                                            Stations
-                                                            <ArrowUpDown className="h-3 w-3" />
-                                                        </span>
-                                                    </TableHead>
-                                                )}
-                                                {showCol('utilRate') && (
-                                                    <TableHead
-                                                        className="text-center cursor-pointer select-none hover:text-foreground"
-                                                        onClick={() => handleSort('utilizationRate')}
-                                                    >
-                                                        <span className="flex items-center justify-center gap-1">
-                                                            Util. Rate
-                                                            <ArrowUpDown className="h-3 w-3" />
-                                                        </span>
-                                                    </TableHead>
-                                                )}
-                                                {showCol('zombies') && (
-                                                    <TableHead
-                                                        className="text-center cursor-pointer select-none hover:text-foreground"
-                                                        onClick={() => handleSort('zombieStations')}
-                                                    >
-                                                        <span className="flex items-center justify-center gap-1">
-                                                            Zombies
-                                                            <ArrowUpDown className="h-3 w-3" />
-                                                        </span>
-                                                    </TableHead>
-                                                )}
-                                                {showCol('tier') && <TableHead className="text-center">Tier</TableHead>}
-                                                {showCol('heatmap') && <TableHead className="text-center">Heatmap</TableHead>}
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredAndSorted.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={visibleColCount} className="text-center py-8 text-muted-foreground">
-                                                        <div className="flex flex-col items-center gap-2">
-                                                            <ShieldCheck className="h-8 w-8 opacity-30" />
-                                                            <p className="text-sm font-medium">No merchants in this tier</p>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : filteredAndSorted.map((m) => {
-                                                const tierCfg = TIER_CONFIG[m.tier]
-                                                const isExpanded = expandedMerchant === m.merchantId
-                                                return (
-                                                    <Fragment key={m.merchantId}>
-                                                        <TableRow
-                                                            className="cursor-pointer hover:bg-muted/50"
-                                                            onClick={() => setExpandedMerchant(isExpanded ? null : m.merchantId)}
-                                                        >
-                                                            <TableCell className="w-6 pr-0">
-                                                                {isExpanded
-                                                                    ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                                                    : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                                                            </TableCell>
-                                                            {/* TableCell is `whitespace-nowrap`, so a long merchant name
-                                                                sized this column to ~212px and pushed the table past its
-                                                                scroller — the Status column ended up off-screen and the
-                                                                row had to be scrolled sideways to read. Wrapping the name
-                                                                lets the table fit the viewport instead. */}
-                                                            <TableCell className="whitespace-normal">
-                                                                <Link
-                                                                    href={`/manage/merchants/${m.merchantId}`}
-                                                                    className="hover:underline font-medium text-sm flex items-start gap-1"
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                >
-                                                                    <span className="min-w-0">{m.merchantName}</span>
-                                                                    <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 opacity-40" />
-                                                                </Link>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {m.totalOrders.toLocaleString()} total orders
-                                                                </p>
-                                                            </TableCell>
-                                                            {showCol('stations') && (
-                                                                <TableCell className="text-center">
-                                                                    <span className="font-medium text-sm">
-                                                                        {m.activeStations}/{m.totalStations}
-                                                                    </span>
-                                                                </TableCell>
-                                                            )}
-                                                            {showCol('utilRate') && (
-                                                                <TableCell className="text-center">
-                                                                    <span className="text-sm font-semibold tabular-nums">
-                                                                        {m.utilizationRate}%
-                                                                    </span>
-                                                                </TableCell>
-                                                            )}
-                                                            {showCol('zombies') && (
-                                                                <TableCell className="text-center">
-                                                                    {m.zombieStations > 0 ? (
-                                                                        <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
-                                                                            <Ghost className="h-3 w-3" />
-                                                                            {m.zombieStations}
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="text-muted-foreground">—</span>
-                                                                    )}
-                                                                </TableCell>
-                                                            )}
-                                                            {showCol('tier') && (
-                                                                <TableCell className="text-center text-sm text-muted-foreground">
-                                                                    {tierCfg.label}
-                                                                </TableCell>
-                                                            )}
-                                                            {showCol('heatmap') && (
-                                                                <TableCell>
-                                                                    <StationHeatmapGrid merchant={m} />
-                                                                </TableCell>
-                                                            )}
-                                                        </TableRow>
-
-                                                        {/* Expanded Drill-down Row */}
-                                                        {isExpanded && (
-                                                            <TableRow className="bg-muted/30">
-                                                                {/* `whitespace-normal` so the drill-down, which is a block
-                                                                    of its own, does not inherit TableCell's nowrap and
-                                                                    report an inflated width to the parent's auto layout. */}
-                                                                <TableCell colSpan={visibleColCount} className="whitespace-normal p-2 sm:p-4">
-                                                                    <div className="min-w-0 space-y-3">
-                                                                        {/* Wraps rather than squeezing: a long merchant name
-                                                                            beside a `shrink-0` pill otherwise collapses the
-                                                                            heading to one word per line on a phone. */}
-                                                                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                                                                            <h4 className="min-w-0 text-sm font-semibold">Station Detail — {m.merchantName}</h4>
-                                                                            {m.reclaimableStations > 0 && (
-                                                                                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                                                                                    <Recycle className="h-3 w-3" />
-                                                                                    {m.reclaimableStations} reclaimable
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        {/* Same rule as the parent table: the min-width is what
-                                                                            forces sideways scrolling, so it lifts on mobile. A
-                                                                            7-column drill-down at 680px inside a ~300px panel was
-                                                                            unreadable — on a phone it keeps the three columns that
-                                                                            answer "is this station earning its keep" and drops the
-                                                                            rest, which are available at tablet width and up. */}
-                                                                        <Table
-                                                                            variant="data"
-                                                                            className={cn(
-                                                                                !isMobile && 'min-w-[680px]',
-                                                                                // Station names are the long value here; let
-                                                                                // them wrap so the drill-down fits the row it
-                                                                                // sits in rather than widening the parent.
-                                                                                isMobile && 'w-full table-fixed [&_td]:px-2 [&_th]:px-2 [&_td]:whitespace-normal'
-                                                                            )}
-                                                                        >
-                                                                            <TableHeader className="[&_tr]:border-0">
-                                                                                <TableRow>
-                                                                                    <TableHead>Station</TableHead>
-                                                                                    {!isMobile && <TableHead>Type</TableHead>}
-                                                                                    {/* Narrow, right-aligned numerics so the station
-                                                                                        name — the column that identifies the row —
-                                                                                        keeps the remaining width and shows in full. */}
-                                                                                    <TableHead className={cn('text-right', isMobile && 'w-12')}>Orders</TableHead>
-                                                                                    {!isMobile && <TableHead className="text-right">Active Days</TableHead>}
-                                                                                    {!isMobile && <TableHead className="text-right">Avg/Day</TableHead>}
-                                                                                    {!isMobile && <TableHead className="text-right">Last Txn</TableHead>}
-                                                                                    <TableHead className={cn('text-center', isMobile && 'w-16')}>Status</TableHead>
-                                                                                </TableRow>
-                                                                            </TableHeader>
-                                                                            <TableBody>
-                                                                                {m.stations.map((s) => (
-                                                                                    <TableRow key={s.stationId}>
-                                                                                        <TableCell className="font-medium">
-                                                                                            {/* Wraps rather than truncating: on a phone
-                                                                                                "Audit Fix Station UPDATED" became
-                                                                                                "Audit Fix S…", which is not enough to
-                                                                                                tell two stations apart. */}
-                                                                                            <span className="block sm:truncate">{s.stationName}</span>
-                                                                                            {/* The dropped columns fold into a caption
-                                                                                                here rather than disappearing, so a phone
-                                                                                                still gets type and recency. */}
-                                                                                            {isMobile && (
-                                                                                                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                                                                                                    {s.stationType}
-                                                                                                    {' · '}
-                                                                                                    {s.lastTransactionAt
-                                                                                                        ? s.daysSinceLastTxn === 0
-                                                                                                            ? 'today'
-                                                                                                            : `${s.daysSinceLastTxn}d ago`
-                                                                                                        : 'never'}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </TableCell>
-                                                                                        {!isMobile && <TableCell className="text-xs text-muted-foreground">{s.stationType}</TableCell>}
-                                                                                        <TableCell className="text-right tabular-nums">{s.totalOrders.toLocaleString()}</TableCell>
-                                                                                        {!isMobile && <TableCell className="text-right tabular-nums">{s.activeDays}</TableCell>}
-                                                                                        {!isMobile && <TableCell className="text-right tabular-nums">{s.avgOrdersPerActiveDay}</TableCell>}
-                                                                                        {!isMobile && (
-                                                                                            <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
-                                                                                                {s.lastTransactionAt ? (
-                                                                                                    s.daysSinceLastTxn === 0 ? 'Today' : `${s.daysSinceLastTxn}d ago`
-                                                                                                ) : (
-                                                                                                    <span>Never</span>
-                                                                                                )}
-                                                                                            </TableCell>
-                                                                                        )}
-                                                                                        <TableCell className="text-center text-sm text-muted-foreground">
-                                                                                            {s.isZombie ? (
-                                                                                                <span className="inline-flex items-center gap-1 font-medium">
-                                                                                                    <Ghost className="h-3 w-3" />
-                                                                                                    Zombie
-                                                                                                </span>
-                                                                                            ) : s.activeDays === 0 ? (
-                                                                                                'Idle'
-                                                                                            ) : s.avgOrdersPerActiveDay < 1 ? (
-                                                                                                'Low'
-                                                                                            ) : (
-                                                                                                'Active'
-                                                                                            )}
-                                                                                        </TableCell>
-                                                                                    </TableRow>
-                                                                                ))}
-                                                                            </TableBody>
-                                                                        </Table>
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )}
-                                                    </Fragment>
-                                                )
-                                            })}
-                                        </TableBody>
-                                    </Table>
+                    {/* Merchant list — its own row. One line per merchant, pages at
+                        10; no height cap, so nothing scrolls inside the page. */}
+                    <Panel>
+                        <PanelSection
+                            label="Merchant terminal report"
+                            caption={
+                                filterTier === 'all'
+                                    ? `All ${data.summary.totalMerchants} merchants`
+                                    : `${filteredAndSorted.length} ${filterTier} merchants`
+                            }
+                            action={
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Select value={sortOption} onValueChange={(v) => setSortOption(v as SortOption)}>
+                                        <SelectTrigger
+                                            aria-label="Sort merchants"
+                                            className="h-9 w-44 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none"
+                                        >
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(SORT_OPTIONS).map(([value, o]) => (
+                                                <SelectItem key={value} value={value}>{o.label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
+                                        <SelectTrigger
+                                            aria-label="Filter by tier"
+                                            className="h-9 w-40 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none"
+                                        >
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Tiers</SelectItem>
+                                            <SelectItem value="critical">Critical (&lt;25%)</SelectItem>
+                                            <SelectItem value="underutilized">Underutilized (&lt;50%)</SelectItem>
+                                            <SelectItem value="healthy">Healthy (≥50%)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </PanelSection>
-                        </Panel>
-                    </div>
+                            }
+                        >
+                            {filteredAndSorted.length === 0 ? (
+                                <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+                                    <ShieldCheck className="h-8 w-8 opacity-30" />
+                                    <p className="text-sm font-medium">No merchants in this tier</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-1">
+                                    {pageRows.map(m => (
+                                        <MerchantUtilizationRow
+                                            key={m.merchantId}
+                                            merchant={m}
+                                            nameHint={nameHints.get(m.merchantId) ?? null}
+                                            isMobile={isMobile}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            <PaginationBar
+                                className="border-t-0 pt-0"
+                                pagination={pagination}
+                                onPageChange={setPage}
+                                itemLabel="merchants"
+                            />
+                        </PanelSection>
+                    </Panel>
 
                     {/* Empty State */}
                     {data.summary.totalStations === 0 && (
@@ -713,7 +679,7 @@ export default function TerminalUtilizationHeatmap() {
                             <PanelSection label="No stations found">
                                 <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
                                     <Tablet className="h-8 w-8 text-muted-foreground opacity-50" />
-                                    <p className="max-w-md text-sm text-muted-foreground">
+                                    <p className="max-w-md text-sm text-muted-foreground max-md:hidden">
                                         No active stations detected. Terminal utilization data will appear once merchants register their devices.
                                     </p>
                                 </div>
@@ -725,9 +691,9 @@ export default function TerminalUtilizationHeatmap() {
                     {data.summary.totalStations > 0 && data.summary.underutilizedMerchantCount === 0 && data.summary.totalZombieStations === 0 && (
                         <Panel>
                             <PanelSection icon={ShieldCheck} label="Fleet fully utilized">
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-sm text-muted-foreground max-md:hidden">
                                     All {data.summary.totalStations} terminals across {data.summary.totalMerchants} merchants are actively processing transactions.
-                                    No zombie tablets or underutilized merchants detected.
+                                    No inactive tablets or underutilized merchants detected.
                                 </p>
                             </PanelSection>
                         </Panel>

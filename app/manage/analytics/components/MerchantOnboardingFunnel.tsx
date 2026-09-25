@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { format, formatDistanceToNow } from 'date-fns'
 import { useMerchantOnboardingFunnel } from '@/lib/queries/use-platform-analytics'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -11,13 +12,14 @@ import {
   type ReportColumn,
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { cn } from '@/lib/utils'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, TrendingUp, Filter } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
-import type { OnboardingFunnelStage, StuckMerchant } from '@/app/manage/actions/hq-platform/analytics'
+import type { OnboardingFunnelStage, StalledMerchant } from '@/app/manage/actions/hq-platform/analytics'
 
 /**
  * Stage colours are data encoding, not status decoration — each bar maps to its
@@ -27,29 +29,47 @@ import type { OnboardingFunnelStage, StuckMerchant } from '@/app/manage/actions/
 const STAGE_COLORS: Record<string, string> = {
   created: '#94a3b8',
   onboarding: '#f59e0b',
-  active: '#22c55e',
+  live: '#22c55e',
   churned: '#ef4444',
 }
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** `2025-10` → `Oct '25`. */
+function fmtMonth(key: string) {
+  const [y, m] = key.split('-').map(Number)
+  return m ? `${MONTH_ABBR[m - 1]} '${String(y).slice(2)}` : key
+}
+
+const CHECKLIST: { key: keyof StalledMerchant; label: string }[] = [
+  { key: 'hasLogo', label: 'Logo' },
+  { key: 'hasLocation', label: 'Location' },
+  { key: 'hasMenu', label: 'Menu' },
+  { key: 'hasStaff', label: 'Staff' },
+  { key: 'hasDevice', label: 'Device' },
+]
+
 /**
- * Mobile column meta for the stuck-merchants table. Days in onboarding is the
- * measure the list is built on, so it rides along with the merchant name.
+ * Mobile column meta for the stalled-merchants table. Readiness is the roll-up
+ * of the five checklist columns, so it stays visible while the individual
+ * checkmarks start hidden.
  */
-const STUCK_MERCHANT_COLUMNS: ReportColumn[] = [
+const STALLED_COLUMNS: ReportColumn[] = [
   { id: 'merchant', label: 'Merchant', locked: true },
-  { id: 'days', label: 'Days in Onboarding' },
+  { id: 'signedUp', label: 'Signed Up', defaultHidden: true },
   { id: 'lastActivity', label: 'Last Activity', defaultHidden: true },
   { id: 'admin', label: 'Assigned Admin', defaultHidden: true },
-  { id: 'risk', label: 'Risk', defaultHidden: true },
+  ...CHECKLIST.map(c => ({ id: c.key, label: c.label, defaultHidden: true })),
+  { id: 'readiness', label: 'Readiness' },
 ]
 
 export function MerchantOnboardingFunnel() {
   const { data, isLoading } = useMerchantOnboardingFunnel()
+  const router = useRouter()
   const isMobile = useIsMobile()
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
-    initialHiddenColumns(STUCK_MERCHANT_COLUMNS)
+    initialHiddenColumns(STALLED_COLUMNS)
   )
-  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
 
   if (isLoading) {
     return (
@@ -62,118 +82,145 @@ export function MerchantOnboardingFunnel() {
 
   if (!data) return null
 
-  const maxCount = Math.max(...data.funnel.map(s => s.count), 1)
+  const stalled = data.stalledMerchants
+  // A column that reads "Unassigned" on every row carries no information.
+  const anyAssigned = stalled.some(m => m.assignedAdmin)
+  const showCol = (id: string) =>
+    (id !== 'admin' || anyAssigned) && (!isMobile || !hiddenCols.has(id))
 
   return (
     <div className="space-y-6">
       <Panel>
-        <PanelSection label="Onboarding funnel" icon={Filter} caption="All merchants by lifecycle stage">
+        <PanelSection
+          label="Merchants by stage"
+          icon={Filter}
+          caption={`All ${data.totalMerchants} merchants by onboarding status`}
+        >
           <div className="space-y-6">
             <StatRow columns={3}>
               <StatTile
-                label="Overall Conversion Rate"
-                value={`${data.conversionRate}%`}
+                label="Total Merchants"
+                value={data.totalMerchants}
+                meta="Across all stages"
               />
               <StatTile
-                label="Stuck (>14 days onboarding)"
-                value={data.stuckMerchants.length}
+                label="Live"
+                value={data.liveCount}
+                meta={`${data.liveRate}% of merchants`}
               />
               <StatTile
-                label="Active Merchants"
-                value={data.funnel.find(f => f.stage === 'active')?.count ?? 0}
+                label="Stalled"
+                value={stalled.length}
+                meta="Signed up 14+ days ago, not live"
               />
             </StatRow>
 
             <div className="space-y-3">
-              {data.funnel.map((stage: OnboardingFunnelStage) => {
-                const pct = Math.round((stage.count / maxCount) * 100)
-                return (
-                  /* Mobile stacks the label over a full-width track; the two
-                     fixed 24/20 gutters of the desktop row left the bar only
-                     the ~130px that remained on a 390px phone, so every bar
-                     started a quarter of the way in against dead space. */
-                  <div
-                    key={stage.stage}
-                    className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3"
-                  >
-                    <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground sm:w-24 sm:shrink-0 sm:justify-end sm:text-right">
-                      <span>{stage.label}</span>
-                      {stage.conversionFromPrev !== null && (
-                        <span className="tabular-nums sm:hidden">{stage.conversionFromPrev}% conv.</span>
-                      )}
-                    </div>
-                    <div className="h-8 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="flex h-full items-center rounded-full pl-3 text-xs font-medium text-white transition-all duration-500"
-                        style={{ width: `${Math.max(pct, 5)}%`, backgroundColor: STAGE_COLORS[stage.stage] || '#94a3b8' }}
-                      >
-                        {stage.count}
-                      </div>
-                    </div>
-                    {stage.conversionFromPrev !== null && (
-                      <div className="hidden w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:block">
-                        {stage.conversionFromPrev}% conv.
-                      </div>
-                    )}
+              {data.funnel.map((stage: OnboardingFunnelStage) => (
+                /* Mobile stacks the label over a full-width track; the two
+                   fixed gutters of the desktop row left the bar only the
+                   ~130px that remained on a 390px phone. */
+                <div
+                  key={stage.stage}
+                  className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3"
+                >
+                  <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground sm:w-24 sm:shrink-0 sm:justify-end sm:text-right">
+                    <span>{stage.label}</span>
+                    <span className="tabular-nums sm:hidden">{stage.percentOfTotal}%</span>
                   </div>
-                )
-              })}
+                  {/* Width is the stage's share of ALL merchants, so bars
+                      compare directly and every track is the same length. */}
+                  <div className="h-8 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                    {/* `min-w-8`: a 5% bar on a phone is ~12px, narrower than
+                        the pl-3 inset alone, so the count was clipped away. */}
+                    <div
+                      className="flex h-full min-w-8 items-center rounded-full pl-3 text-xs font-medium text-white transition-all duration-500"
+                      style={{ width: `${Math.max(stage.percentOfTotal, 5)}%`, backgroundColor: STAGE_COLORS[stage.stage] }}
+                    >
+                      {stage.count}
+                    </div>
+                  </div>
+                  <div className="hidden w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:block">
+                    {stage.percentOfTotal}%
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </PanelSection>
       </Panel>
 
-      {data.stuckMerchants.length > 0 && (
+      {stalled.length > 0 && (
         <Panel>
           <PanelSection
-            label={`Stuck merchants (${data.stuckMerchants.length})`}
+            label={`Stalled merchants (${stalled.length})`}
             icon={AlertTriangle}
-            caption="Merchants in onboarding for more than 14 days without progressing"
+            caption="Signed up 14+ days ago and not live yet. Closest to ready first."
             action={
               <MobileColumnsButton
-                columns={STUCK_MERCHANT_COLUMNS}
+                columns={anyAssigned ? STALLED_COLUMNS : STALLED_COLUMNS.filter(c => c.id !== 'admin')}
                 hidden={hiddenCols}
                 onChange={setHiddenCols}
               />
             }
           >
-            {/* The `variant="data"` well is the surface — §5.2: a table is not
-                wrapped in panel padding, or you get a box inside a box. */}
-            <Table variant="data">
+            {/* The `variant="data"` well is the surface — §5.2. Min-width is
+                dropped on mobile so hiding columns actually narrows the table. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[820px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  {showCol('days') && <TableHead className="text-right">Days in Onboarding</TableHead>}
-                  {showCol('lastActivity') && <TableHead>Last Activity</TableHead>}
+                  {showCol('signedUp') && <TableHead className="whitespace-nowrap text-right">Signed Up</TableHead>}
+                  {showCol('lastActivity') && <TableHead className="whitespace-nowrap">Last Activity</TableHead>}
                   {showCol('admin') && <TableHead>Assigned Admin</TableHead>}
-                  {showCol('risk') && <TableHead>Risk</TableHead>}
+                  {CHECKLIST.map(c => showCol(c.key) && (
+                    <TableHead key={c.key} className="text-center">{c.label}</TableHead>
+                  ))}
+                  {showCol('readiness') && <TableHead className="text-right">Readiness</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.stuckMerchants.map((m: StuckMerchant) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-medium">{m.name}</TableCell>
-                    {showCol('days') && (
-                      <TableCell className="text-right tabular-nums">{m.daysInOnboarding}d</TableCell>
+                {stalled.map((m: StalledMerchant) => (
+                  <TableRow
+                    key={m.id}
+                    className="cursor-pointer"
+                    onClick={() => router.push(`/manage/merchants/${m.id}`)}
+                  >
+                    <TableCell className="max-w-60">
+                      <span className="block truncate font-medium" title={m.name}>{m.name}</span>
+                      {m.ownerEmail && (
+                        <span className="block truncate text-xs text-muted-foreground" title={m.ownerEmail}>
+                          {m.ownerEmail}
+                        </span>
+                      )}
+                    </TableCell>
+                    {showCol('signedUp') && (
+                      <TableCell
+                        className="whitespace-nowrap text-right tabular-nums"
+                        title={format(new Date(m.createdAt), 'MMM d, yyyy')}
+                      >
+                        {m.daysSinceSignup}d ago
+                      </TableCell>
                     )}
                     {showCol('lastActivity') && (
-                      <TableCell className="text-muted-foreground">
-                        {m.lastActivity ? new Date(m.lastActivity).toLocaleDateString() : 'No activity'}
+                      <TableCell
+                        className="whitespace-nowrap text-muted-foreground"
+                        title={m.lastActivity ? format(new Date(m.lastActivity), 'MMM d, yyyy h:mm a') : undefined}
+                      >
+                        {m.lastActivity ? formatDistanceToNow(new Date(m.lastActivity), { addSuffix: true }) : 'None'}
                       </TableCell>
                     )}
                     {showCol('admin') && (
-                      <TableCell>
-                        {m.assignedAdmin ?? <span className="text-xs italic text-muted-foreground">Unassigned</span>}
-                      </TableCell>
+                      <TableCell className="text-muted-foreground">{m.assignedAdmin ?? '—'}</TableCell>
                     )}
-                    {showCol('risk') && (
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
-                        >
-                          {m.daysInOnboarding >= 30 ? 'Critical' : 'At Risk'}
-                        </Badge>
+                    {CHECKLIST.map(c => showCol(c.key) && (
+                      <TableCell key={c.key} className="text-center">
+                        <CheckMark ok={m[c.key] as boolean} />
+                      </TableCell>
+                    ))}
+                    {showCol('readiness') && (
+                      <TableCell className="text-right text-sm tabular-nums">
+                        {m.readinessScore}/{CHECKLIST.length}
                       </TableCell>
                     )}
                   </TableRow>
@@ -186,22 +233,38 @@ export function MerchantOnboardingFunnel() {
 
       <Panel>
         <PanelSection
-          label="Monthly onboarding trend"
+          label="Monthly sign-ups"
           icon={TrendingUp}
-          caption="New vs Active merchants per month (last 12 months)"
+          caption="Merchants signed up each month, and how many of them are live now (last 12 months)"
         >
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={240}>
             <BarChart data={data.monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} width={isMobile ? valueAxisWidthMobile(3) : undefined} />
-              <Tooltip content={<AnalyticsTooltip />} />
-              <Bar dataKey="newCount" name="New Merchants" fill="#94a3b8" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="activeCount" name="Activated" fill="#22c55e" radius={[3, 3, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={fmtMonth} />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={isMobile ? valueAxisWidthMobile(3) : undefined} />
+              <Tooltip content={props => <AnalyticsTooltip {...props} label={fmtMonth(String(props.label ?? ''))} />} />
+              {/* Recharts tints legend text with the series colour; only the dot should carry it. */}
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 12 }}
+                formatter={value => <span className="text-muted-foreground">{value}</span>}
+              />
+              <Bar dataKey="newCount" name="Signed up" fill="#94a3b8" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="liveCount" name="Now live" fill="#22c55e" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </PanelSection>
       </Panel>
     </div>
+  )
+}
+
+/** Checklist mark — the glyph carries the meaning; no colour. */
+function CheckMark({ ok }: { ok: boolean }) {
+  return (
+    <span className={ok ? 'text-base text-foreground' : 'text-base text-muted-foreground/60'}>
+      {ok ? '✓' : '✗'}
+    </span>
   )
 }

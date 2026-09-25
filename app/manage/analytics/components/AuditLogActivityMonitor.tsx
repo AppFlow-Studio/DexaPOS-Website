@@ -16,12 +16,12 @@ import {
   type ReportColumn,
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { cn } from '@/lib/utils'
 import {
   ShieldAlert,
   Search,
-  ChevronLeft,
-  ChevronRight,
   Activity,
   AlertTriangle,
   XCircle,
@@ -86,7 +86,7 @@ const FULL_LOG_COLUMNS: ReportColumn[] = [
 // CONSTANTS & HELPERS
 // ============================================================================
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 10
 
 const ACTION_CATEGORIES = [
   { value: 'all',      label: 'All Categories' },
@@ -207,6 +207,8 @@ function AuditSummaryStats({ analytics, isLoading }: {
     { label: 'Failed Actions', value: analytics?.failedActionsCount, icon: AlertCircle },
   ]
 
+  const isMobile = useIsMobile()
+
   const tile = ({ label, value, icon: Icon }: (typeof stats)[number]) => (
     <StatTile
       key={label}
@@ -220,11 +222,17 @@ function AuditSummaryStats({ analytics, isLoading }: {
   return (
     <Panel>
       <PanelSection label="Audit activity" icon={ShieldAlert}>
-        {/* Five figures: 3-up then 2-up — `StatRow` tops out at four columns. */}
-        <div className="space-y-6">
-          <StatRow columns={3}>{stats.slice(0, 3).map(tile)}</StatRow>
-          <StatRow columns={2}>{stats.slice(3).map(tile)}</StatRow>
-        </div>
+        {/* Five figures: 3-up then 2-up — `StatRow` tops out at four columns.
+            On phones that split left Warnings alone on its row and stacked the
+            last two one per row, so it is one two-up grid there instead. */}
+        {isMobile ? (
+          <StatRow columns={3}>{stats.map(tile)}</StatRow>
+        ) : (
+          <div className="space-y-6">
+            <StatRow columns={3}>{stats.slice(0, 3).map(tile)}</StatRow>
+            <StatRow columns={2}>{stats.slice(3).map(tile)}</StatRow>
+          </div>
+        )}
       </PanelSection>
     </Panel>
   )
@@ -329,6 +337,7 @@ function TopActorsTable({ actors, isLoading }: {
   )
   const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
   const visibleColCount = TOP_ACTOR_COLUMNS.filter(c => showCol(c.id)).length
+  const { pageRows, pagination, setPage } = useClientPagination(actors)
 
   return (
     <Panel>
@@ -344,96 +353,95 @@ function TopActorsTable({ actors, isLoading }: {
           />
         }
       >
-        <div className="max-h-80 overflow-auto">
-          {/* Min-width lifted on mobile so hidden columns actually narrow the
-              table instead of leaving it scrolling sideways. */}
-          <Table variant="data" className={cn(!isMobile && 'min-w-[820px]')}>
-            <TableHeader className="[&_tr]:border-0">
-              <TableRow>
-                <TableHead>Actor</TableHead>
-                {showCol('role') && <TableHead>Role</TableHead>}
-                {showCol('actions') && <TableHead className="text-right">Actions</TableHead>}
-                {showCol('warnings') && <TableHead className="text-right">Warnings</TableHead>}
-                {showCol('errors') && <TableHead className="text-right">Errors</TableHead>}
-                {showCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
-                {showCol('lastActive') && <TableHead className="text-right">Last Active</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: visibleColCount }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : actors.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center gap-2">
-                      <User className="h-7 w-7 opacity-30" />
-                      No actor data available
-                    </div>
-                  </TableCell>
+        {/* Min-width lifted on mobile so hidden columns actually narrow the
+            table instead of leaving it scrolling sideways. */}
+        <Table variant="data" className={cn(!isMobile && 'min-w-[820px]')}>
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow>
+              <TableHead>Actor</TableHead>
+              {showCol('role') && <TableHead>Role</TableHead>}
+              {showCol('actions') && <TableHead className="text-right">Actions</TableHead>}
+              {showCol('warnings') && <TableHead className="text-right">Warnings</TableHead>}
+              {showCol('errors') && <TableHead className="text-right">Errors</TableHead>}
+              {showCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+              {showCol('lastActive') && <TableHead className="text-right">Last Active</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: visibleColCount }).map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                  ))}
                 </TableRow>
-              ) : (
-                actors.map((actor) => (
-                  <TableRow key={actor.actorName}>
+              ))
+            ) : actors.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center gap-2">
+                    <User className="h-7 w-7 opacity-30" />
+                    No actor data available
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              pageRows.map((actor) => (
+                <TableRow key={actor.actorName}>
+                  <TableCell>
+                    <p className="font-medium leading-tight">{actor.actorName}</p>
+                    {actor.actorEmail && actor.actorEmail !== actor.actorName && (
+                      <p className="text-xs leading-tight text-muted-foreground">{actor.actorEmail}</p>
+                    )}
+                  </TableCell>
+                  {showCol('role') && (
                     <TableCell>
-                      <p className="font-medium leading-tight">{actor.actorName}</p>
-                      {actor.actorEmail && actor.actorEmail !== actor.actorName && (
-                        <p className="text-xs leading-tight text-muted-foreground">{actor.actorEmail}</p>
+                      {actor.actorRole ? (
+                        <span className="capitalize text-muted-foreground">{actor.actorRole}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    {showCol('role') && (
-                      <TableCell>
-                        {actor.actorRole ? (
-                          <span className="capitalize text-muted-foreground">{actor.actorRole}</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    )}
-                    {showCol('actions') && (
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        {actor.totalActions.toLocaleString()}
-                      </TableCell>
-                    )}
-                    {showCol('warnings') && (
-                      <TableCell className="text-right tabular-nums">
-                        {actor.warningCount > 0 ? (
-                          <span className="font-medium">{actor.warningCount}</span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </TableCell>
-                    )}
-                    {showCol('errors') && (
-                      <TableCell className="text-right tabular-nums">
-                        {actor.errorCount > 0 ? (
-                          <span className="font-semibold">{actor.errorCount}</span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </TableCell>
-                    )}
-                    {showCol('merchants') && (
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {actor.distinctMerchants}
-                      </TableCell>
-                    )}
-                    {showCol('lastActive') && (
-                      <TableCell className="whitespace-nowrap text-right text-muted-foreground">
-                        {fmtRelative(actor.lastActionAt)}
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                  )}
+                  {showCol('actions') && (
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {actor.totalActions.toLocaleString()}
+                    </TableCell>
+                  )}
+                  {showCol('warnings') && (
+                    <TableCell className="text-right tabular-nums">
+                      {actor.warningCount > 0 ? (
+                        <span className="font-medium">{actor.warningCount}</span>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {showCol('errors') && (
+                    <TableCell className="text-right tabular-nums">
+                      {actor.errorCount > 0 ? (
+                        <span className="font-semibold">{actor.errorCount}</span>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {showCol('merchants') && (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {actor.distinctMerchants}
+                    </TableCell>
+                  )}
+                  {showCol('lastActive') && (
+                    <TableCell className="whitespace-nowrap text-right text-muted-foreground">
+                      {fmtRelative(actor.lastActionAt)}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <PaginationBar className="border-t-0 pt-0" pagination={pagination} onPageChange={setPage} itemLabel="actors" />
       </PanelSection>
     </Panel>
   )
@@ -453,6 +461,7 @@ function FailedActionsFeed({ failed, isLoading }: {
     initialHiddenColumns(FAILED_ACTION_COLUMNS)
   )
   const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  const { pageRows, pagination, setPage } = useClientPagination(failed)
 
   return (
     <Panel>
@@ -491,7 +500,7 @@ function FailedActionsFeed({ failed, isLoading }: {
             <p className="text-xs">All recent platform operations completed successfully.</p>
           </div>
         ) : (
-          <div className="max-h-96 overflow-auto">
+          <>
             {/* Min-width lifted on mobile so hidden columns actually narrow the
                 table instead of leaving it scrolling sideways. */}
             <Table variant="data" className={cn(!isMobile && 'min-w-[920px]')}>
@@ -500,14 +509,14 @@ function FailedActionsFeed({ failed, isLoading }: {
                   <TableHead className="w-36">Time</TableHead>
                   {showCol('actor') && <TableHead>Actor</TableHead>}
                   {showCol('action') && <TableHead>Action / Category</TableHead>}
-                  {showCol('error') && <TableHead className="max-w-72">Error Message</TableHead>}
+                  {showCol('error') && <TableHead className="min-w-56 max-w-[27rem]">Error Message</TableHead>}
                   {showCol('resource') && <TableHead>Resource</TableHead>}
                   {showCol('merchant') && <TableHead>Merchant</TableHead>}
                   {showCol('severity') && <TableHead>Severity</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {failed.map((f) => {
+                {pageRows.map((f) => {
                   const { date, time } = fmtTime(f.createdAt)
                   return (
                     <TableRow key={f.id}>
@@ -532,12 +541,14 @@ function FailedActionsFeed({ failed, isLoading }: {
                         </TableCell>
                       )}
                       {showCol('error') && (
-                        <TableCell className="max-w-72 align-top">
+                        <TableCell className="min-w-56 max-w-[27rem] align-top">
                           {f.errorMessage ? (
                             // The message keeps its own quiet well so a wrapped
                             // stack string stays distinguishable from the row.
                             <p
-                              className="line-clamp-2 rounded-2xl bg-muted/60 px-2 py-1 font-mono text-xs leading-snug"
+                              // `whitespace-normal`: table cells are nowrap, so
+                              // without it the message ran off the row mid-word.
+                              className="line-clamp-2 whitespace-normal break-words rounded-2xl bg-muted/60 px-2 py-1 font-mono text-xs leading-snug"
                               title={f.errorMessage}
                             >
                               {f.errorMessage}
@@ -582,7 +593,8 @@ function FailedActionsFeed({ failed, isLoading }: {
                 })}
               </TableBody>
             </Table>
-          </div>
+            <PaginationBar className="border-t-0 pt-0" pagination={pagination} onPageChange={setPage} itemLabel="failed actions" />
+          </>
         )}
       </PanelSection>
     </Panel>
@@ -690,7 +702,7 @@ function FullLogTable() {
               <TableRow>
                 <TableHead className="w-36">Time</TableHead>
                 {showCol('actor') && <TableHead>Actor</TableHead>}
-                {showCol('action') && <TableHead>Action</TableHead>}
+                {showCol('action') && <TableHead className="min-w-56">Action</TableHead>}
                 {showCol('category') && <TableHead>Category</TableHead>}
                 {showCol('resource') && <TableHead>Resource</TableHead>}
                 {showCol('merchant') && <TableHead>Merchant</TableHead>}
@@ -735,7 +747,8 @@ function FullLogTable() {
                         </TableCell>
                       )}
                       {showCol('action') && (
-                        <TableCell className="max-w-48 truncate font-medium" title={log.action}>
+                        <TableCell className="min-w-56 whitespace-normal break-words font-medium">
+                          {/* Full name, wrapped — a truncated action reads as a different action. */}
                           {log.action}
                         </TableCell>
                       )}
@@ -777,25 +790,20 @@ function FullLogTable() {
           </Table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            {isLoading ? '…'
-              : total === 0 ? 'No results'
-              : `Showing ${offset + 1}–${Math.min(offset + PAGE_SIZE, total)} of ${total.toLocaleString()}`}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" className="h-7 px-2"
-              onClick={() => setPage(p => p - 1)} disabled={page === 0 || isLoading}>
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <span className="px-2">{page + 1} / {totalPages}</span>
-            <Button variant="outline" size="sm" className="h-7 px-2"
-              onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1 || isLoading}>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        <PaginationBar
+          className="border-t-0 pt-0"
+          pagination={{
+            page: page + 1,
+            pageSize: PAGE_SIZE,
+            total,
+            totalPages,
+            hasNextPage: page < totalPages - 1,
+            hasPreviousPage: page > 0,
+          }}
+          onPageChange={p => setPage(p - 1)}
+          isLoading={isLoading}
+          itemLabel="events"
+        />
       </PanelSection>
     </Panel>
   )
@@ -810,19 +818,6 @@ export function AuditLogActivityMonitor() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-slate-100">
-          <ShieldAlert className="h-5 w-5 text-slate-600" />
-        </div>
-        <div>
-          <h3 className="text-base font-semibold">Audit Log Activity Monitor</h3>
-          <p className="text-sm text-muted-foreground">
-            Platform-wide admin action trail — compliance visibility across all merchants and HQ operations
-          </p>
-        </div>
-      </div>
-
       {/* ── Section 1: Summary stat cards ── */}
       <AuditSummaryStats analytics={analytics} isLoading={analyticsLoading} />
 

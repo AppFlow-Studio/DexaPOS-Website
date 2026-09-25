@@ -15,7 +15,9 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Wifi, WifiOff, AlertTriangle, ChevronRight, Building2, MapPin } from 'lucide-react'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { Wifi, WifiOff, AlertTriangle, ChevronRight, Building2 } from 'lucide-react'
 import { useState } from 'react'
 import type { FleetDevice, HardwareCensusItem, FleetAlertItem } from '@/app/manage/actions/hq-platform/analytics'
 
@@ -36,10 +38,17 @@ const STATUS_LABELS: Record<string, string> = {
  * to `/manage/health` and the DLQ. The status donut above still carries the
  * colours, where they map a slice to its legend entry (§4.6b).
  */
-function StatusBadge({ status }: { status: FleetDevice['healthStatus'] }) {
+/** Phone-card labels: the card's status slot is narrow, so the short form. */
+const SHORT_STATUS_LABELS: Record<string, string> = {
+  online: 'On',
+  degraded: 'Degraded',
+  offline: 'Off',
+}
+
+function StatusBadge({ status, short = false }: { status: FleetDevice['healthStatus']; short?: boolean }) {
   return (
     <span className={status === 'online' ? 'text-sm text-muted-foreground' : 'text-sm font-medium'}>
-      {STATUS_LABELS[status]}
+      {(short ? SHORT_STATUS_LABELS : STATUS_LABELS)[status]}
     </span>
   )
 }
@@ -56,63 +65,43 @@ function fmtMb(mb: number | null): string {
   return `${mb}MB`
 }
 
-// ── Hierarchy Types ──────────────────────────────────────────────────────────
+// ── Merchant grouping ────────────────────────────────────────────────────────
 
-interface LocationGroup {
-  locationId: string | null
-  locationName: string | null
+interface MerchantGroup {
+  merchantId: string
+  merchantName: string
   devices: FleetDevice[]
   onlineCount: number
   degradedCount: number
   offlineCount: number
 }
 
-interface MerchantGroup {
-  merchantId: string
-  merchantName: string
-  locations: LocationGroup[]
-  totalDevices: number
-  onlineCount: number
-  degradedCount: number
-  offlineCount: number
-}
-
-function buildHierarchy(devices: FleetDevice[]): MerchantGroup[] {
+function groupByMerchant(devices: FleetDevice[]): MerchantGroup[] {
   const merchantMap = new Map<string, MerchantGroup>()
 
   for (const device of devices) {
-    if (!merchantMap.has(device.merchantId)) {
-      merchantMap.set(device.merchantId, {
+    let merchant = merchantMap.get(device.merchantId)
+    if (!merchant) {
+      merchant = {
         merchantId: device.merchantId,
         merchantName: device.merchantName,
-        locations: [],
-        totalDevices: 0,
-        onlineCount: 0,
-        degradedCount: 0,
-        offlineCount: 0,
-      })
-    }
-    const merchant = merchantMap.get(device.merchantId)!
-
-    const locKey = device.locationId ?? '__no_location__'
-    let loc = merchant.locations.find(l => (l.locationId ?? '__no_location__') === locKey)
-    if (!loc) {
-      loc = {
-        locationId: device.locationId,
-        locationName: device.locationName,
         devices: [],
         onlineCount: 0,
         degradedCount: 0,
         offlineCount: 0,
       }
-      merchant.locations.push(loc)
+      merchantMap.set(device.merchantId, merchant)
     }
-
-    loc.devices.push(device)
-    loc[device.healthStatus === 'online' ? 'onlineCount' : device.healthStatus === 'degraded' ? 'degradedCount' : 'offlineCount']++
-
-    merchant.totalDevices++
+    merchant.devices.push(device)
     merchant[device.healthStatus === 'online' ? 'onlineCount' : device.healthStatus === 'degraded' ? 'degradedCount' : 'offlineCount']++
+  }
+
+  for (const merchant of merchantMap.values()) {
+    // Location is a column now, so keep a location's devices next to each other.
+    merchant.devices.sort((a, b) =>
+      (a.locationName ?? '').localeCompare(b.locationName ?? '') ||
+      a.stationName.localeCompare(b.stationName)
+    )
   }
 
   return Array.from(merchantMap.values()).sort((a, b) => {
@@ -126,12 +115,15 @@ function buildHierarchy(devices: FleetDevice[]): MerchantGroup[] {
 
 // ── Device Row ───────────────────────────────────────────────────────────────
 
-function DeviceRow({ device, indent = false }: { device: FleetDevice; indent?: boolean }) {
+/**
+ * No row tint: the Status cell already says Offline/Degraded in weight, and a
+ * tint on top of the table's own surface made the layers unreadable.
+ */
+function DeviceRow({ device }: { device: FleetDevice }) {
   return (
-    <TableRow key={device.stationId} className={device.healthStatus === 'offline' ? 'bg-red-50/40' : device.healthStatus === 'degraded' ? 'bg-amber-50/40' : ''}>
-      <TableCell className={`text-sm py-2 font-medium ${indent ? 'pl-10' : 'pl-6'}`}>
-        {device.stationName}
-      </TableCell>
+    <TableRow>
+      <TableCell className="text-sm py-2 font-medium">{device.stationName}</TableCell>
+      <TableCell className="text-sm py-2 text-muted-foreground">{device.locationName ?? 'No location'}</TableCell>
       <TableCell className="text-sm py-2 text-muted-foreground">{device.deviceModel}</TableCell>
       <TableCell className="py-2"><StatusBadge status={device.healthStatus} /></TableCell>
       <TableCell className="text-sm py-2 text-right">
@@ -164,34 +156,33 @@ function DeviceRow({ device, indent = false }: { device: FleetDevice; indent?: b
 /**
  * One device as a card.
  *
- * The table's eight columns become a name + status line and a 2-up grid of
+ * The table's columns become a name + status line and a 2-up grid of
  * labelled metrics. Each value carries its own label, so nothing depends on a
  * column header that has scrolled off — which is what made the table version
  * unreadable on a phone.
  */
 function DeviceCard({ device }: { device: FleetDevice }) {
-  const metrics: Array<{ label: string; value: string }> = [
+  // RAM and storage share one full-width row: two narrow "free" cells
+  // squeezed the labels, and the pair reads naturally as one reading.
+  const metrics: Array<{ label: string; value: string; wide?: boolean }> = [
     { label: 'Battery', value: device.batteryLevel !== null ? `${device.batteryLevel}%` : '—' },
-    { label: 'RAM free', value: fmtMb(device.ramFreeMb) },
-    { label: 'Storage free', value: fmtMb(device.storageFreeMb) },
     { label: 'Last seen', value: fmtLastSeen(device.minutesSinceHeartbeat) },
+    {
+      label: 'RAM/storage free',
+      value: `${fmtMb(device.ramFreeMb)}/${fmtMb(device.storageFreeMb)}`,
+      wide: true,
+    },
   ]
 
   return (
-    <div className="rounded-2xl bg-card/70 p-3">
+    <div className="rounded-2xl bg-muted/30 p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{device.stationName}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {device.deviceModel || '—'}
-            {device.appVersion ? ` · ${device.appVersion}` : ''}
-          </p>
-        </div>
-        <StatusBadge status={device.healthStatus} />
+        <p className="min-w-0 truncate text-sm font-medium">{device.stationName}</p>
+        <StatusBadge status={device.healthStatus} short />
       </div>
       <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
         {metrics.map(m => (
-          <div key={m.label} className="flex items-baseline justify-between gap-2">
+          <div key={m.label} className={cn('flex items-baseline justify-between gap-2', m.wide && 'col-span-2')}>
             <dt className="text-xs text-muted-foreground">{m.label}</dt>
             <dd className="text-xs font-medium tabular-nums">{m.value}</dd>
           </div>
@@ -201,156 +192,75 @@ function DeviceCard({ device }: { device: FleetDevice }) {
   )
 }
 
-/** A merchant and its locations, as collapsible card sections. */
-function MerchantCardSection({ group }: { group: MerchantGroup }) {
-  const [expanded, setExpanded] = useState(
-    group.offlineCount > 0 || group.degradedCount > 0
-  )
+// ── Merchant Section ─────────────────────────────────────────────────────────
+
+/**
+ * A merchant row that expands into its devices — a table on desktop, cards on
+ * a phone. Every merchant starts collapsed so the list reads as a merchant
+ * index first; the Active alerts panel above is where problems surface.
+ */
+function MerchantSection({ group, isMobile }: { group: MerchantGroup; isMobile: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const deviceCount = group.devices.length
 
   return (
-    <div className="rounded-2xl bg-muted/30">
-      <button
-        type="button"
-        onClick={() => setExpanded(e => !e)}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
-      >
-        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{group.merchantName}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {group.totalDevices}
-        </span>
-      </button>
-
-      {/* Counts sit under the name rather than beside it: at 400px a single row
-          of name + three counts wraps into an unreadable tangle. */}
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 pb-2 pl-10 text-xs tabular-nums text-muted-foreground">
-        {group.onlineCount > 0 && <span>{group.onlineCount} online</span>}
-        {group.degradedCount > 0 && <span className="font-medium">{group.degradedCount} degraded</span>}
-        {group.offlineCount > 0 && <span className="font-medium">{group.offlineCount} offline</span>}
-      </div>
-
-      {expanded && (
-        <div className="space-y-2 px-2 pb-2">
-          {group.locations.map(loc => (
-            <LocationCardSection key={loc.locationId ?? '__no_location__'} loc={loc} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** A location and its devices. Only two levels of indent, never three. */
-function LocationCardSection({ loc }: { loc: LocationGroup }) {
-  const [expanded, setExpanded] = useState(
-    loc.offlineCount > 0 || loc.degradedCount > 0
-  )
-
-  return (
+    // No fill on the group: the device table carries its own surface, and a
+    // second grey behind it made the two indistinguishable.
     <div>
       <button
         type="button"
         onClick={() => setExpanded(e => !e)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-1.5 px-1 py-1.5 text-left"
+        className="flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted/40"
       >
-        <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
-          {loc.locationName ?? 'No Location'}
+        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate text-sm font-semibold">{group.merchantName}</span>
+        <span className="text-xs text-muted-foreground">
+          {deviceCount} device{deviceCount !== 1 ? 's' : ''}
         </span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {loc.devices.length}
+        {/* Counts read as text: a row of tinted pills would colour-code
+            status, which §14.3 HQ-2 reserves for health and the DLQ. */}
+        <span className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+          {group.onlineCount > 0 && <span>{group.onlineCount} online</span>}
+          {group.degradedCount > 0 && <span className="font-medium">{group.degradedCount} degraded</span>}
+          {group.offlineCount > 0 && <span className="font-medium">{group.offlineCount} offline</span>}
         </span>
       </button>
 
       {expanded && (
-        <div className="space-y-2 pt-1">
-          {loc.devices.map(device => (
-            <DeviceCard key={device.stationId} device={device} />
-          ))}
-        </div>
+        isMobile ? (
+          <div className="space-y-2 pt-1">
+            {group.devices.map(device => (
+              <DeviceCard key={device.stationId} device={device} />
+            ))}
+          </div>
+        ) : (
+          <div className="pt-1">
+            <Table variant="data" className="min-w-[900px]">
+              <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead>Station</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Battery</TableHead>
+                  <TableHead className="text-right">RAM Free</TableHead>
+                  <TableHead className="text-right">Storage Free</TableHead>
+                  <TableHead className="text-right">Last Seen</TableHead>
+                  <TableHead>App</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {group.devices.map(device => (
+                  <DeviceRow key={device.stationId} device={device} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )
       )}
     </div>
-  )
-}
-
-// ── Merchant Section ─────────────────────────────────────────────────────────
-
-function MerchantSection({ group }: { group: MerchantGroup }) {
-  // Groups with a degraded or offline device start open, so a problem is
-  // visible without hunting for it.
-  const [expanded, setExpanded] = useState(
-    group.offlineCount > 0 || group.degradedCount > 0
-  )
-
-  return (
-    <>
-      {/* Merchant header row */}
-      <TableRow
-        className="cursor-pointer select-none bg-muted/30 hover:bg-muted/50"
-        onClick={() => setExpanded(e => !e)}
-      >
-        <TableCell colSpan={8} className="py-2">
-          <div className="flex items-center gap-2">
-            <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-sm">{group.merchantName}</span>
-            <span className="text-xs text-muted-foreground ml-1">({group.totalDevices} device{group.totalDevices !== 1 ? 's' : ''})</span>
-            {/* Counts read as text: a row of tinted pills would colour-code
-                status, which §14.3 HQ-2 reserves for health and the DLQ. */}
-            <div className="ml-2 flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
-              {group.onlineCount > 0 && <span>{group.onlineCount} online</span>}
-              {group.degradedCount > 0 && <span className="font-medium">{group.degradedCount} degraded</span>}
-              {group.offlineCount > 0 && <span className="font-medium">{group.offlineCount} offline</span>}
-            </div>
-          </div>
-        </TableCell>
-      </TableRow>
-
-      {expanded && group.locations.map(loc => (
-        <LocationSection key={loc.locationId ?? '__no_location__'} loc={loc} />
-      ))}
-    </>
-  )
-}
-
-// ── Location Section ─────────────────────────────────────────────────────────
-
-function LocationSection({ loc }: { loc: LocationGroup }) {
-  const [expanded, setExpanded] = useState(
-    loc.offlineCount > 0 || loc.degradedCount > 0
-  )
-
-  return (
-    <>
-      {/* Location sub-header */}
-      <TableRow
-        className="cursor-pointer select-none hover:bg-muted/30"
-        onClick={() => setExpanded(e => !e)}
-      >
-        <TableCell colSpan={8} className="py-1.5 pl-8">
-          <div className="flex items-center gap-2">
-            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
-            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground font-medium">
-              {loc.locationName ?? 'No Location'}
-            </span>
-            <span className="text-xs text-muted-foreground">({loc.devices.length} device{loc.devices.length !== 1 ? 's' : ''})</span>
-            <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
-              {loc.degradedCount > 0 && <span className="font-medium">{loc.degradedCount} degraded</span>}
-              {loc.offlineCount > 0 && <span className="font-medium">{loc.offlineCount} offline</span>}
-            </div>
-          </div>
-        </TableCell>
-      </TableRow>
-
-      {expanded && loc.devices.map(device => (
-        <DeviceRow key={device.stationId} device={device} indent />
-      ))}
-    </>
   )
 }
 
@@ -367,6 +277,8 @@ const ACTIVE_ALERT_COLUMNS: ReportColumn[] = [
   { id: 'severity', label: 'Severity', defaultHidden: true },
 ]
 
+const NO_ALERTS: FleetAlertItem[] = []
+
 export function FleetHealthDashboard() {
   const { data, isLoading, dataUpdatedAt } = useFleetHealth()
   const isMobile = useIsMobile()
@@ -374,6 +286,13 @@ export function FleetHealthDashboard() {
     initialHiddenColumns(ACTIVE_ALERT_COLUMNS)
   )
   const showAlertCol = (id: string) => !isMobile || !alertHiddenCols.has(id)
+  // Called before the loading return (hooks can't be conditional); the shared
+  // hook clamps the page if the live-refetched feed shrinks.
+  const {
+    pageRows: pagedAlerts,
+    pagination: alertPagination,
+    setPage: setAlertPage,
+  } = useClientPagination(data?.alertFeed ?? NO_ALERTS)
 
   if (isLoading) {
     return (
@@ -398,7 +317,7 @@ export function FleetHealthDashboard() {
 
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—'
 
-  const hierarchy = buildHierarchy(data.devices)
+  const merchants = groupByMerchant(data.devices)
 
   return (
     <div className="space-y-6">
@@ -489,8 +408,8 @@ export function FleetHealthDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.alertFeed.map((alert: FleetAlertItem, i) => (
-                  <TableRow key={i}>
+                {pagedAlerts.map((alert: FleetAlertItem, i) => (
+                  <TableRow key={`${alertPagination.page}-${i}`}>
                     <TableCell className="font-medium">{alert.stationName}</TableCell>
                     {showAlertCol('merchant') && (
                       <TableCell className="text-muted-foreground">{alert.merchantName}</TableCell>
@@ -503,60 +422,30 @@ export function FleetHealthDashboard() {
                 ))}
               </TableBody>
             </Table>
+
+            <PaginationBar
+              className="border-t-0 pt-0"
+              pagination={alertPagination}
+              onPageChange={setAlertPage}
+              itemLabel="alerts"
+            />
           </PanelSection>
         </Panel>
       )}
 
       <Panel>
         <PanelSection
-          label={`All devices (${data.totalDevices}) — merchant → location → device`}
-          caption={
-            isMobile
-              ? 'Tap a merchant or location to expand. Groups with issues start open.'
-              : 'Click a merchant or location row to expand/collapse. Rows with issues are auto-expanded.'
-          }
+          label={`All devices (${data.totalDevices})`}
+          caption="Click a merchant to see its devices."
         >
-          {/* A 3-level tree needs 900px to stay legible, so at phone width it
-              becomes cards instead: hiding columns would not help, because the
-              problem is the indent depth and the eight unlabelled values, not
-              the column count. Both views share `hierarchy`. */}
-          {isMobile ? (
-            hierarchy.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">No devices found</div>
-            ) : (
-              <div className="space-y-2">
-                {hierarchy.map(group => (
-                  <MerchantCardSection key={group.merchantId} group={group} />
-                ))}
-              </div>
-            )
+          {merchants.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">No devices found</div>
           ) : (
-            <Table variant="data" className="min-w-[900px]">
-              <TableHeader className="[&_tr]:border-0">
-                <TableRow>
-                  <TableHead>Station / Location / Merchant</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Battery</TableHead>
-                  <TableHead className="text-right">RAM Free</TableHead>
-                  <TableHead className="text-right">Storage Free</TableHead>
-                  <TableHead className="text-right">Last Seen</TableHead>
-                  <TableHead>App</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {hierarchy.map(group => (
-                  <MerchantSection key={group.merchantId} group={group} />
-                ))}
-                {hierarchy.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                      No devices found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+            <div className="space-y-4">
+              {merchants.map(group => (
+                <MerchantSection key={group.merchantId} group={group} isMobile={isMobile} />
+              ))}
+            </div>
           )}
         </PanelSection>
       </Panel>

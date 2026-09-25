@@ -11,6 +11,8 @@ import {
   type ReportColumn,
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -112,6 +114,8 @@ export function KDSPerformance() {
       setSortKey(key)
       setSortDir(key === 'merchantName' ? 'asc' : 'desc')
     }
+    // A re-sort starts from the top, not mid-list on the old page.
+    merchantPage.setPage(1)
   }
 
   const sortedMerchants = useMemo(() => {
@@ -125,6 +129,8 @@ export function KDSPerformance() {
       return sortDir === 'asc' ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal)
     })
   }, [data?.slowestMerchants, sortKey, sortDir])
+  const merchantPage = useClientPagination(sortedMerchants)
+  const itemPage = useClientPagination((data?.slowestItems ?? []) as KDSSlowestItem[])
 
   const periodSelect = (
     <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -169,7 +175,7 @@ export function KDSPerformance() {
             <ChefHat className="h-12 w-12 text-muted-foreground opacity-30" />
             <div>
               <p className="font-medium text-muted-foreground">No KDS data available</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground max-md:hidden">
                 No KDS items were bumped in the last {days} days, or KDS displays are not configured.
               </p>
             </div>
@@ -314,7 +320,7 @@ export function KDSPerformance() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(data.slowestItems as KDSSlowestItem[]).map((item) => (
+                {itemPage.pageRows.map((item) => (
                   <TableRow key={item.itemName}>
                     <TableCell className="font-medium">{item.itemName}</TableCell>
                     {showItemCol('avgPrep') && (
@@ -331,6 +337,12 @@ export function KDSPerformance() {
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              className="border-t-0 pt-0"
+              pagination={itemPage.pagination}
+              onPageChange={itemPage.setPage}
+              itemLabel="items"
+            />
           </PanelSection>
         </Panel>
       )}
@@ -366,7 +378,7 @@ export function KDSPerformance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedMerchants.map(m => {
+              {merchantPage.pageRows.map(m => {
                 const avgMins = m.avgPrepTimeSeconds / 60
                 return (
                   <TableRow key={m.merchantId}>
@@ -406,6 +418,12 @@ export function KDSPerformance() {
               })}
             </TableBody>
           </Table>
+          <PaginationBar
+            className="border-t-0 pt-0"
+            pagination={merchantPage.pagination}
+            onPageChange={merchantPage.setPage}
+            itemLabel="merchants"
+          />
         </PanelSection>
       </Panel>
     </div>

@@ -13,6 +13,8 @@ import {
   type ReportColumn,
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -293,6 +295,8 @@ export function LocationDensityInsights() {
     initialHiddenColumns(TOP_CITY_COLUMNS)
   )
   const showCityCol = (id: string) => !isMobile || !cityHiddenCols.has(id)
+  // Above the loading/empty early returns, like the other hooks.
+  const cityPage = useClientPagination(data?.byCity ?? [])
 
   if (isLoading) {
     // Built from the same Panel/PanelSection/StatRow primitives as the loaded
@@ -575,40 +579,44 @@ export function LocationDensityInsights() {
             />
           }
         >
-          <div className="max-h-80 overflow-auto">
-            {/* Min-width lifted on mobile so hidden columns actually narrow the
-                table instead of leaving it scrolling sideways. */}
-            <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
-              <TableHeader className="[&_tr]:border-0">
-                <TableRow>
-                  <TableHead>City</TableHead>
-                  {showCityCol('state') && <TableHead>State</TableHead>}
-                  {showCityCol('locations') && <TableHead className="text-right">Locations</TableHead>}
-                  {showCityCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
-                  {showCityCol('gpv') && <TableHead className="text-right">30d GPV</TableHead>}
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow>
+                <TableHead>City</TableHead>
+                {showCityCol('state') && <TableHead>State</TableHead>}
+                {showCityCol('locations') && <TableHead className="text-right">Locations</TableHead>}
+                {showCityCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                {showCityCol('gpv') && <TableHead className="text-right">30d GPV</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cityPage.pageRows.map(row => (
+                <TableRow key={`${row.city}-${row.state}`}>
+                  <TableCell className="font-medium">{row.city}</TableCell>
+                  {showCityCol('state') && (
+                    <TableCell className="text-muted-foreground">{row.state}</TableCell>
+                  )}
+                  {showCityCol('locations') && (
+                    <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                  )}
+                  {showCityCol('merchants') && (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                  )}
+                  {showCityCol('gpv') && (
+                    <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                  )}
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.byCity.map(row => (
-                  <TableRow key={`${row.city}-${row.state}`}>
-                    <TableCell className="font-medium">{row.city}</TableCell>
-                    {showCityCol('state') && (
-                      <TableCell className="text-muted-foreground">{row.state}</TableCell>
-                    )}
-                    {showCityCol('locations') && (
-                      <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
-                    )}
-                    {showCityCol('merchants') && (
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
-                    )}
-                    {showCityCol('gpv') && (
-                      <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
+          <PaginationBar
+            className="border-t-0 pt-0"
+            pagination={cityPage.pagination}
+            onPageChange={cityPage.setPage}
+            itemLabel="cities"
+          />
         </PanelSection>
       </Panel>
 

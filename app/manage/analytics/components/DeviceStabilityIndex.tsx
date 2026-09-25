@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import {
@@ -51,7 +51,12 @@ const VERSION_DETAIL_COLUMNS: ReportColumn[] = [
     { id: 'status', label: 'Status', defaultHidden: true },
 ]
 
-export default function DeviceStabilityIndex() {
+/**
+ * @param besideChart Panel laid out next to "Stability by app version" — the
+ *   analytics page puts Terminal Utilization's distribution chart there so the
+ *   two fleet charts share a row.
+ */
+export default function DeviceStabilityIndex({ besideChart }: { besideChart?: ReactNode }) {
     const [days, setDays] = useState<number>(30)
     const [selectedVersion, setSelectedVersion] = useState<string | null>(null)
     const isMobile = useIsMobile()
@@ -74,13 +79,6 @@ export default function DeviceStabilityIndex() {
             {/* Section Header */}
             <div className="flex flex-wrap items-center gap-3 justify-between">
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <Smartphone className="h-5 w-5 text-primary shrink-0" />
-                    <div className="min-w-0">
-                        <h2 className="text-lg font-semibold">Device Stability Index</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Instability rate per app version — offline heartbeats &amp; kicked sessions
-                        </p>
-                    </div>
                     {!isLoading && stabilityData && (
                         stabilityData.overallInstabilityRate <= INSTABILITY_THRESHOLD ? (
                             <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
@@ -115,7 +113,7 @@ export default function DeviceStabilityIndex() {
                     <PanelSection icon={AlertTriangle} label="Rollout hold recommended">
                         <div className="flex min-w-0 flex-col gap-2">
                             <p className="text-sm">{stabilityData.rolloutWarning}</p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground max-md:hidden">
                                 &gt;{INSTABILITY_THRESHOLD}% threshold breached
                             </p>
                         </div>
@@ -127,7 +125,7 @@ export default function DeviceStabilityIndex() {
                 stabilityData.versionBars.every(v => v.instabilityRate <= INSTABILITY_THRESHOLD) && (
                 <Panel>
                     <PanelSection icon={ShieldCheck} label="Fleet stable — clear to roll out">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground max-md:hidden">
                             All {stabilityData.versionBars.length} versions are below the {INSTABILITY_THRESHOLD}% instability threshold.
                             Overall rate: {stabilityData.overallInstabilityRate}%.
                         </p>
@@ -170,11 +168,11 @@ export default function DeviceStabilityIndex() {
                 </Panel>
             ) : null}
 
-            {/* Main Chart + Drill-down */}
-            <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-7">
+            {/* Stability chart, with the page's companion chart beside it */}
+            <div className={cn('grid min-w-0 grid-cols-1 gap-4', besideChart && 'lg:grid-cols-2')}>
 
                 {/* Stacked Bar Chart by Version */}
-                <Panel className="lg:col-span-4">
+                <Panel className="min-w-0">
                     <PanelSection
                         label="Stability by app version"
                         caption="Click a version bar to drill down by hardware model"
@@ -317,8 +315,11 @@ export default function DeviceStabilityIndex() {
                     </PanelSection>
                 </Panel>
 
-                {/* Drill-down Panel */}
-                <Panel className="lg:col-span-3">
+                {besideChart}
+            </div>
+
+            {/* Drill-down Panel — its own row */}
+            <Panel>
                     <PanelSection
                         label={selectedVersion ? `Hardware breakdown — ${selectedVersion}` : 'Version details'}
                         caption={
@@ -497,7 +498,6 @@ export default function DeviceStabilityIndex() {
                         )}
                     </PanelSection>
                 </Panel>
-            </div>
         </>
     )
 }

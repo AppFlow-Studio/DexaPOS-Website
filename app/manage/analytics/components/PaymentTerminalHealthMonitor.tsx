@@ -19,6 +19,7 @@ import {
   HelpCircle,
   CreditCard,
   AlertTriangle,
+  AlertCircle,
   Clock,
   Link2Off,
   KeyRound,
@@ -30,6 +31,7 @@ import {
   Terminal,
   Activity,
 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
@@ -196,6 +198,22 @@ export function PaymentTerminalHealthMonitor() {
 
   const orphanTerminals = data.terminals.filter(t => t.isOrphan)
   const hasAlerts = summary.settlementOverdue > 0 || summary.orphans > 0 || summary.authKeysMissing > 0
+  const actionRequired = (
+    <div className="space-y-1">
+      <p className="text-sm font-semibold">Action required</p>
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {summary.settlementOverdue > 0 && (
+          <span>{summary.settlementOverdue} terminal{summary.settlementOverdue !== 1 ? 's' : ''} not settled in &gt;24h — review batch settlement</span>
+        )}
+        {summary.orphans > 0 && (
+          <span>{summary.orphans} orphan terminal{summary.orphans !== 1 ? 's' : ''} — no station mapping (cannot process payments)</span>
+        )}
+        {summary.authKeysMissing > 0 && (
+          <span>{summary.authKeysMissing} terminal{summary.authKeysMissing !== 1 ? 's' : ''} missing auth key — configuration incomplete</span>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -221,7 +239,33 @@ export function PaymentTerminalHealthMonitor() {
 
       <Panel>
         <PanelSection
-          label="Fleet connection rate"
+          label={
+            <span className="inline-flex items-center gap-2">
+              Fleet connection rate
+              {/* Phones get "Action required" behind this icon rather than
+                  as a block under the bar — same pattern as Staff labor. */}
+              {hasAlerts && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Action required"
+                      className="inline-flex rounded-full text-muted-foreground hover:text-foreground md:hidden"
+                    >
+                      <AlertCircle className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="center"
+                    collisionPadding={16}
+                    className="w-[min(18rem,calc(100vw-2rem))] rounded-2xl"
+                  >
+                    {actionRequired}
+                  </PopoverContent>
+                </Popover>
+              )}
+            </span>
+          }
           icon={Activity}
           value={`${uptimePct}%`}
           action={
@@ -258,22 +302,9 @@ export function PaymentTerminalHealthMonitor() {
           {hasAlerts && (
             // Inset note rather than a bordered alert box — §5.5 carries
             // separation on fill, not a drawn edge.
-            <div className="mt-5 flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3">
+            <div className="mt-5 flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 max-md:hidden">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 space-y-1">
-                <p className="text-sm font-semibold">Action required</p>
-                <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  {summary.settlementOverdue > 0 && (
-                    <span>{summary.settlementOverdue} terminal{summary.settlementOverdue !== 1 ? 's' : ''} not settled in &gt;24h — review batch settlement</span>
-                  )}
-                  {summary.orphans > 0 && (
-                    <span>{summary.orphans} orphan terminal{summary.orphans !== 1 ? 's' : ''} — no station mapping (cannot process payments)</span>
-                  )}
-                  {summary.authKeysMissing > 0 && (
-                    <span>{summary.authKeysMissing} terminal{summary.authKeysMissing !== 1 ? 's' : ''} missing auth key — configuration incomplete</span>
-                  )}
-                </div>
-              </div>
+              <div className="min-w-0">{actionRequired}</div>
             </div>
           )}
         </PanelSection>

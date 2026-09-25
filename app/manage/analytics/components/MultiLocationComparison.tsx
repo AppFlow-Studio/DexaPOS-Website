@@ -6,6 +6,7 @@ import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -97,9 +98,13 @@ function MiniSparkline({ data }: { data: SparklinePoint[] }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-export function MultiLocationComparison() {
-  const [days, setDays] = useState(30)
+/** How many rows the "All locations" table shows before "Show all". */
+const TABLE_PREVIEW_ROWS = 10
+
+/** `days` comes from the Revenue & Risk tab's shared period picker. */
+export function MultiLocationComparison({ days }: { days: number }) {
   const [search, setSearch] = useState('')
+  const [showAllRows, setShowAllRows] = useState(false)
   const [selectedMerchantId, setSelectedMerchantId] = useState<string>('all')
   const isMobile = useIsMobile()
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
@@ -167,8 +172,9 @@ export function MultiLocationComparison() {
     )
   }
 
-  // Top 15 locations for the chart (from filtered set)
-  const chartData = filteredLocations.slice(0, 15).map((l, i) => ({
+  // Top 15 selling locations for the chart — zero bars are empty axis space.
+  const sellingLocations = filteredLocations.filter(l => l.totalGPV > 0)
+  const chartData = sellingLocations.slice(0, 15).map((l, i) => ({
     name: l.locationName.length > 14 ? l.locationName.slice(0, 13) + '…' : l.locationName,
     gpv: l.totalGPV,
     fill: i === 0 ? '#f59e0b' : i < 3 ? '#3b82f6' : '#94a3b8',
@@ -177,14 +183,10 @@ export function MultiLocationComparison() {
   return (
     <div className="space-y-6">
       {(() => {
-        const visibleGPVs = filteredLocations.map(l => l.totalGPV)
-        const totalVisibleGPV = visibleGPVs.reduce((s, v) => s + v, 0)
+        const totalVisibleGPV = filteredLocations.reduce((s, l) => s + l.totalGPV, 0)
         const avgVisible = filteredLocations.length > 0 ? totalVisibleGPV / filteredLocations.length : 0
-        const sortedVisible = [...visibleGPVs].sort((a, b) => a - b)
-        const medianVisible = sortedVisible.length > 0
-          ? sortedVisible[Math.floor(sortedVisible.length / 2)]
-          : 0
-        const topVisible = filteredLocations[0]
+        const withoutSales = filteredLocations.length - sellingLocations.length
+        const topVisible = sellingLocations[0]
         return (
           <Panel>
             <PanelSection
@@ -205,22 +207,12 @@ export function MultiLocationComparison() {
                       <SelectValue placeholder="Select merchant…" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Merchants (platform-wide)</SelectItem>
+                      <SelectItem value="all">All merchants</SelectItem>
                       {multiLocationMerchants.map(m => (
                         <SelectItem key={m.id} value={m.id}>
                           {m.name} ({m.count} locations)
                         </SelectItem>
                       ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
-                    <SelectTrigger className="h-9 w-36 rounded-full border-0 bg-muted/60 px-3 shadow-none">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="7">Last 7 days</SelectItem>
-                      <SelectItem value="30">Last 30 days</SelectItem>
-                      <SelectItem value="90">Last 90 days</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -233,17 +225,21 @@ export function MultiLocationComparison() {
                   meta={selectedMerchantId === 'all' ? `of ${data.totalLocations} total` : undefined}
                 />
                 <StatTile label="Avg GPV / Location" value={fmtGPV(avgVisible)} />
+                {/* The GPV is the headline; the name goes in the meta line, where
+                    a long location name can wrap instead of truncating. */}
                 <StatTile
                   label="Top Location"
                   icon={<Trophy />}
-                  value={
-                    <span className="block truncate" title={topVisible?.locationName}>
-                      {topVisible?.locationName ?? '—'}
-                    </span>
-                  }
-                  meta={fmtGPV(topVisible?.totalGPV ?? 0)}
+                  value={topVisible ? fmtGPV(topVisible.totalGPV) : '—'}
+                  meta={topVisible?.locationName}
                 />
-                <StatTile label="Median GPV" value={fmtGPV(medianVisible)} />
+                {/* Replaces "Median GPV", which read $0.00 whenever most
+                    locations hadn't sold — the count says that directly. */}
+                <StatTile
+                  label="Without Sales"
+                  value={withoutSales}
+                  meta={`No GPV in the last ${days} days`}
+                />
               </StatRow>
             </PanelSection>
           </Panel>
@@ -252,9 +248,14 @@ export function MultiLocationComparison() {
 
       <Panel>
         <PanelSection
-          label={`Top ${Math.min(15, filteredLocations.length)} locations by GPV`}
+          label={`Top ${chartData.length} locations by GPV`}
           caption={`Last ${days} days${selectedMerchantId !== 'all' ? ` · ${multiLocationMerchants.find(m => m.id === selectedMerchantId)?.name}` : ''}`}
         >
+          {chartData.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No location recorded sales in the last {days} days.
+            </p>
+          ) : (
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={chartData} margin={{ bottom: 32 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -275,13 +276,14 @@ export function MultiLocationComparison() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          )}
         </PanelSection>
       </Panel>
 
       <Panel>
         <PanelSection
           label="All locations"
-          caption={`Ranked by GPV — vs. prior ${days}-day period`}
+          caption={`Ranked by GPV over the last ${days} days · vs Avg compares with the average location, vs Prev with the ${days} days before`}
           action={
             // `flex-wrap` + `min-w-0`: the row sits in PanelSection's header,
             // which lets it shrink. A rigid `w-52` input in a non-wrapping row
@@ -307,7 +309,9 @@ export function MultiLocationComparison() {
             </div>
           }
         >
-          <div className="max-h-96 overflow-auto">
+          {/* No inner vertical scroll: a scroll box inside a scrolling page
+              traps the wheel. The table previews its top rows instead. */}
+          <div className="overflow-x-auto">
             {/* The min-width is what forces horizontal scrolling, so it has to
                 lift on mobile — otherwise hiding columns just widens the gaps
                 and the table still scrolls sideways. */}
@@ -317,7 +321,7 @@ export function MultiLocationComparison() {
                   <TableHead>Location</TableHead>
                   {showCol('merchant') && <TableHead>Merchant</TableHead>}
                   {showCol('gpv') && <TableHead className="text-right">GPV</TableHead>}
-                  {showCol('vsAvg') && <TableHead>vs Avg</TableHead>}
+                  {showCol('vsAvg') && <TableHead className="text-right">vs Avg</TableHead>}
                   {showCol('orders') && <TableHead className="text-right">Orders</TableHead>}
                   {showCol('avgOrder') && <TableHead className="text-right">Avg Order</TableHead>}
                   {showCol('voidRate') && <TableHead className="text-right">Void %</TableHead>}
@@ -340,7 +344,7 @@ export function MultiLocationComparison() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLocations.map((loc: LocationMetrics) => {
+                {(showAllRows ? filteredLocations : filteredLocations.slice(0, TABLE_PREVIEW_ROWS)).map((loc: LocationMetrics) => {
                   const diff = loc.totalGPV - data.avgGPVPerLocation
                   const vsAvgPct = data.avgGPVPerLocation > 0
                     ? Math.round((diff / data.avgGPVPerLocation) * 100)
@@ -364,8 +368,9 @@ export function MultiLocationComparison() {
                         </TableCell>
                       )}
                       {showCol('vsAvg') && (
-                        <TableCell className="tabular-nums text-muted-foreground">
-                          {vsAvgPct >= 0 ? '+' : ''}{vsAvgPct}% avg
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {/* A location with no sales is always -100%; that's noise, not a comparison. */}
+                          {loc.totalGPV > 0 ? `${vsAvgPct >= 0 ? '+' : ''}${vsAvgPct}% avg` : '—'}
                         </TableCell>
                       )}
                       {showCol('orders') && (
@@ -422,6 +427,18 @@ export function MultiLocationComparison() {
               </TableBody>
             </Table>
           </div>
+          {filteredLocations.length > TABLE_PREVIEW_ROWS && (
+            <div className="mt-3 text-center">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setShowAllRows(v => !v)}
+              >
+                {showAllRows ? `Show top ${TABLE_PREVIEW_ROWS}` : `Show all ${filteredLocations.length} locations`}
+              </Button>
+            </div>
+          )}
         </PanelSection>
       </Panel>
     </div>

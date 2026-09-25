@@ -6,6 +6,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   applyReportablePredicate,
   isOrderReportable,
+  RECOGNIZED_PAYMENT_STATUSES,
 } from '@/lib/reporting/recognized-order'
 
 // ============================================================================
@@ -28,7 +29,9 @@ export interface PlatformKPIs {
   merchantsOnboarding: number
   // Platform Health
   activeDevices: number
+  totalDevices: number
   totalLocations: number
+  merchantsWithLocations: number
   voidRate: number // percentage
   avgOrderValue: number
   // Payment mix
@@ -91,6 +94,8 @@ export interface GPVConcentrationData {
   averageGPV: number
   medianGPV: number
   periodDays: number
+  /** GPV a merchant needs in the period to count as a whale ($100k per 30 days). */
+  whaleThreshold: number
 }
 
 // ============================================================================
@@ -144,7 +149,10 @@ export interface StationUtilization {
   stationName: string
   stationType: string
   locationId: string
+  locationName: string | null
   merchantId: string
+  /** False for KDS screens: they show tickets, never ring up orders, so they are excluded from every utilization count. */
+  takesOrders: boolean
   totalOrders: number          // in the period
   activeDays: number           // days with ≥1 txn
   lastTransactionAt: string | null
@@ -192,6 +200,9 @@ export type ChurnSeverity = 'critical' | 'high' | 'medium'
 export interface ChurnWarningMerchant {
   id: string
   name: string
+  /** Where "Email" goes — the merchant has no account-manager field yet. */
+  ownerEmail: string | null
+  daysSinceLastOrder: number
   lastSevenDaysGPV: number
   prevSevenDaysGPV: number
   dropPercentage: number
@@ -201,6 +212,17 @@ export interface ChurnWarningMerchant {
   transactionsPrev7Days: number
 }
 
+/** An active merchant's active location with no recognized sale recently. */
+export interface QuietLocation {
+  locationId: string
+  locationName: string
+  merchantId: string
+  merchantName: string
+  /** null = the location has never recorded a sale. */
+  lastOrderDate: string | null
+  daysSinceLastOrder: number | null
+}
+
 export interface ChurnWarningData {
   atRiskMerchants: ChurnWarningMerchant[]
   totalAtRisk: number
@@ -208,6 +230,9 @@ export interface ChurnWarningData {
   highCount: number
   mediumCount: number
   totalGPVAtRisk: number
+  /** Week-over-week drops can't see a location that never sold or went silent. */
+  quietLocations: QuietLocation[]
+  quietAfterDays: number
 }
 
 export interface PlatformAuditLogFilters {
@@ -328,7 +353,8 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
     activeMerchantsRes,
     totalMerchantsRes,
     activeDevicesRes,
-    totalLocationsRes,
+    totalDevicesRes,
+    activeLocationsRes,
     newMerchantsRes,
     onboardingRes,
     paymentMethodsRes,
@@ -363,21 +389,27 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
       .select('*', { count: 'exact', head: true })
       .eq('is_online', true)
       .gte('last_heartbeat_at', tenMinutesAgo.toISOString()),
-    // Total active locations
+    // Deployed devices — the denominator for "N of M online" (same filter as the fleet view)
+    supabase
+      .from('stations')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true),
+    // Active locations — merchant_id too, for the distinct-merchant count
     supabase
       .from('locations')
-      .select('*', { count: 'exact', head: true })
+      .select('merchant_id')
       .eq('is_active', true),
     // New merchants created this calendar month
     supabase
       .from('merchants')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', startOfMonth.toISOString()),
-    // Merchants currently in onboarding
+    // Merchants currently in onboarding — `onboarding_status`, the same field
+    // the Merchant Health funnel reads (merchants has no `status` column)
     supabase
       .from('merchants')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'onboarding'),
+      .eq('onboarding_status', 'onboarding'),
     // Payment method split (30d) — for cash vs card %
     supabase
       .from('order_payments')
@@ -417,6 +449,8 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
   )
   const activeMerchants7d = activeMerchantSet.size
 
+  const activeLocations = activeLocationsRes.data || []
+
   // --- Payment method mix ---
   const payments = paymentMethodsRes.data || []
   const totalPaymentAmount = payments.reduce((sum, p) => sum + Number(p.amount), 0)
@@ -448,7 +482,9 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
     newMerchantsThisMonth: newMerchantsRes.count || 0,
     merchantsOnboarding: onboardingRes.count || 0,
     activeDevices: activeDevicesRes.count || 0,
-    totalLocations: totalLocationsRes.count || 0,
+    totalDevices: totalDevicesRes.count || 0,
+    totalLocations: activeLocations.length,
+    merchantsWithLocations: new Set(activeLocations.map(l => l.merchant_id)).size,
     voidRate,
     avgOrderValue,
     cashPercent,
@@ -780,6 +816,8 @@ export async function getGPVConcentration(days: number = 30): Promise<GPVConcent
   const prevPeriodStart = new Date()
   prevPeriodStart.setDate(prevPeriodStart.getDate() - days * 2)
 
+  const WHALE_THRESHOLD = 100_000 * (days / 30)
+
   const emptyResult: GPVConcentrationData = {
     lorenzCurve: [
       { merchantPercentile: 0, gpvPercentile: 0, equalityLine: 0, merchantCount: 0 },
@@ -793,6 +831,7 @@ export async function getGPVConcentration(days: number = 30): Promise<GPVConcent
     averageGPV: 0,
     medianGPV: 0,
     periodDays: days,
+    whaleThreshold: WHALE_THRESHOLD,
   }
 
   const { data: orders, error } = await applyReportablePredicate(
@@ -866,8 +905,7 @@ export async function getGPVConcentration(days: number = 30): Promise<GPVConcent
   const riskLevel: ConcentrationRisk =
     topTenPercentGPVShare > 60 ? 'high' : topTenPercentGPVShare >= 40 ? 'medium' : 'low'
 
-  const WHALE_THRESHOLD = 100_000 * (days / 30)
-  const whaleIds = sorted.filter(m => m.gpv >= WHALE_THRESHOLD).map(m => m.id)
+  const whaleIds =sorted.filter(m => m.gpv >= WHALE_THRESHOLD).map(m => m.id)
 
   let whaleList: WhaleListMerchant[] = []
   if (whaleIds.length > 0) {
@@ -915,6 +953,7 @@ export async function getGPVConcentration(days: number = 30): Promise<GPVConcent
     averageGPV: Math.round(averageGPV * 100) / 100,
     medianGPV: Math.round(medianGPV * 100) / 100,
     periodDays: days,
+    whaleThreshold: WHALE_THRESHOLD,
   }
 }
 
@@ -932,8 +971,10 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
   const last7DaysStart = new Date(now)
   last7DaysStart.setDate(last7DaysStart.getDate() - 7)
 
+  // The 14-day window doubles as the "gone quiet" threshold for locations.
+  const QUIET_AFTER_DAYS = 14
   const prev7DaysStart = new Date(now)
-  prev7DaysStart.setDate(prev7DaysStart.getDate() - 14)
+  prev7DaysStart.setDate(prev7DaysStart.getDate() - QUIET_AFTER_DAYS)
 
   const emptyResult: ChurnWarningData = {
     atRiskMerchants: [],
@@ -942,18 +983,25 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
     highCount: 0,
     mediumCount: 0,
     totalGPVAtRisk: 0,
+    quietLocations: [],
+    quietAfterDays: QUIET_AFTER_DAYS,
   }
 
   // Fetch orders for last 14 days
   const { data: orders, error } = await applyReportablePredicate(
-    supabase.from('orders').select('merchant_id, total_amount, created_at')
+    supabase.from('orders').select('merchant_id, location_id, total_amount, created_at')
   ).gte('created_at', prev7DaysStart.toISOString())
 
-  if (error || !orders || orders.length === 0) return emptyResult
+  if (error || !orders) return emptyResult
+
+  const quietLocations = await getQuietLocations(
+    supabase,
+    new Set(orders.map(o => o.location_id))
+  )
 
   // Aggregate by merchant for both periods
   const last7DaysData = new Map<string, { gpv: number; txCount: number; lastOrderDate: string }>()
-  const prev7DaysData = new Map<string, { gpv: number; txCount: number }>()
+  const prev7DaysData = new Map<string, { gpv: number; txCount: number; lastOrderDate: string }>()
 
   orders.forEach(order => {
     const orderDate = new Date(order.created_at)
@@ -980,8 +1028,11 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
       if (existing) {
         existing.gpv += amount
         existing.txCount += 1
+        if (orderDate > new Date(existing.lastOrderDate)) {
+          existing.lastOrderDate = order.created_at
+        }
       } else {
-        prev7DaysData.set(order.merchant_id, { gpv: amount, txCount: 1 })
+        prev7DaysData.set(order.merchant_id, { gpv: amount, txCount: 1, lastOrderDate: order.created_at })
       }
     }
   })
@@ -997,11 +1048,13 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
     prevTx: number
   }>()
 
-  last7DaysData.forEach((lastStats, merchantId) => {
-    const prevStats = prev7DaysData.get(merchantId)
+  // Walk the previous week, not the last one: a merchant that went to zero
+  // sales has no last-week rows at all and is the most urgent case (-100%).
+  prev7DaysData.forEach((prevStats, merchantId) => {
+    const lastStats = last7DaysData.get(merchantId)
+      ?? { gpv: 0, txCount: 0, lastOrderDate: prevStats.lastOrderDate }
 
-    // Only compare if merchant had activity in previous period
-    if (prevStats && prevStats.gpv > 0) {
+    if (prevStats.gpv > 0) {
       const dropAmount = prevStats.gpv - lastStats.gpv
       const dropPercentage = Math.round((dropAmount / prevStats.gpv) * 1000) / 10
 
@@ -1020,15 +1073,15 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
     }
   })
 
-  if (atRiskMerchantIds.length === 0) return emptyResult
+  if (atRiskMerchantIds.length === 0) return { ...emptyResult, quietLocations }
 
   // Fetch merchant details (only active merchants)
   const { data: merchants } = await supabase
     .from('merchants')
-    .select('id, name, onboarding_status')
+    .select('id, name, onboarding_status, owner_email')
     .in('id', atRiskMerchantIds)
 
-  if (!merchants || merchants.length === 0) return emptyResult
+  if (!merchants || merchants.length === 0) return { ...emptyResult, quietLocations }
 
   // Build final result
   const atRiskMerchants: ChurnWarningMerchant[] = merchants
@@ -1036,14 +1089,16 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
       const dropData = merchantDropData.get(merchant.id)
       if (!dropData) return null
 
-      // Classify severity
+      // Classify severity — bands match the UI labels (30–50, 50–80, 80+).
       let severity: ChurnSeverity = 'medium'
       if (dropData.dropPct >= 80) severity = 'critical'
-      else if (dropData.dropPct >= 55) severity = 'high'
+      else if (dropData.dropPct >= 50) severity = 'high'
 
       return {
         id: merchant.id,
         name: merchant.name || 'Unknown Merchant',
+        ownerEmail: merchant.owner_email ?? null,
+        daysSinceLastOrder: Math.floor((now.getTime() - new Date(dropData.lastOrderDate).getTime()) / 86_400_000),
         lastSevenDaysGPV: Math.round(dropData.lastGPV * 100) / 100,
         prevSevenDaysGPV: Math.round(dropData.prevGPV * 100) / 100,
         dropPercentage: dropData.dropPct,
@@ -1071,7 +1126,59 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
     highCount,
     mediumCount,
     totalGPVAtRisk: Math.round(totalGPVAtRisk * 100) / 100,
+    quietLocations,
+    quietAfterDays: QUIET_AFTER_DAYS,
   }
+}
+
+/**
+ * Active locations of active merchants with no recognized sale in the churn
+ * window. Onboarding/suspended merchants are excluded — a location that hasn't
+ * launched yet is the onboarding funnel's concern, not churn.
+ */
+async function getQuietLocations(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationsWithRecentSales: Set<string>
+): Promise<QuietLocation[]> {
+  const { data: merchants } = await supabase
+    .from('merchants').select('id, name').eq('onboarding_status', 'active')
+  if (!merchants?.length) return []
+  const merchantName = new Map(merchants.map(m => [m.id, m.name]))
+
+  const { data: locations } = await supabase
+    .from('locations').select('id, name, merchant_id')
+    .in('merchant_id', merchants.map(m => m.id)).eq('is_active', true)
+  const quiet = (locations ?? []).filter(l => !locationsWithRecentSales.has(l.id))
+
+  // Last sale per quiet location — "never" vs "3 weeks ago" is the difference
+  // between an unlaunched site and a lost one.
+  const lastSales = await Promise.all(quiet.map(l =>
+    applyReportablePredicate(
+      supabase.from('orders').select('created_at').eq('location_id', l.id)
+    ).order('created_at', { ascending: false }).limit(1)
+  ))
+
+  const now = Date.now()
+  return quiet
+    .map((l, i) => {
+      const lastOrderDate: string | null = lastSales[i].data?.[0]?.created_at ?? null
+      return {
+        locationId: l.id,
+        locationName: l.name,
+        merchantId: l.merchant_id,
+        merchantName: merchantName.get(l.merchant_id) || 'Unknown Merchant',
+        lastOrderDate,
+        daysSinceLastOrder: lastOrderDate
+          ? Math.floor((now - new Date(lastOrderDate).getTime()) / 86_400_000)
+          : null,
+      }
+    })
+    // Went silent (had sales) first — those were earning — then never-sold.
+    .sort((a, b) =>
+      (a.lastOrderDate === null ? 1 : 0) - (b.lastOrderDate === null ? 1 : 0)
+      || (b.lastOrderDate ?? '').localeCompare(a.lastOrderDate ?? '')
+      || a.locationName.localeCompare(b.locationName)
+    )
 }
 
 // ============================================================================
@@ -1535,6 +1642,10 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
   // the UI can render "based on ~$X/unit assumption" transparently.
   const HARDWARE_COST_PER_UNIT = 499
 
+  // Station types that ring up orders (chk_station_type). `kds` is the one
+  // that does not, so it is excluded from every utilization count.
+  const ORDER_TAKING_STATION_TYPES = new Set(['register', 'checkout', 'self_service'])
+
   const emptyResult: TerminalUtilizationData = {
     merchants: [],
     summary: {
@@ -1604,6 +1715,14 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
 
   const merchantNameMap = new Map(merchantRows?.map(m => [m.id, m.name || 'Unknown Merchant']) || [])
 
+  // Location names: shown per station, and they tell apart two merchants
+  // that share a name.
+  const locationIds = [...new Set(allStations.map(s => s.location_id).filter(Boolean))]
+  const { data: locationRows } = locationIds.length > 0
+    ? await supabase.from('locations').select('id, name').in('id', locationIds)
+    : { data: [] as { id: string; name: string | null }[] }
+  const locationNameMap = new Map(locationRows?.map(l => [l.id, l.name]) || [])
+
   // 5. Build per-station utilization
   const now = new Date()
   const ZOMBIE_THRESHOLD_DAYS = 30
@@ -1619,14 +1738,20 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
       daysSinceLastTxn = Math.floor((now.getTime() - new Date(lastTxnAt).getTime()) / (1000 * 60 * 60 * 24))
     }
 
-    const isZombie = lastTxnAt === null || (daysSinceLastTxn !== null && daysSinceLastTxn >= ZOMBIE_THRESHOLD_DAYS)
+    // A kitchen display never rings up an order, so "no transaction" says
+    // nothing about whether it is used — it is never inactive or reclaimable.
+    const takesOrders = ORDER_TAKING_STATION_TYPES.has(station.station_type)
+    const isZombie = takesOrders &&
+      (lastTxnAt === null || (daysSinceLastTxn !== null && daysSinceLastTxn >= ZOMBIE_THRESHOLD_DAYS))
 
     return {
       stationId: station.id,
       stationName: station.station_name,
       stationType: station.station_type,
       locationId: station.location_id,
+      locationName: locationNameMap.get(station.location_id) ?? null,
       merchantId: station.merchant_id,
+      takesOrders,
       totalOrders,
       activeDays,
       lastTransactionAt: lastTxnAt,
@@ -1635,6 +1760,8 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
       avgOrdersPerActiveDay: activeDays > 0 ? Math.round((totalOrders / activeDays) * 10) / 10 : 0,
     }
   })
+
+  const stationRank = (s: StationUtilization) => (s.isZombie ? 2 : s.takesOrders ? 0 : 1)
 
   // 6. Group by merchant and calculate utilization
   const merchantGroupMap = new Map<string, StationUtilization[]>()
@@ -1645,14 +1772,18 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
     merchantGroupMap.get(su.merchantId)!.push(su)
   })
 
-  // A station is "active" if it averaged ≥1 txn/day over the period
+  // A station is "active" if it averaged ≥1 txn/day over the period.
+  // Utilization counts order-taking stations only; KDS screens stay in
+  // `stations` for the drill-down but are not in any count. A merchant with no
+  // order-taking station has no utilization to measure, so it is left out.
   const merchantUtilizations: MerchantTerminalUtilization[] = Array.from(merchantGroupMap.entries())
-    .filter(([, stations]) => stations.length > 0)
+    .filter(([, stations]) => stations.some(s => s.takesOrders))
     .map(([merchantId, stations]) => {
-      const totalStations = stations.length
+      const orderStations = stations.filter(s => s.takesOrders)
+      const totalStations = orderStations.length
       // Active = station processed orders on average at least 1/day
       // More practically: station was active on at least 1 day (had any txn)
-      const activeStations = stations.filter(s => s.activeDays > 0 && s.avgOrdersPerActiveDay >= 1).length
+      const activeStations = orderStations.filter(s => s.activeDays > 0 && s.avgOrdersPerActiveDay >= 1).length
       const zombieStations = stations.filter(s => s.isZombie).length
       const utilizationRate = totalStations > 0 ? Math.round((activeStations / totalStations) * 1000) / 10 : 0
       const totalOrders = stations.reduce((sum, s) => sum + s.totalOrders, 0)
@@ -1669,16 +1800,21 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
         zombieStations,
         utilizationRate,
         tier,
-        stations: stations.sort((a, b) => b.totalOrders - a.totalOrders), // most active first
+        // Working stations first (most orders first), then kitchen displays,
+        // then inactive ones — the drill-down leads with what is in use.
+        stations: stations.sort((a, b) =>
+          stationRank(a) - stationRank(b) || b.totalOrders - a.totalOrders
+        ),
         totalOrders,
         reclaimableStations: zombieStations,
       }
     })
     .sort((a, b) => a.utilizationRate - b.utilizationRate) // worst first
 
-  // 7. Build summary
-  const totalStations = stationUtils.length
-  const totalActiveStations = stationUtils.filter(s => s.activeDays > 0 && s.avgOrdersPerActiveDay >= 1).length
+  // 7. Build summary — order-taking stations only, as per merchant above
+  const orderStationUtils = stationUtils.filter(s => s.takesOrders)
+  const totalStations = orderStationUtils.length
+  const totalActiveStations = orderStationUtils.filter(s => s.activeDays > 0 && s.avgOrdersPerActiveDay >= 1).length
   const totalZombieStations = stationUtils.filter(s => s.isZombie).length
   const underutilizedMerchantCount = merchantUtilizations.filter(m => m.utilizationRate < 50).length
   const criticalMerchantCount = merchantUtilizations.filter(m => m.utilizationRate < 25).length
@@ -1922,42 +2058,61 @@ export interface OnboardingFunnelStage {
   stage: string
   label: string
   count: number
-  conversionFromPrev: number | null
+  /** Share of all merchants in this stage, 0–100. */
+  percentOfTotal: number
 }
 
-export interface StuckMerchant {
+/**
+ * A merchant that signed up 14+ days ago and still hasn't gone live. One list
+ * covering both "stuck in onboarding" and "never activated" — they were two
+ * tables showing largely the same merchants.
+ */
+export interface StalledMerchant {
   id: string
   name: string
+  ownerEmail: string | null
   createdAt: string
-  daysInOnboarding: number
+  daysSinceSignup: number
   lastActivity: string | null
   assignedAdmin: string | null
+  hasLogo: boolean
+  hasLocation: boolean
+  hasMenu: boolean
+  hasStaff: boolean
+  hasDevice: boolean
+  /** Checklist items done, 0–5. */
+  readinessScore: number
 }
 
 export interface MonthlyOnboardingTrend {
   month: string
   newCount: number
-  activeCount: number
+  /** Of the merchants that signed up this month, how many are live now. */
+  liveCount: number
 }
 
 export interface MerchantOnboardingFunnelData {
+  totalMerchants: number
   funnel: OnboardingFunnelStage[]
-  stuckMerchants: StuckMerchant[]
+  stalledMerchants: StalledMerchant[]
   monthlyTrend: MonthlyOnboardingTrend[]
-  avgDaysToActive: number | null
-  conversionRate: number
+  liveCount: number
+  /** Live ÷ all merchants, 0–100. */
+  liveRate: number
 }
+
+/** Days after sign-up before a not-yet-live merchant counts as stalled. */
+const STALLED_AFTER_DAYS = 14
 
 export async function getMerchantOnboardingFunnel(): Promise<MerchantOnboardingFunnelData> {
   await assertHQPermission('hq.org.view')
 
   const supabase = createServerSupabaseClient()
   const now = new Date()
-  const fourteenDaysAgo = new Date(now); fourteenDaysAgo.setDate(now.getDate() - 14)
-  const twelveMonthsAgo = new Date(now); twelveMonthsAgo.setMonth(now.getMonth() - 12)
+  const DAY_MS = 1000 * 60 * 60 * 24
 
   const [merchantsRes, auditRes] = await Promise.all([
-    supabase.from('merchants').select('id, name, onboarding_status, created_at'),
+    supabase.from('merchants').select('id, name, owner_email, onboarding_status, created_at, organizations(imageURL)'),
     supabase.from('audit_logs').select('resource_id, created_at')
       .eq('resource_type', 'merchant')
       .order('created_at', { ascending: false })
@@ -1974,70 +2129,106 @@ export async function getMerchantOnboardingFunnel(): Promise<MerchantOnboardingF
     }
   })
 
-  const statusCounts = {
-    created: merchants.filter(m => m.onboarding_status === 'created').length,
-    onboarding: merchants.filter(m => m.onboarding_status === 'onboarding').length,
-    active: merchants.filter(m => m.onboarding_status === 'active' || m.onboarding_status === 'completed').length,
-    suspended: merchants.filter(m => m.onboarding_status === 'suspended' || m.onboarding_status === 'churned').length,
-  }
+  // Every `onboarding_status` value lands in exactly one stage, so the stages
+  // always sum to the merchant total. `cancelled` used to fall through all four.
+  const isLive = (s: string) => s === 'active' || s === 'completed'
+  const isNotLiveYet = (s: string) => s === 'created' || s === 'onboarding'
+  const stageOf = (s: string) =>
+    s === 'created' ? 'created' : s === 'onboarding' ? 'onboarding' : isLive(s) ? 'live' : 'churned'
 
-  const fmtConv = (num: number, denom: number) =>
-    denom > 0 ? Math.round((num / denom) * 1000) / 10 : null
+  const counts = { created: 0, onboarding: 0, live: 0, churned: 0 }
+  merchants.forEach(m => { counts[stageOf(m.onboarding_status)] += 1 })
+
+  const total = merchants.length
+  const share = (n: number) => total > 0 ? Math.round((n / total) * 1000) / 10 : 0
 
   const funnel: OnboardingFunnelStage[] = [
-    { stage: 'created', label: 'Created', count: statusCounts.created, conversionFromPrev: null },
-    { stage: 'onboarding', label: 'Onboarding', count: statusCounts.onboarding, conversionFromPrev: fmtConv(statusCounts.onboarding, merchants.length) },
-    { stage: 'active', label: 'Active', count: statusCounts.active, conversionFromPrev: fmtConv(statusCounts.active, statusCounts.onboarding + statusCounts.active) },
-    { stage: 'churned', label: 'Churned / Suspended', count: statusCounts.suspended, conversionFromPrev: null },
+    { stage: 'created', label: 'Created', count: counts.created, percentOfTotal: share(counts.created) },
+    { stage: 'onboarding', label: 'Onboarding', count: counts.onboarding, percentOfTotal: share(counts.onboarding) },
+    { stage: 'live', label: 'Live', count: counts.live, percentOfTotal: share(counts.live) },
+    { stage: 'churned', label: 'Churned', count: counts.churned, percentOfTotal: share(counts.churned) },
   ]
 
-  const stuckMerchantList = merchants.filter(m => m.onboarding_status === 'onboarding' && new Date(m.created_at) < fourteenDaysAgo)
-  const stuckIds = stuckMerchantList.map(m => m.id)
+  const daysSince = (iso: string) => Math.floor((now.getTime() - new Date(iso).getTime()) / DAY_MS)
 
-  // Fetch assigned admin names from admin_merchant_access
-  const { data: accessRows } = stuckIds.length > 0
-    ? await supabase.from('admin_merchant_access')
-        .select('merchant_id, admin_user_id, users!inner(full_name)')
-        .in('merchant_id', stuckIds)
-        .eq('is_active', true)
-    : { data: [] }
+  const stalledRaw = merchants.filter(m =>
+    isNotLiveYet(m.onboarding_status) && daysSince(m.created_at) >= STALLED_AFTER_DAYS
+  )
+  const stalledIds = stalledRaw.map(m => m.id)
+
+  const [accessRes, menuRes, staffRes, stationsRes, locationsRes] = stalledIds.length > 0
+    ? await Promise.all([
+        supabase.from('admin_merchant_access')
+          .select('merchant_id, admin_user_id, users!inner(full_name)')
+          .in('merchant_id', stalledIds)
+          .eq('is_active', true),
+        supabase.from('menu_items').select('merchant_id').in('merchant_id', stalledIds),
+        supabase.from('location_members').select('merchant_id').in('merchant_id', stalledIds),
+        supabase.from('stations').select('merchant_id').in('merchant_id', stalledIds).eq('is_active', true),
+        supabase.from('locations').select('merchant_id').in('merchant_id', stalledIds).eq('is_active', true),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }]
+
   const assignedAdminMap = new Map<string, string>()
-  ;(accessRows || []).forEach((row: any) => {
+  ;(accessRes.data || []).forEach((row: any) => {
     if (!assignedAdminMap.has(row.merchant_id) && row.users?.full_name) {
       assignedAdminMap.set(row.merchant_id, row.users.full_name)
     }
   })
+  const idSet = (rows: { merchant_id: string }[] | null) => new Set((rows || []).map(r => r.merchant_id))
+  const hasMenuSet = idSet(menuRes.data)
+  const hasStaffSet = idSet(staffRes.data)
+  const hasDeviceSet = idSet(stationsRes.data)
+  const hasLocationSet = idSet(locationsRes.data)
 
-  const stuckMerchants: StuckMerchant[] = stuckMerchantList
-    .map(m => ({
-      id: m.id,
-      name: m.name || 'Unknown',
-      createdAt: m.created_at,
-      daysInOnboarding: Math.floor((now.getTime() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24)),
-      lastActivity: lastActivityMap.get(m.id) || null,
-      assignedAdmin: assignedAdminMap.get(m.id) || null,
-    }))
-    .sort((a, b) => b.daysInOnboarding - a.daysInOnboarding)
+  const stalledMerchants: StalledMerchant[] = stalledRaw
+    .map(m => {
+      // Logo is the org image the merchant uploads, synced from Clerk.
+      const org = Array.isArray(m.organizations) ? m.organizations[0] : m.organizations
+      const hasLogo = !!org?.imageURL
+      const hasLocation = hasLocationSet.has(m.id)
+      const hasMenu = hasMenuSet.has(m.id)
+      const hasStaff = hasStaffSet.has(m.id)
+      const hasDevice = hasDeviceSet.has(m.id)
+      return {
+        id: m.id,
+        name: m.name || 'Unknown',
+        ownerEmail: m.owner_email,
+        createdAt: m.created_at,
+        daysSinceSignup: daysSince(m.created_at),
+        lastActivity: lastActivityMap.get(m.id) || null,
+        assignedAdmin: assignedAdminMap.get(m.id) || null,
+        hasLogo, hasLocation, hasMenu, hasStaff, hasDevice,
+        readinessScore: [hasLogo, hasLocation, hasMenu, hasStaff, hasDevice].filter(Boolean).length,
+      }
+    })
+    // Closest to going live first — those are the calls worth making — then oldest.
+    .sort((a, b) => b.readinessScore - a.readinessScore || b.daysSinceSignup - a.daysSinceSignup)
 
-  const monthlyMap = new Map<string, { newCount: number; activeCount: number }>()
+  // Last 12 calendar months, oldest first, INCLUDING months with no sign-ups:
+  // skipping empty months squashed the time axis.
+  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const monthlyMap = new Map<string, { newCount: number; liveCount: number }>()
+  for (let i = 11; i >= 0; i--) {
+    monthlyMap.set(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)), { newCount: 0, liveCount: 0 })
+  }
   merchants.forEach(m => {
-    const date = new Date(m.created_at)
-    if (date < twelveMonthsAgo) return
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    if (!monthlyMap.has(key)) monthlyMap.set(key, { newCount: 0, activeCount: 0 })
-    const entry = monthlyMap.get(key)!
+    const entry = monthlyMap.get(monthKey(new Date(m.created_at)))
+    if (!entry) return
     entry.newCount += 1
-    if (m.onboarding_status === 'active' || m.onboarding_status === 'completed') entry.activeCount += 1
+    if (isLive(m.onboarding_status)) entry.liveCount += 1
   })
 
   const monthlyTrend: MonthlyOnboardingTrend[] = Array.from(monthlyMap.entries())
     .map(([month, v]) => ({ month, ...v }))
-    .sort((a, b) => a.month.localeCompare(b.month))
 
   return {
-    funnel, stuckMerchants, monthlyTrend,
-    avgDaysToActive: null,
-    conversionRate: fmtConv(statusCounts.active, merchants.length) ?? 0,
+    totalMerchants: total,
+    funnel,
+    stalledMerchants,
+    monthlyTrend,
+    liveCount: counts.live,
+    liveRate: share(counts.live),
   }
 }
 
@@ -2052,32 +2243,13 @@ export interface ActivationHistogramBucket {
   maxDays: number
 }
 
-export interface NeverActivatedMerchant {
-  id: string
-  name: string
-  createdAt: string
-  daysSinceCreation: number
-  hasLogo: boolean
-  hasLocation: boolean
-  hasMenu: boolean
-  hasStaff: boolean
-  hasDevice: boolean
-  onboardingScore: number // 0-6 checklist items (logo, location, menu, staff, device, order)
-}
-
 export interface MerchantActivationData {
   histogram: ActivationHistogramBucket[]
-  neverActivated: NeverActivatedMerchant[]
   avgDaysToActivate: number | null
   medianDaysToActivate: number | null
   activatedThisMonth: number
-  totalMerchantsWithOrders: number
-  momImprovement: {
-    thisMonthAvgDays: number | null
-    lastMonthAvgDays: number | null
-    /** Negative = improved (faster activation). Null if either month has no data. */
-    delta: number | null
-  }
+  /** Merchants the averages and histogram are computed from (have a first sale). */
+  sampleSize: number
 }
 
 export async function getMerchantActivationTimeline(): Promise<MerchantActivationData> {
@@ -2086,10 +2258,9 @@ export async function getMerchantActivationTimeline(): Promise<MerchantActivatio
   const supabase = createServerSupabaseClient()
   const now = new Date()
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
 
   const [merchantsRes, firstOrdersRes] = await Promise.all([
-    supabase.from('merchants').select('id, name, created_at'),
+    supabase.from('merchants').select('id, created_at'),
     applyReportablePredicate(
       supabase.from('orders').select('merchant_id, created_at')
     ).order('created_at', { ascending: true }),
@@ -2114,8 +2285,6 @@ export async function getMerchantActivationTimeline(): Promise<MerchantActivatio
 
   const daysToActivate: number[] = []
   let activatedThisMonth = 0
-  const thisMonthDays: number[] = []
-  const lastMonthDays: number[] = []
 
   merchants.forEach(m => {
     const firstOrderAt = firstOrderMap.get(m.id)
@@ -2125,13 +2294,7 @@ export async function getMerchantActivationTimeline(): Promise<MerchantActivatio
     daysToActivate.push(days)
     const bucket = buckets.find(b => days >= b.minDays && days < b.maxDays)
     if (bucket) bucket.count += 1
-    const firstOrderDate = new Date(firstOrderAt)
-    if (firstOrderDate >= startOfThisMonth) {
-      activatedThisMonth += 1
-      thisMonthDays.push(days)
-    } else if (firstOrderDate >= startOfLastMonth && firstOrderDate < startOfThisMonth) {
-      lastMonthDays.push(days)
-    }
+    if (new Date(firstOrderAt) >= startOfThisMonth) activatedThisMonth += 1
   })
 
   const avgDaysToActivate = daysToActivate.length > 0
@@ -2143,62 +2306,12 @@ export async function getMerchantActivationTimeline(): Promise<MerchantActivatio
     ? sortedDays.length % 2 === 0 ? (sortedDays[midIdx - 1] + sortedDays[midIdx]) / 2 : sortedDays[midIdx]
     : null
 
-  const thisMonthAvgDays = thisMonthDays.length > 0
-    ? Math.round(thisMonthDays.reduce((a, b) => a + b, 0) / thisMonthDays.length * 10) / 10
-    : null
-  const lastMonthAvgDays = lastMonthDays.length > 0
-    ? Math.round(lastMonthDays.reduce((a, b) => a + b, 0) / lastMonthDays.length * 10) / 10
-    : null
-  const momDelta = thisMonthAvgDays !== null && lastMonthAvgDays !== null
-    ? Math.round((thisMonthAvgDays - lastMonthAvgDays) * 10) / 10
-    : null
-
-  const neverActivatedRaw = merchants.filter(m => {
-    const days = Math.floor((now.getTime() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24))
-    return days > 30 && !firstOrderMap.has(m.id)
-  })
-
-  const naIds = neverActivatedRaw.slice(0, 50).map(m => m.id)
-  const [menuRes, staffRes, stationsRes, locationsRes] = naIds.length > 0
-    ? await Promise.all([
-        supabase.from('menu_items').select('merchant_id').in('merchant_id', naIds),
-        supabase.from('location_members').select('merchant_id').in('merchant_id', naIds),
-        supabase.from('stations').select('merchant_id').in('merchant_id', naIds).eq('is_active', true),
-        supabase.from('locations').select('merchant_id').in('merchant_id', naIds).eq('is_active', true),
-      ])
-    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }]
-
-  const hasMenuSet = new Set(menuRes.data?.map(r => r.merchant_id) || [])
-  const hasStaffSet = new Set(staffRes.data?.map(r => r.merchant_id) || [])
-  const hasDeviceSet = new Set(stationsRes.data?.map(r => r.merchant_id) || [])
-  const hasLocationSet = new Set(locationsRes.data?.map(r => r.merchant_id) || [])
-
-  const neverActivated: NeverActivatedMerchant[] = neverActivatedRaw.slice(0, 50).map(m => {
-    const hasLogo = false // logo_url not in merchants table
-    const hasLocation = hasLocationSet.has(m.id)
-    const hasMenu = hasMenuSet.has(m.id)
-    const hasStaff = hasStaffSet.has(m.id)
-    const hasDevice = hasDeviceSet.has(m.id)
-    // 6th criterion (has first order) is always false for never-activated list
-    const onboardingScore = [hasLogo, hasLocation, hasMenu, hasStaff, hasDevice].filter(Boolean).length
-    return {
-      id: m.id,
-      name: m.name || 'Unknown',
-      createdAt: m.created_at,
-      daysSinceCreation: Math.floor((now.getTime() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24)),
-      hasLogo, hasLocation, hasMenu, hasStaff, hasDevice,
-      onboardingScore,
-    }
-  }).sort((a, b) => b.daysSinceCreation - a.daysSinceCreation)
-
   return {
     histogram: buckets,
-    neverActivated,
     avgDaysToActivate,
     medianDaysToActivate,
     activatedThisMonth,
-    totalMerchantsWithOrders: firstOrderMap.size,
-    momImprovement: { thisMonthAvgDays, lastMonthAvgDays, delta: momDelta },
+    sampleSize: daysToActivate.length,
   }
 }
 
@@ -2223,14 +2336,18 @@ export interface MerchantFeeExposure {
   totalGPV: number
   cardPercent: number
   estimatedFees: number
+  /** Merchant runs dual pricing, so card fees are largely passed to customers. */
+  dualPricing: boolean
 }
 
 export interface MonthlyPaymentTrend {
   month: string        // e.g. "2026-01"
-  cashPercent: number
-  cardPercent: number
-  otherPercent: number
+  /** null when the month had no collected payments — charted as a gap, not 0%. */
+  cashPercent: number | null
+  cardPercent: number | null
+  otherPercent: number | null
   totalGPV: number
+  transactionCount: number
 }
 
 export interface DualPricingAnalysis {
@@ -2268,21 +2385,47 @@ export async function getPaymentMethodMix(days: number = 30): Promise<PaymentMet
   const supabase = createServiceRoleClient()
   const periodStart = new Date(); periodStart.setDate(periodStart.getDate() - days)
 
-  const { data: payments } = await supabase
-    .from('order_payments')
-    .select('payment_method, amount, order_id')
-    .gte('initiated_at', periodStart.toISOString())
+  // Collected payments on recognized orders only, windowed by the order's
+  // created_at — the same order set Whale Watch and Location comparison use.
+  // Totals still differ slightly from order GPV by design: cash payments carry
+  // the dual-pricing discount and card payments include tips.
+  // order_payments → orders is many-to-one, so PostgREST embeds a single
+  // object; the generated types can't tell and infer an array.
+  type CollectedPayment = {
+    payment_method: string | null
+    amount: number
+    orders: { merchant_id: string; created_at: string }
+  }
+  // Paged: PostgREST caps a response at 1000 rows, which silently dropped the
+  // newest months from the 6-month trend.
+  const PAGE = 1000
+  const collectedPayments = async (since: Date) => {
+    const rows: CollectedPayment[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await applyReportablePredicate(
+        supabase
+          .from('order_payments')
+          .select('id, payment_method, amount, orders!inner(merchant_id, created_at, status, payment_status)')
+          .in('status', [...RECOGNIZED_PAYMENT_STATUSES]),
+        'orders.'
+      )
+        .gte('orders.created_at', since.toISOString())
+        .order('id')
+        .range(from, from + PAGE - 1)
+      const page = (data ?? []) as unknown as CollectedPayment[]
+      rows.push(...page)
+      if (page.length < PAGE) break
+    }
+    return { data: rows }
+  }
+
+  const { data: payments } = await collectedPayments(periodStart)
 
   const emptyDualPricing: DualPricingAnalysis = { merchantsWithDualPricing: 0, estimatedCardSurchargeCollected: 0, estimatedCashDiscountGiven: 0 }
 
   if (!payments || payments.length === 0) {
     return { split: [], totalGPV: 0, totalTransactions: 0, cashPercent: 0, cardPercent: 0, feeExposureTable: [], dualPricingAnalysis: emptyDualPricing, monthlyTrend: [], periodDays: days }
   }
-
-  const orderIds = [...new Set(payments.map(p => p.order_id).filter(Boolean))]
-  const { data: orders } = await supabase
-    .from('orders').select('id, merchant_id').in('id', orderIds)
-  const orderMerchantMap = new Map((orders || []).map(o => [o.id, o.merchant_id]))
 
   const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount), 0)
 
@@ -2309,7 +2452,7 @@ export async function getPaymentMethodMix(days: number = 30): Promise<PaymentMet
 
   const merchantGPVMap = new Map<string, { card: number; cash: number; total: number }>()
   payments.forEach(p => {
-    const mid = orderMerchantMap.get(p.order_id); if (!mid) return
+    const mid = p.orders.merchant_id; if (!mid) return
     if (!merchantGPVMap.has(mid)) merchantGPVMap.set(mid, { card: 0, cash: 0, total: 0 })
     const e = merchantGPVMap.get(mid)!; const amt = Number(p.amount); e.total += amt
     if (p.payment_method === 'cash') e.cash += amt
@@ -2318,9 +2461,15 @@ export async function getPaymentMethodMix(days: number = 30): Promise<PaymentMet
 
   const mids = [...merchantGPVMap.keys()]
   const { data: merchantRows } = mids.length > 0
-    ? await supabase.from('merchants').select('id, name').in('id', mids)
+    ? await supabase.from('merchants').select('id, name, pricing_strategy, dual_pricing_percentage').in('id', mids)
     : { data: [] }
   const nameMap = new Map((merchantRows || []).map(m => [m.id, m.name || 'Unknown']))
+  // Dual pricing is a merchant setting; the rate is the card-vs-cash price gap.
+  const dualPricingRate = new Map(
+    (merchantRows || [])
+      .filter(m => m.pricing_strategy === 'dual')
+      .map(m => [m.id, Number(m.dual_pricing_percentage) / 100])
+  )
 
   const feeExposureTable: MerchantFeeExposure[] = Array.from(merchantGPVMap.entries())
     .map(([mid, v]) => ({
@@ -2329,66 +2478,65 @@ export async function getPaymentMethodMix(days: number = 30): Promise<PaymentMet
       totalGPV: Math.round(v.total * 100) / 100,
       cardPercent: v.total > 0 ? Math.round((v.card / v.total) * 1000) / 10 : 0,
       estimatedFees: Math.round(v.card * 0.025 * 100) / 100,
+      dualPricing: dualPricingRate.has(mid),
     }))
     .sort((a, b) => b.cardPercent - a.cardPercent).slice(0, 50)
 
+  // Six calendar months ending with the current one (UTC), so the current month
+  // is always on the axis even before it has payments.
+  const now = new Date()
+  const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  const trendMonths = Array.from({ length: 6 }, (_, i) =>
+    monthKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5 + i, 1)))
+  )
+  const trendStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1))
+
+  const trendPaymentsRes = await collectedPayments(trendStart)
+
   // --- Dual pricing analysis ---
-  const allMerchantIds = [...merchantGPVMap.keys()]
-  const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-
-  const [dualPricingLocationsRes, trendPaymentsRes] = await Promise.all([
-    allMerchantIds.length > 0
-      ? supabase.from('locations').select('merchant_id, cash_discount_percentage')
-          .in('merchant_id', allMerchantIds).gt('cash_discount_percentage', 0)
-      : Promise.resolve({ data: [] }),
-    supabase.from('order_payments').select('payment_method, amount, initiated_at')
-      .gte('initiated_at', sixMonthsAgo.toISOString()),
-  ])
-
-  const dualPricingLocations = dualPricingLocationsRes.data || []
-  const dualPricingMerchantSet = new Set(dualPricingLocations.map(l => l.merchant_id))
-  const avgCashDiscountRate = dualPricingLocations.length > 0
-    ? dualPricingLocations.reduce((sum, l) => sum + Number(l.cash_discount_percentage || 0), 0) / dualPricingLocations.length / 100
-    : 0.03
-
+  // Each dual-pricing merchant at its own rate. (This used to read a
+  // locations.cash_discount_percentage column that doesn't exist, so the
+  // query always failed and the panel never showed.)
   let estimatedCardSurcharge = 0
   let estimatedCashDiscount = 0
   merchantGPVMap.forEach((v, mid) => {
-    if (!dualPricingMerchantSet.has(mid)) return
-    estimatedCardSurcharge += v.card * avgCashDiscountRate
-    estimatedCashDiscount += v.cash * avgCashDiscountRate
+    const rate = dualPricingRate.get(mid); if (rate === undefined) return
+    estimatedCardSurcharge += v.card * rate
+    estimatedCashDiscount += v.cash * rate
   })
 
   const dualPricingAnalysis: DualPricingAnalysis = {
-    merchantsWithDualPricing: dualPricingMerchantSet.size,
+    merchantsWithDualPricing: dualPricingRate.size,
     estimatedCardSurchargeCollected: Math.round(estimatedCardSurcharge * 100) / 100,
     estimatedCashDiscountGiven: Math.round(estimatedCashDiscount * 100) / 100,
   }
 
   // --- 6-month payment method trend ---
   const trendPayments = trendPaymentsRes.data || []
-  const trendMonthMap = new Map<string, { cash: number; card: number; other: number; total: number }>()
+  const trendMonthMap = new Map(
+    trendMonths.map(m => [m, { cash: 0, card: 0, other: 0, total: 0, count: 0 }])
+  )
   trendPayments.forEach(p => {
-    const d = new Date(p.initiated_at)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    if (!trendMonthMap.has(key)) trendMonthMap.set(key, { cash: 0, card: 0, other: 0, total: 0 })
-    const e = trendMonthMap.get(key)!; const amt = Number(p.amount)
-    e.total += amt
+    const e = trendMonthMap.get(monthKey(new Date(p.orders.created_at))); if (!e) return
+    const amt = Number(p.amount)
+    e.total += amt; e.count += 1
     if (p.payment_method === 'cash') e.cash += amt
     else if (p.payment_method?.startsWith('card')) e.card += amt
     else e.other += amt
   })
 
-  const monthlyTrend: MonthlyPaymentTrend[] = Array.from(trendMonthMap.entries())
-    .map(([month, v]) => ({
+  const pct = (part: number, total: number) => total > 0 ? Math.round((part / total) * 1000) / 10 : null
+  const monthlyTrend: MonthlyPaymentTrend[] = trendMonths.map(month => {
+    const v = trendMonthMap.get(month)!
+    return {
       month,
-      cashPercent: v.total > 0 ? Math.round((v.cash / v.total) * 1000) / 10 : 0,
-      cardPercent: v.total > 0 ? Math.round((v.card / v.total) * 1000) / 10 : 0,
-      otherPercent: v.total > 0 ? Math.round((v.other / v.total) * 1000) / 10 : 0,
+      cashPercent: pct(v.cash, v.total),
+      cardPercent: pct(v.card, v.total),
+      otherPercent: pct(v.other, v.total),
       totalGPV: Math.round(v.total * 100) / 100,
-    }))
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .slice(-6) // keep last 6 months
+      transactionCount: v.count,
+    }
+  })
 
   return { split, totalGPV: Math.round(totalAmount * 100) / 100, totalTransactions: payments.length, cashPercent, cardPercent, feeExposureTable, dualPricingAnalysis, monthlyTrend, periodDays: days }
 }
@@ -2420,11 +2568,17 @@ export interface StaffVoidEntry {
   staffName: string
   merchantName: string
   voidCount: number
+  /** Orders this staff member rang up in the period. */
+  ordersTaken: number
+  /** Voided items per order taken; null when they took no orders. */
+  voidsPerOrder: number | null
 }
 
 export interface VoidRefundData {
   platformVoidRate: number
   platformRefundRate: number
+  /** Void rate (%) above which a merchant is flagged: 2× the platform rate. */
+  anomalyThreshold: number
   merchantAnomalies: VoidAnomalyMerchant[]
   voidReasonBreakdown: VoidReasonBreakdown[]
   staffVoidLeaderboard: StaffVoidEntry[]
@@ -2438,7 +2592,7 @@ export async function getVoidRefundIntelligence(days: number = 30): Promise<Void
   const periodStart = new Date(); periodStart.setDate(periodStart.getDate() - days)
 
   const [ordersRes, voidReasonsRes, voidedItemsRes] = await Promise.all([
-    supabase.from('orders').select('id, merchant_id, status, total_amount')
+    supabase.from('orders').select('id, merchant_id, status, total_amount, created_by_staff_id')
       .not('status', 'in', '(draft,cancelled)').gte('created_at', periodStart.toISOString()),
     supabase.from('order_status_history').select('reason, to_status, order_id')
       .in('to_status', ['void', 'refunded']).gte('created_at', periodStart.toISOString()),
@@ -2522,6 +2676,11 @@ export async function getVoidRefundIntelligence(days: number = 30): Promise<Void
     if (mid) e.merchantIds.add(mid)
   })
 
+  const ordersByStaff = new Map<string, number>()
+  orders.forEach(o => {
+    if (o.created_by_staff_id) ordersByStaff.set(o.created_by_staff_id, (ordersByStaff.get(o.created_by_staff_id) || 0) + 1)
+  })
+
   const staffIds = [...staffVoidMap.keys()]
   const serviceSupabase = createServiceRoleClient()
   const { data: staffRows } = staffIds.length > 0
@@ -2541,12 +2700,16 @@ export async function getVoidRefundIntelligence(days: number = 30): Promise<Void
         staffName: staffNameMap.get(staffId) || 'Unknown',
         merchantName: primaryMerchantId ? (nameMap.get(primaryMerchantId) || 'Unknown') : 'Unknown',
         voidCount: v.count,
+        ordersTaken: ordersByStaff.get(staffId) || 0,
+        voidsPerOrder: ordersByStaff.get(staffId)
+          ? Math.round((v.count / ordersByStaff.get(staffId)!) * 100) / 100
+          : null,
       }
     })
     .sort((a, b) => b.voidCount - a.voidCount)
     .slice(0, 15)
 
-  return { platformVoidRate, platformRefundRate, merchantAnomalies, voidReasonBreakdown, staffVoidLeaderboard, periodDays: days }
+  return { platformVoidRate, platformRefundRate, anomalyThreshold: Math.round(ANOMALY_THRESHOLD * 100) / 100, merchantAnomalies, voidReasonBreakdown, staffVoidLeaderboard, periodDays: days }
 }
 
 // ============================================================================

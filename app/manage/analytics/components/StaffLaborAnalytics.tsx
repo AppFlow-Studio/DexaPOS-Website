@@ -11,6 +11,8 @@ import {
     type ReportColumn,
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -18,6 +20,7 @@ import {
     ResponsiveContainer, Cell,
 } from 'recharts'
 import { ArrowUpDown, Clock, Zap, AlertCircle, CalendarDays, Table2 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
@@ -66,6 +69,8 @@ export function StaffLaborAnalytics() {
             setSortKey(key)
             setSortDir(key === 'merchantName' ? 'asc' : 'desc')
         }
+        // A re-sort starts from the top, not mid-list on the old page.
+        merchantPage.setPage(1)
     }
 
     const sortedMerchants = useMemo(() => {
@@ -79,6 +84,7 @@ export function StaffLaborAnalytics() {
             return sortDir === 'asc' ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal)
         })
     }, [data?.merchantStats, sortKey, sortDir])
+    const merchantPage = useClientPagination(sortedMerchants)
 
     const periodSelect = (
         <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -107,6 +113,16 @@ export function StaffLaborAnalytics() {
 
     const { sessionHealth } = data
     const totalOpenShifts = data.openShiftsCount
+    const openShiftNote = (
+        <>
+            <span className="font-semibold">
+                {totalOpenShifts} open shift{totalOpenShifts > 1 ? 's' : ''} detected.
+            </span>{' '}
+            Staff clocked in but never clocked out. Their hours are excluded from totals to
+            prevent inflated data. Hours shown reflect{' '}
+            <span className="font-semibold">completed shifts only</span>.
+        </>
+    )
 
     const peakHour = data.hourlyPattern.reduce((max, h) => h.shiftCount > max.shiftCount ? h : max, data.hourlyPattern[0])
     const peakDay = data.dayOfWeekPattern.reduce((max, d) => d.shiftCount > max.shiftCount ? d : max, data.dayOfWeekPattern[0])
@@ -126,21 +142,47 @@ export function StaffLaborAnalytics() {
     return (
         <div className="space-y-6">
             <Panel>
-                <PanelSection label="Staff labor" icon={Clock} action={periodSelect}>
+                <PanelSection
+                    label={
+                        <span className="inline-flex items-center gap-2">
+                            Staff labor
+                            {/* Phones get the open-shift note behind this icon
+                                rather than as a block above the figures. */}
+                            {totalOpenShifts > 0 && (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button
+                                            type="button"
+                                            aria-label="Open shifts detected"
+                                            className="inline-flex rounded-full text-muted-foreground hover:text-foreground md:hidden"
+                                        >
+                                            <AlertCircle className="h-4 w-4" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    {/* Centred on the icon, kept 16px off the screen
+                                        edges and never wider than the viewport —
+                                        start-aligned, it ran off the right side. */}
+                                    <PopoverContent
+                                        align="center"
+                                        collisionPadding={16}
+                                        className="w-[min(18rem,calc(100vw-2rem))] rounded-2xl text-sm"
+                                    >
+                                        {openShiftNote}
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+                        </span>
+                    }
+                    icon={Clock}
+                    action={periodSelect}
+                >
                     <div className="space-y-6">
                         {totalOpenShifts > 0 && (
                             // Inset note, not a bordered alert box: §5.5 keeps
                             // separation on fill rather than a drawn edge.
-                            <div className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+                            <div className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm max-md:hidden">
                                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                                <div className="min-w-0">
-                                    <span className="font-semibold">
-                                        {totalOpenShifts} open shift{totalOpenShifts > 1 ? 's' : ''} detected.
-                                    </span>{' '}
-                                    Staff clocked in but never clocked out. Their hours are excluded from totals to
-                                    prevent inflated data. Hours shown reflect{' '}
-                                    <span className="font-semibold">completed shifts only</span>.
-                                </div>
+                                <div className="min-w-0">{openShiftNote}</div>
                             </div>
                         )}
 
@@ -254,65 +296,73 @@ export function StaffLaborAnalytics() {
                             No shift data in this period
                         </div>
                     ) : (
-                        // Min-width lifted on mobile so hidden columns actually
-                        // narrow the table rather than leaving it scrolling sideways.
-                        <Table variant="data" className={cn(!isMobile && 'min-w-[720px]')}>
-                            <TableHeader className="[&_tr]:border-0">
-                                <TableRow>
-                                    <TableHead>{sortHeader('merchantName', 'Merchant', 'left')}</TableHead>
-                                    {showCol('staff') && <TableHead className="text-right">{sortHeader('activeStaff', 'Staff')}</TableHead>}
-                                    {showCol('hours') && <TableHead className="text-right">{sortHeader('totalHours', 'Hours')}</TableHead>}
-                                    {showCol('orders') && <TableHead className="text-right">{sortHeader('totalOrders', 'Orders')}</TableHead>}
-                                    {showCol('hrsPerOrder') && <TableHead className="text-right">{sortHeader('hoursPerOrder', 'Hrs / Order')}</TableHead>}
-                                    {showCol('openShifts') && <TableHead className="text-right">Open Shifts</TableHead>}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {sortedMerchants.map((m: MerchantLaborStat) => {
-                                    const isHighRatio = m.hoursPerOrder !== null && m.hoursPerOrder > 1
-                                    return (
-                                        <TableRow key={m.merchantId}>
-                                            <TableCell className="font-medium">
-                                                {m.merchantName}
-                                                {isHighRatio && (
-                                                    <span className="ml-2 text-xs text-muted-foreground">High ratio</span>
+                        <>
+                            {/* Min-width lifted on mobile so hidden columns actually
+                                narrow the table rather than leaving it scrolling sideways. */}
+                            <Table variant="data" className={cn(!isMobile && 'min-w-[720px]')}>
+                                <TableHeader className="[&_tr]:border-0">
+                                    <TableRow>
+                                        <TableHead>{sortHeader('merchantName', 'Merchant', 'left')}</TableHead>
+                                        {showCol('staff') && <TableHead className="text-right">{sortHeader('activeStaff', 'Staff')}</TableHead>}
+                                        {showCol('hours') && <TableHead className="text-right">{sortHeader('totalHours', 'Hours')}</TableHead>}
+                                        {showCol('orders') && <TableHead className="text-right">{sortHeader('totalOrders', 'Orders')}</TableHead>}
+                                        {showCol('hrsPerOrder') && <TableHead className="text-right">{sortHeader('hoursPerOrder', 'Hrs / Order')}</TableHead>}
+                                        {showCol('openShifts') && <TableHead className="text-right">Open Shifts</TableHead>}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {merchantPage.pageRows.map((m: MerchantLaborStat) => {
+                                        const isHighRatio = m.hoursPerOrder !== null && m.hoursPerOrder > 1
+                                        return (
+                                            <TableRow key={m.merchantId}>
+                                                <TableCell className="font-medium">
+                                                    {m.merchantName}
+                                                    {isHighRatio && (
+                                                        <span className="ml-2 text-xs text-muted-foreground">High ratio</span>
+                                                    )}
+                                                </TableCell>
+                                                {showCol('staff') && (
+                                                    <TableCell className="text-right tabular-nums">{m.activeStaff}</TableCell>
                                                 )}
-                                            </TableCell>
-                                            {showCol('staff') && (
-                                                <TableCell className="text-right tabular-nums">{m.activeStaff}</TableCell>
-                                            )}
-                                            {showCol('hours') && (
-                                                <TableCell className="text-right tabular-nums">{m.totalHours.toLocaleString()}h</TableCell>
-                                            )}
-                                            {showCol('orders') && (
-                                                <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(m.totalOrders)}</TableCell>
-                                            )}
-                                            {showCol('hrsPerOrder') && (
-                                                <TableCell className="text-right tabular-nums">
-                                                    {m.hoursPerOrder !== null ? (
-                                                        <span className="font-medium">{m.hoursPerOrder}h</span>
-                                                    ) : (
-                                                        <span className="text-xs italic text-muted-foreground">No orders</span>
-                                                    )}
-                                                </TableCell>
-                                            )}
-                                            {showCol('openShifts') && (
-                                                <TableCell className="text-right tabular-nums">
-                                                    {m.openShiftsCount > 0 ? (
-                                                        <span className="inline-flex items-center gap-1 text-xs font-medium">
-                                                            <AlertCircle className="h-3 w-3" />
-                                                            {m.openShiftsCount}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">—</span>
-                                                    )}
-                                                </TableCell>
-                                            )}
-                                        </TableRow>
-                                    )
-                                })}
-                            </TableBody>
-                        </Table>
+                                                {showCol('hours') && (
+                                                    <TableCell className="text-right tabular-nums">{m.totalHours.toLocaleString()}h</TableCell>
+                                                )}
+                                                {showCol('orders') && (
+                                                    <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(m.totalOrders)}</TableCell>
+                                                )}
+                                                {showCol('hrsPerOrder') && (
+                                                    <TableCell className="text-right tabular-nums">
+                                                        {m.hoursPerOrder !== null ? (
+                                                            <span className="font-medium">{m.hoursPerOrder}h</span>
+                                                        ) : (
+                                                            <span className="text-xs italic text-muted-foreground">No orders</span>
+                                                        )}
+                                                    </TableCell>
+                                                )}
+                                                {showCol('openShifts') && (
+                                                    <TableCell className="text-right tabular-nums">
+                                                        {m.openShiftsCount > 0 ? (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-medium">
+                                                                <AlertCircle className="h-3 w-3" />
+                                                                {m.openShiftsCount}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                    </TableCell>
+                                                )}
+                                            </TableRow>
+                                        )
+                                    })}
+                                </TableBody>
+                            </Table>
+                            <PaginationBar
+                                className="border-t-0 pt-0"
+                                pagination={merchantPage.pagination}
+                                onPageChange={merchantPage.setPage}
+                                itemLabel="merchants"
+                            />
+                        </>
                     )}
                 </PanelSection>
             </Panel>

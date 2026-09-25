@@ -11,7 +11,6 @@ import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { AnalyticsTooltip, CHART_MARGIN, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import {
     BarChart3,
-    TrendingDown,
     DollarSign,
     Users,
     CreditCard,
@@ -25,21 +24,12 @@ import {
     ArrowUpDown,
     User,
     Minus,
-    AlertTriangle,
     Building2,
-    Siren,
-    ExternalLink,
-    Clock,
-    Mail,
     BarChart2,
     MapPin,
     Utensils,
     Cpu,
     Globe,
-    BellRing,
-    CheckCircle2,
-    Loader2,
-    XCircle,
 } from 'lucide-react'
 import {
     AreaChart,
@@ -51,13 +41,7 @@ import {
     ResponsiveContainer,
 } from 'recharts'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import {
-    MobileColumnsButton,
-    initialHiddenColumns,
-    type ReportColumn,
-} from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
@@ -67,10 +51,10 @@ import {
     usePlatformKPIs,
     usePlatformSalesTrend,
 } from '@/lib/queries/use-platform-analytics'
-import { sendChurnSlackAlert } from '../actions/hq-platform/analytics'
-import type { ConcentrationRisk, ChurnSeverity } from '../actions/hq-platform/analytics'
+import type { ConcentrationRisk } from '../actions/hq-platform/analytics'
+import { ChurnRadar } from './components/ChurnRadar'
 import DeviceStabilityIndex from './components/DeviceStabilityIndex'
-import TerminalUtilizationHeatmap from './components/TerminalUtilizationHeatmap'
+import TerminalUtilizationHeatmap, { UtilizationDistribution } from './components/TerminalUtilizationHeatmap'
 import { FleetHealthDashboard } from './components/FleetHealthDashboard'
 import { PaymentTerminalHealthMonitor } from './components/PaymentTerminalHealthMonitor'
 import { MerchantOnboardingFunnel } from './components/MerchantOnboardingFunnel'
@@ -100,6 +84,13 @@ function fmtGPV(n: number) {
     if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}k`
     return `$${n.toFixed(2)}`
 }
+
+/**
+ * Below this many merchants with sales, "top 10% share" and a risk level are
+ * artefacts of the sample (at n=2 the top decile is 0.2 of a merchant), so
+ * Whale Watch shows "not enough data" instead of a verdict.
+ */
+const MIN_CONCENTRATION_MERCHANTS = 10
 
 // ── Tab pill ──────────────────────────────────────────────────────────────────
 
@@ -143,39 +134,26 @@ function SectionHeader({ title, description }: { title: string; description?: st
     return (
         <div className="mb-5">
             <h2 className="text-base font-semibold">{title}</h2>
-            {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
+            {description && <p className="text-sm text-muted-foreground mt-0.5 max-md:hidden">{description}</p>}
         </div>
     )
 }
-
-/**
- * Mobile column meta for the churn risk alert table.
- *
- * Merchant is locked (it is the row's identity) and Drop % is the reason the
- * row is on the list, so those two are the mobile default. The GPV pair, the
- * recency column and the action buttons are opt-in.
- */
-const CHURN_RISK_COLUMNS: ReportColumn[] = [
-    { id: 'merchant', label: 'Merchant', locked: true },
-    { id: 'severity', label: 'Severity', defaultHidden: true },
-    { id: 'prevGpv', label: 'Prev 7d GPV', defaultHidden: true },
-    { id: 'lastGpv', label: 'Last 7d GPV', defaultHidden: true },
-    { id: 'drop', label: 'Drop %' },
-    { id: 'daysSince', label: 'Days Since Last Txn', defaultHidden: true },
-    { id: 'actions', label: 'Actions', defaultHidden: true },
-]
 
 // ============================================================================
 // PAGE
 // ============================================================================
 
 export default function AnalyticsPage() {
-    const [whaleWatchDays, setWhaleWatchDays] = useState<number>(30)
+    const [revenueDays, setRevenueDays] = useState<number>(30)
     const [whaleSortKey, setWhaleSortKey] = useState<'monthlyGPV' | 'percentOfTotal' | 'trend'>('monthlyGPV')
     const [whaleSortDir, setWhaleSortDir] = useState<'asc' | 'desc'>('desc')
     const [chartMetric, setChartMetric] = useState<'revenue' | 'orders'>('revenue')
+    // Terminal Utilization's range, lifted here because its distribution chart
+    // renders beside the Device Stability chart, outside that component.
+    const [terminalDays, setTerminalDays] = useState<number>(30)
 
     const [activeTab, setActiveTab] = useState('overview')
+    const isMobile = useIsMobile()
     const tabRailRef = useRef<HTMLDivElement>(null)
 
     /**
@@ -204,34 +182,6 @@ export default function AnalyticsPage() {
         rail.scrollTo({ left, behavior: reduceMotion ? 'auto' : 'smooth' })
     }, [activeTab])
 
-    const isMobile = useIsMobile()
-    const [churnHiddenCols, setChurnHiddenCols] = useState<Set<string>>(() =>
-        initialHiddenColumns(CHURN_RISK_COLUMNS)
-    )
-    // Hiding is mobile-only: the picker itself is `md:hidden`, so desktop must
-    // ignore the set rather than keep columns hidden with no way to restore them.
-    const showChurnCol = (id: string) => !isMobile || !churnHiddenCols.has(id)
-
-    type SlackState = { status: 'idle' | 'sending' | 'sent' | 'error' | 'no_webhook' | 'no_critical'; message?: string }
-    const [slackAlert, setSlackAlert] = useState<SlackState>({ status: 'idle' })
-
-    async function handleSlackAlert() {
-        if (!churnData || slackAlert.status === 'sending') return
-        setSlackAlert({ status: 'sending' })
-        try {
-            const result = await sendChurnSlackAlert(churnData.atRiskMerchants, {
-                totalAtRisk: churnData.totalAtRisk,
-                highCount: churnData.highCount,
-                mediumCount: churnData.mediumCount,
-                totalGPVAtRisk: churnData.totalGPVAtRisk,
-            })
-            setSlackAlert({ status: result.status, message: result.message })
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error'
-            setSlackAlert({ status: 'error', message: msg })
-        }
-    }
-
     function handleExportPDF() {
         const title = document.title
         document.title = `DexaPOS Analytics Report — ${new Date().toLocaleDateString()}`
@@ -239,7 +189,7 @@ export default function AnalyticsPage() {
         document.title = title
     }
 
-    const { data: gpvData, isLoading: gpvLoading } = useGPVConcentration(whaleWatchDays)
+    const { data: gpvData, isLoading: gpvLoading } = useGPVConcentration(revenueDays)
     const { data: churnData, isLoading: churnLoading } = useChurnWarnings()
     const { data: kpiData, isLoading: kpiLoading } = usePlatformKPIs()
     const { data: salesTrend, isLoading: salesTrendLoading } = usePlatformSalesTrend()
@@ -251,14 +201,7 @@ export default function AnalyticsPage() {
      */
     function fmtTrend(change: number | undefined) {
         if (change === undefined || change === null) return undefined
-        const isPos = change >= 0
-        return (
-            <>
-                <span className={isPos ? 'text-green-600' : 'text-red-600'}>
-                    {isPos ? '+' : ''}{change.toFixed(1)}%
-                </span>{' '}from prior period
-            </>
-        )
+        return `${change >= 0 ? '+' : ''}${change.toFixed(1)}% from prior period`
     }
 
     // Label + icon only: §14.3 HQ-2 keeps severity colour to `/manage/health`
@@ -270,6 +213,8 @@ export default function AnalyticsPage() {
     }
 
     const currentRisk = gpvData ? riskConfig[gpvData.riskLevel] : null
+    const hasConcentrationSample = (gpvData?.totalMerchants ?? 0) >= MIN_CONCENTRATION_MERCHANTS
+    const topDecileCount = Math.max(1, Math.ceil((gpvData?.totalMerchants ?? 0) * 0.1))
 
     const sortedWhaleList = useMemo(() => {
         if (!gpvData?.whaleList) return []
@@ -297,11 +242,64 @@ export default function AnalyticsPage() {
         </Button>
     )
 
-    const churnSeverityConfig: Record<ChurnSeverity, { label: string }> = {
-        critical: { label: 'Critical' },
-        high: { label: 'High' },
-        medium: { label: 'Medium' },
-    }
+
+    /** Platform totals, in reading order: GPV, merchants, orders, AOV, devices, locations. */
+    const platformTiles = [
+        <StatTile
+            key="gpv"
+            label="Total GPV (30d)"
+            icon={<DollarSign />}
+            isLoading={kpiLoading}
+            value={kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}
+            meta={fmtTrend(kpiData?.gpvChange)}
+            metaClassName="max-md:hidden"
+        />,
+        <StatTile
+            key="activeMerchants"
+            label="Active Merchants (7d)"
+            icon={<Users />}
+            isLoading={kpiLoading}
+            value={kpiData?.activeMerchants7d.toLocaleString() ?? '—'}
+            meta={kpiData ? `${kpiData.totalMerchants.toLocaleString()} total` : undefined}
+            metaClassName="max-md:hidden"
+        />,
+        <StatTile
+            key="orders"
+            label="Total Orders (30d)"
+            icon={<CreditCard />}
+            isLoading={kpiLoading}
+            value={kpiData?.totalOrders30d.toLocaleString() ?? '—'}
+            meta={fmtTrend(kpiData?.ordersChange)}
+            metaClassName="max-md:hidden"
+        />,
+        <StatTile
+            key="aov"
+            label="Avg Order Value (30d)"
+            icon={<Activity />}
+            isLoading={kpiLoading}
+            value={kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}
+            meta={kpiData ? `Across ${kpiData.totalOrders30d.toLocaleString()} orders` : undefined}
+            metaClassName="max-md:hidden"
+        />,
+        <StatTile
+            key="devices"
+            label="Devices Online"
+            icon={<Cpu />}
+            isLoading={kpiLoading}
+            value={kpiData?.activeDevices?.toLocaleString() ?? '—'}
+            meta={kpiData ? `of ${kpiData.totalDevices.toLocaleString()} deployed` : undefined}
+            metaClassName="max-md:hidden"
+        />,
+        <StatTile
+            key="locations"
+            label="Active Locations"
+            icon={<MapPin />}
+            isLoading={kpiLoading}
+            value={kpiData?.totalLocations?.toLocaleString() ?? '—'}
+            meta={kpiData ? `Across ${kpiData.merchantsWithLocations.toLocaleString()} merchants` : undefined}
+            metaClassName="max-md:hidden"
+        />
+    ]
 
     return (
         <PageShell as="div">
@@ -327,6 +325,7 @@ export default function AnalyticsPage() {
             <PageHeader
                 title="Analytics"
                 subtitle="Platform-wide intelligence across all merchants, devices, and channels"
+                subtitleClassName="max-md:hidden"
                 actions={
                     <div className="no-print">
                         <Button variant="outline" size="sm" onClick={handleExportPDF}>
@@ -344,55 +343,19 @@ export default function AnalyticsPage() {
                 narrow on anything short of a wide desktop. */}
             <Panel>
                 <PanelSection label="Platform totals" icon={BarChart3}>
-                    <div className="space-y-6">
+                    {isMobile ? (
+                        // Phones lay the six out two-up, so Devices Online is
+                        // pulled up beside Total Orders instead of leaving
+                        // Orders alone on its row.
                         <StatRow columns={3}>
-                            <StatTile
-                                label="Total GPV (30d)"
-                                icon={<DollarSign />}
-                                isLoading={kpiLoading}
-                                value={kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}
-                                meta={fmtTrend(kpiData?.gpvChange)}
-                            />
-                            <StatTile
-                                label="Active Merchants (7d)"
-                                icon={<Users />}
-                                isLoading={kpiLoading}
-                                value={kpiData?.activeMerchants7d.toLocaleString() ?? '—'}
-                                meta={kpiData ? `${kpiData.totalMerchants.toLocaleString()} total` : undefined}
-                            />
-                            <StatTile
-                                label="Total Orders (30d)"
-                                icon={<CreditCard />}
-                                isLoading={kpiLoading}
-                                value={kpiData?.totalOrders30d.toLocaleString() ?? '—'}
-                                meta={fmtTrend(kpiData?.ordersChange)}
-                            />
+                            {[0, 1, 2, 4, 3, 5].map(i => platformTiles[i])}
                         </StatRow>
-
-                        <StatRow columns={3}>
-                            <StatTile
-                                label="Avg Order Value"
-                                icon={<Activity />}
-                                isLoading={kpiLoading}
-                                value={kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}
-                                meta={`${kpiData?.cashPercent ?? 0}% cash · ${kpiData?.cardPercent ?? 0}% card`}
-                            />
-                            <StatTile
-                                label="Active Devices"
-                                icon={<Cpu />}
-                                isLoading={kpiLoading}
-                                value={kpiData?.activeDevices?.toLocaleString() ?? '—'}
-                                meta="Online now"
-                            />
-                            <StatTile
-                                label="Total Locations"
-                                icon={<MapPin />}
-                                isLoading={kpiLoading}
-                                value={kpiData?.totalLocations?.toLocaleString() ?? '—'}
-                                meta="Active locations"
-                            />
-                        </StatRow>
-                    </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <StatRow columns={3}>{platformTiles.slice(0, 3)}</StatRow>
+                            <StatRow columns={3}>{platformTiles.slice(3)}</StatRow>
+                        </div>
+                    )}
                 </PanelSection>
             </Panel>
 
@@ -439,16 +402,23 @@ export default function AnalyticsPage() {
                         <PanelSection label="Platform ratios" icon={BarChart2}>
                             <StatRow columns={4}>
                                 {[
-                                    { label: 'Void Rate', value: kpiData?.voidRate, suffix: '%' },
-                                    { label: 'New Merchants', value: kpiData?.newMerchantsThisMonth, suffix: ' this mo.' },
-                                    { label: 'Onboarding', value: kpiData?.merchantsOnboarding, suffix: '' },
-                                    { label: 'Card Split', value: kpiData?.cardPercent, suffix: '%' },
-                                ].map(({ label, value, suffix }) => (
+                                    { label: 'Void Rate', value: kpiData?.voidRate, suffix: '%', meta: 'Of orders, last 30 days' },
+                                    { label: 'New Merchants', value: kpiData?.newMerchantsThisMonth, suffix: '', meta: 'This month' },
+                                    { label: 'Onboarding', value: kpiData?.merchantsOnboarding, suffix: '', meta: 'Merchants in progress' },
+                                    {
+                                        label: 'Card Split',
+                                        value: kpiData?.cardPercent,
+                                        suffix: '%',
+                                        meta: kpiData ? `${kpiData.cashPercent}% cash · 30d volume` : undefined,
+                                    },
+                                ].map(({ label, value, suffix, meta }) => (
                                     <StatTile
                                         key={label}
                                         label={label}
                                         isLoading={kpiLoading}
                                         value={value !== undefined ? `${value}${suffix}` : '—'}
+                                        meta={meta}
+                                        metaClassName="max-md:hidden"
                                     />
                                 ))}
                             </StatRow>
@@ -459,6 +429,7 @@ export default function AnalyticsPage() {
                         <PanelSection
                             label="GPV trend (last 30 days)"
                             caption="Daily Gross Payment Volume with prior period overlay"
+                            captionClassName="max-md:hidden"
                             action={
                                 <div className="flex shrink-0 gap-1 p-0.5">
                                     <Button size="sm" variant={chartMetric === 'revenue' ? 'default' : 'ghost'} className="h-7 rounded-full px-3 text-xs" onClick={() => setChartMetric('revenue')}>GPV</Button>
@@ -502,37 +473,40 @@ export default function AnalyticsPage() {
 
                 {/* ══════════════════════════════════════════════════════════════════
             TAB 2 — REVENUE & RISK
-            T001: Whale Watch  →  T002: Churn Warning  →  T007: Payment Mix  →  T018: Multi-Location
+            T001: Whale Watch  →  T002: Churn Warning  →  T008: Void & Refund  →  T007: Payment Mix  →  T018: Multi-Location
         ══════════════════════════════════════════════════════════════════ */}
-                <TabsContent value="revenue" className="space-y-6">
+                {/* On phones every panel caption and stat meta line on this tab
+                    is dropped (via the shell's `data-slot` hooks) — the tab is
+                    long, and the titles and figures carry it on their own. */}
+                <TabsContent
+                    value="revenue"
+                    className="space-y-6 max-md:[&_[data-slot=panel-caption]]:hidden max-md:[&_[data-slot=stat-meta]]:hidden"
+                >
+
+                    {/* One period for every section on this tab — three pickers
+                        that could disagree made the sections incomparable.
+                        Churn is the exception: it is always 7 days vs 7 days. */}
+                    <div className="flex items-center justify-start gap-2 md:justify-end">
+                        <Select value={String(revenueDays)} onValueChange={v => setRevenueDays(Number(v))}>
+                            <SelectTrigger aria-label="Period" className="h-9 w-36 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="7">Last 7 days</SelectItem>
+                                <SelectItem value="30">Last 30 days</SelectItem>
+                                <SelectItem value="90">Last 90 days</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
                     {/* ── T001: Whale Watch ─────────────────────────────────────────── */}
-                    <SectionHeader
-                        title="GPV Concentration Risk — Whale Watch"
-                        description="Lorenz curve analysis across all merchants — identify concentration risk and high-value accounts"
-                    />
-
+                    {/* No SectionHeaders on this tab: each panel's own title names
+                        its section, and the pair read as a double heading. */}
                     <Panel>
                         <PanelSection
                             icon={Crown}
                             label="Whale Watch"
-                            caption={
-                                !gpvLoading && currentRisk
-                                    ? `GPV concentration risk analysis · ${currentRisk.label}`
-                                    : 'GPV concentration risk analysis'
-                            }
-                            action={
-                                <Select value={String(whaleWatchDays)} onValueChange={v => setWhaleWatchDays(Number(v))}>
-                                    <SelectTrigger className="h-9 w-36 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="7">Last 7 Days</SelectItem>
-                                        <SelectItem value="30">Last 30 Days</SelectItem>
-                                        <SelectItem value="90">Last 90 Days</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            }
+                            caption={`How concentrated GPV is across merchants · last ${revenueDays} days`}
                         >
                             <StatRow columns={4}>
                                 <StatTile
@@ -540,49 +514,65 @@ export default function AnalyticsPage() {
                                     icon={<DollarSign />}
                                     isLoading={gpvLoading}
                                     value={`$${gpvData ? gpvData.totalGPV.toLocaleString() : '0'}`}
-                                    meta={`Last ${whaleWatchDays} days`}
+                                    meta={`Last ${revenueDays} days`}
                                 />
                                 <StatTile
-                                    label="Merchants Analyzed"
+                                    label="Merchants With Sales"
                                     icon={<Building2 />}
                                     isLoading={gpvLoading}
                                     value={gpvData?.totalMerchants.toLocaleString() || '0'}
-                                    meta="With transaction activity"
+                                    meta={gpvData && gpvData.totalMerchants > 0 ? `Median $${gpvData.medianGPV.toLocaleString()} each` : undefined}
                                 />
                                 <StatTile
                                     label="Top 10% GPV Share"
                                     icon={<BarChart3 />}
                                     isLoading={gpvLoading}
-                                    value={`${gpvData?.topTenPercentGPVShare || 0}%`}
-                                    meta={`${Math.max(1, Math.ceil((gpvData?.totalMerchants || 0) * 0.1))} merchant${Math.ceil((gpvData?.totalMerchants || 0) * 0.1) !== 1 ? 's' : ''} in top decile`}
+                                    value={hasConcentrationSample ? `${gpvData?.topTenPercentGPVShare}%` : '—'}
+                                    meta={
+                                        hasConcentrationSample
+                                            ? `${topDecileCount} merchant${topDecileCount !== 1 ? 's' : ''} in top decile`
+                                            : `Needs ${MIN_CONCENTRATION_MERCHANTS}+ merchants with sales`
+                                    }
                                 />
                                 <StatTile
                                     label="Concentration Risk"
-                                    icon={currentRisk ? <currentRisk.icon /> : <ShieldCheck />}
+                                    icon={hasConcentrationSample && currentRisk ? <currentRisk.icon /> : <ShieldCheck />}
                                     isLoading={gpvLoading}
-                                    value={currentRisk ? currentRisk.label.replace(' Risk', '') : '—'}
+                                    value={hasConcentrationSample && currentRisk ? currentRisk.label.replace(' Risk', '') : '—'}
                                     meta={
-                                        gpvData?.riskLevel === 'high'
-                                            ? 'Diversification needed'
-                                            : gpvData?.riskLevel === 'medium'
-                                                ? 'Monitor closely'
-                                                : 'Healthy distribution'
+                                        !hasConcentrationSample
+                                            ? 'Not enough data yet'
+                                            : gpvData?.riskLevel === 'high'
+                                                ? 'Diversification needed'
+                                                : gpvData?.riskLevel === 'medium'
+                                                    ? 'Monitor closely'
+                                                    : 'Healthy distribution'
                                     }
                                 />
                             </StatRow>
+                            {/* An empty whale list used to take half a row. At current
+                                volume it's always empty, so it's one line here instead. */}
+                            {!gpvLoading && gpvData && sortedWhaleList.length === 0 && (
+                                <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground max-md:hidden">
+                                    <Crown className="h-3.5 w-3.5 shrink-0" />
+                                    No whale merchants (≥ {fmtGPV(gpvData.whaleThreshold)} GPV) in the last {revenueDays} days.
+                                </p>
+                            )}
                         </PanelSection>
                     </Panel>
 
-                    {/* Lorenz Curve + Whale List */}
+                    {/* Lorenz Curve + Whale List — each only when it has something to show */}
+                    {(gpvLoading || hasConcentrationSample || sortedWhaleList.length > 0) && (
                     <div className="grid gap-4 lg:grid-cols-7">
-                        <Panel className="lg:col-span-4">
+                        {(gpvLoading || hasConcentrationSample) && (
+                        <Panel className={sortedWhaleList.length > 0 ? 'lg:col-span-4' : 'lg:col-span-7'}>
                             <PanelSection
                                 label="GPV distribution"
                                 caption="Lorenz curve — gap from diagonal indicates concentration"
                             >
                                 {gpvLoading ? (
                                     <Skeleton className="h-80 w-full" />
-                                ) : gpvData && gpvData.totalMerchants >= 2 ? (
+                                ) : gpvData && hasConcentrationSample ? (
                                     <ChartContainer config={whaleChartConfig} className="h-80 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={gpvData.lorenzCurve}>
@@ -608,26 +598,22 @@ export default function AnalyticsPage() {
                                                     return null
                                                 }} />
                                                 <Area type="linear" dataKey="equalityLine" stroke="var(--muted-foreground)" strokeDasharray="5 5" strokeOpacity={0.5} fill="none" strokeWidth={1.5} />
-                                                <Area type="monotone" dataKey="gpvPercentile" stroke="var(--chart-3)" fill="url(#concentrationGap)" strokeWidth={2.5} />
+                                                {/* Linear: a Lorenz curve is piecewise-linear between
+                                                    merchants; smoothing invented points between them. */}
+                                                <Area type="linear" dataKey="gpvPercentile" stroke="var(--chart-3)" fill="url(#concentrationGap)" strokeWidth={2.5} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </ChartContainer>
-                                ) : (
-                                    <div className="h-80 flex flex-col items-center justify-center text-muted-foreground gap-3">
-                                        <AlertTriangle className="h-10 w-10 opacity-30" />
-                                        <div className="text-center">
-                                            <p className="text-sm font-medium">Insufficient data for concentration analysis</p>
-                                            <p className="text-xs mt-1">Requires at least 20 merchants. Current: <span className="font-bold text-foreground">{gpvData?.totalMerchants || 0}</span></p>
-                                        </div>
-                                    </div>
-                                )}
+                                ) : null}
                             </PanelSection>
                         </Panel>
+                        )}
 
-                        <Panel className="lg:col-span-3">
+                        {(gpvLoading || sortedWhaleList.length > 0) && (
+                        <Panel className={hasConcentrationSample || gpvLoading ? 'lg:col-span-3' : 'lg:col-span-7'}>
                             <PanelSection
-                                label="Whale merchants (>$100k GPV)"
-                                caption={`Last ${whaleWatchDays} days — assign dedicated Account Managers`}
+                                label={`Whale merchants (≥ ${fmtGPV(gpvData?.whaleThreshold ?? 100_000)} GPV)`}
+                                caption={`Last ${revenueDays} days — assign dedicated Account Managers`}
                             >
                                 {gpvLoading ? (
                                     <div className="space-y-3">
@@ -687,15 +673,7 @@ export default function AnalyticsPage() {
                                             </TableBody>
                                         </Table>
                                     </div>
-                                ) : (
-                                    <div className="h-72 flex flex-col items-center justify-center text-muted-foreground gap-3">
-                                        <Crown className="h-10 w-10 opacity-30" />
-                                        <div className="text-center">
-                                            <p className="text-sm font-medium">No whale merchants detected</p>
-                                            <p className="text-xs mt-1">No merchants above $100k GPV in the last {whaleWatchDays} days.</p>
-                                        </div>
-                                    </div>
-                                )}
+                                ) : null}
                                 {sortedWhaleList.length > 0 && (
                                     <div className="mt-3 flex items-center justify-between pt-3 text-xs text-muted-foreground">
                                         <span>{sortedWhaleList.length} whale{sortedWhaleList.length !== 1 ? 's' : ''} identified</span>
@@ -704,220 +682,52 @@ export default function AnalyticsPage() {
                                 )}
                             </PanelSection>
                         </Panel>
+                        )}
                     </div>
-
-                    {/* Context summary */}
-                    {!gpvLoading && gpvData && gpvData.totalMerchants > 0 && (
-                        <Panel>
-                            <PanelSection label="Distribution summary">
-                                <StatRow columns={4}>
-                                    <StatTile label="Total Merchants" value={gpvData.totalMerchants.toLocaleString()} />
-                                    <StatTile label="Total GPV" value={`$${gpvData.totalGPV.toLocaleString()}`} />
-                                    <StatTile label="Avg Merchant GPV" value={`$${gpvData.averageGPV.toLocaleString()}`} />
-                                    <StatTile label="Median Merchant GPV" value={`$${gpvData.medianGPV.toLocaleString()}`} />
-                                </StatRow>
-                            </PanelSection>
-                        </Panel>
                     )}
 
-                    {/* ── T002: Churn Warning ───────────────────────────────────────── */}
-                    <SectionHeader
-                        title="Churn Warning Radar"
-                        description="Merchants with >30% week-over-week GPV drop — sorted by severity"
-                    />
+                    {/* The old "Distribution summary" panel repeated Total GPV and the
+                        merchant count from Whale Watch; its median now sits in the
+                        Merchants tile's meta line. */}
 
-                    {churnLoading && <Skeleton className="h-64 w-full rounded-3xl" />}
+                    {/* ── T002: Churn Radar ───────────────────────────────────────────── */}
+                    <ChurnRadar data={churnData} isLoading={churnLoading} />
 
-                    {!churnLoading && churnData && churnData.totalAtRisk === 0 && (
-                        <Panel>
-                            <PanelSection icon={ShieldCheck} label="All clear">
-                                <p className="text-sm text-muted-foreground">
-                                    No merchants showing significant GPV decline. Churn risk is minimal.
-                                </p>
-                            </PanelSection>
-                        </Panel>
-                    )}
-
-                    {!churnLoading && churnData && churnData.totalAtRisk > 0 && (
-                        <Panel>
-                            <PanelSection
-                                icon={Siren}
-                                label={`Churn risk alert (${churnData.totalAtRisk} at risk)`}
-                                caption="Merchants with significant GPV drop (Week-over-Week comparison)"
-                                action={
-                                    <div className="text-right">
-                                        <p className="text-sm text-muted-foreground">Total GPV at Risk</p>
-                                        <p className="text-2xl font-semibold tabular-nums">
-                                            ${churnData.totalGPVAtRisk.toLocaleString()}
-                                        </p>
-                                    </div>
-                                }
-                            >
-                                <div className="mb-6 flex flex-col gap-1">
-                                    <Button
-                                        size="sm"
-                                        variant={slackAlert.status === 'sent' || slackAlert.status === 'no_webhook' ? 'outline' : 'default'}
-                                        className="no-print h-8 w-fit gap-1.5 rounded-full text-xs"
-                                        disabled={slackAlert.status === 'sending' || slackAlert.status === 'sent'}
-                                        onClick={handleSlackAlert}
-                                        title={slackAlert.message}
-                                    >
-                                        {slackAlert.status === 'sending' && <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending…</>}
-                                        {slackAlert.status === 'sent' && <><CheckCircle2 className="h-3.5 w-3.5" />Alert Sent</>}
-                                        {slackAlert.status === 'error' && <><XCircle className="h-3.5 w-3.5" />Retry Alert</>}
-                                        {slackAlert.status === 'no_webhook' && <><BellRing className="h-3.5 w-3.5" />No Webhook Configured</>}
-                                        {(slackAlert.status === 'idle' || slackAlert.status === 'no_critical') && <><BellRing className="h-3.5 w-3.5" />Notify #merchant-health</>}
-                                    </Button>
-                                    {slackAlert.message && slackAlert.status !== 'idle' && (
-                                        <p className="max-w-48 text-[10px] leading-tight text-muted-foreground">{slackAlert.message}</p>
-                                    )}
-                                </div>
-
-                                <div className="mb-6">
-                                    <StatRow columns={3}>
-                                        <StatTile label="Critical (>80% drop)" icon={<AlertTriangle />} value={churnData.criticalCount} />
-                                        <StatTile label="High (50-80% drop)" icon={<TrendingDown />} value={churnData.highCount} />
-                                        <StatTile label="Medium (30-50% drop)" icon={<ArrowDownRight />} value={churnData.mediumCount} />
-                                    </StatRow>
-                                </div>
-
-                                <div>
-                                    <div className="mb-2 flex justify-start">
-                                        <MobileColumnsButton
-                                            columns={CHURN_RISK_COLUMNS}
-                                            hidden={churnHiddenCols}
-                                            onChange={setChurnHiddenCols}
-                                        />
-                                    </div>
-                                    {/* The min-width is what forces the sideways scroll, so it
-                                        has to lift on mobile or hiding columns changes nothing. */}
-                                    <Table variant="data" className={cn(!isMobile && 'min-w-[900px]')}>
-                                        <TableHeader className="[&_tr]:border-0">
-                                            <TableRow>
-                                                <TableHead>Merchant</TableHead>
-                                                {showChurnCol('severity') && <TableHead>Severity</TableHead>}
-                                                {showChurnCol('prevGpv') && <TableHead className="text-right">Prev 7d GPV</TableHead>}
-                                                {showChurnCol('lastGpv') && <TableHead className="text-right">Last 7d GPV</TableHead>}
-                                                {showChurnCol('drop') && <TableHead className="text-right">Drop %</TableHead>}
-                                                {showChurnCol('daysSince') && <TableHead className="text-right">Days Since Last Txn</TableHead>}
-                                                {showChurnCol('actions') && <TableHead className="text-right">Actions</TableHead>}
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {churnData.atRiskMerchants.slice(0, 10).map((merchant) => {
-                                                const config = churnSeverityConfig[merchant.severity]
-                                                const daysSinceLastOrder = Math.floor(
-                                                    (Date.now() - new Date(merchant.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24)
-                                                )
-                                                return (
-                                                    <TableRow key={merchant.id}>
-                                                        <TableCell>
-                                                            <Link href={`/manage/merchants/${merchant.id}`} className="flex items-center gap-2 font-medium hover:underline">
-                                                                {merchant.name}
-                                                                <ExternalLink className="h-3 w-3 opacity-50" />
-                                                            </Link>
-                                                            <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                                                                {merchant.transactionsLast7Days} txns (was {merchant.transactionsPrev7Days})
-                                                            </p>
-                                                        </TableCell>
-                                                        {showChurnCol('severity') && (
-                                                            <TableCell>
-                                                                <span className="flex w-fit items-center gap-1 text-sm text-muted-foreground">
-                                                                    <AlertTriangle className="h-3 w-3" />
-                                                                    {config.label}
-                                                                </span>
-                                                            </TableCell>
-                                                        )}
-                                                        {showChurnCol('prevGpv') && (
-                                                            <TableCell className="text-right font-medium tabular-nums">${merchant.prevSevenDaysGPV.toLocaleString()}</TableCell>
-                                                        )}
-                                                        {showChurnCol('lastGpv') && (
-                                                            <TableCell className="text-right font-medium tabular-nums">${merchant.lastSevenDaysGPV.toLocaleString()}</TableCell>
-                                                        )}
-                                                        {showChurnCol('drop') && (
-                                                            <TableCell className="text-right font-semibold tabular-nums">
-                                                                -{merchant.dropPercentage}%
-                                                            </TableCell>
-                                                        )}
-                                                        {showChurnCol('daysSince') && (
-                                                            <TableCell className="text-right">
-                                                                <div className="flex items-center justify-end gap-1 whitespace-nowrap text-xs text-muted-foreground">
-                                                                    <Clock className="h-3 w-3" />
-                                                                    {daysSinceLastOrder === 0 ? 'Today' : `${daysSinceLastOrder}d ago`}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
-                                                        {showChurnCol('actions') && (
-                                                        <TableCell className="text-right">
-                                                            <div className="flex flex-wrap items-center justify-end gap-1">
-                                                                <a href={`mailto:?subject=At-Risk%20Merchant%3A%20${encodeURIComponent(merchant.name)}&body=Hi%2C%0A%0AThis%20merchant%20has%20shown%20a%20${merchant.dropPercentage}%25%20GPV%20drop%20in%20the%20last%207%20days.%0A%0AMerchant%3A%20${encodeURIComponent(merchant.name)}%0ASeverity%3A%20${merchant.severity}%0APrev%207d%20GPV%3A%20%24${merchant.prevSevenDaysGPV.toLocaleString()}%0ALast%207d%20GPV%3A%20%24${merchant.lastSevenDaysGPV.toLocaleString()}%0A%0APlease%20follow%20up%20with%20this%20account.`}>
-                                                                    <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full px-2 text-xs">
-                                                                        <Mail className="h-3 w-3" />Email AM
-                                                                    </Button>
-                                                                </a>
-                                                                <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full px-2 text-xs">
-                                                                    <User className="h-3 w-3" />Log Call
-                                                                </Button>
-                                                                <Link href={`/manage/merchants/${merchant.id}`}>
-                                                                    <Button size="sm" variant="outline" className="h-7 rounded-full px-2 text-xs">
-                                                                        <ExternalLink className="mr-1 h-3 w-3" />View
-                                                                    </Button>
-                                                                </Link>
-                                                            </div>
-                                                        </TableCell>
-                                                        )}
-                                                    </TableRow>
-                                                )
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-
-                                {churnData.atRiskMerchants.length > 10 && (
-                                    <div className="mt-3 text-center">
-                                        <Button variant="outline" size="sm" className="rounded-full">
-                                            View All {churnData.totalAtRisk} At-Risk Merchants
-                                        </Button>
-                                    </div>
-                                )}
-                            </PanelSection>
-                        </Panel>
-                    )}
+                    {/* ── T008: Void & Refund Intelligence ─────────────────────────── */}
+                    <VoidRefundIntelligence days={revenueDays} />
 
                     {/* ── T007: Payment Method Mix ──────────────────────────────────── */}
-                    <SectionHeader title="Payment Method Mix & Fee Analysis" description="Cash vs card split, estimated processing fee exposure, and dual-pricing analysis" />
-                    <PaymentMethodMix />
+                    <PaymentMethodMix days={revenueDays} />
 
                     {/* ── T018: Multi-Location Comparison ──────────────────────────── */}
-                    <SectionHeader
-                        title="Multi-Location Merchant Comparison"
-                        description="GPV, order volume, and performance ranked across all locations — identify top and underperforming sites"
-                    />
-                    <MultiLocationComparison />
+                    <MultiLocationComparison days={revenueDays} />
 
                 </TabsContent>
 
                 {/* ══════════════════════════════════════════════════════════════════
             TAB 3 — MERCHANT HEALTH
-            T006: Onboarding Funnel  →  T016: Activation Timeline  →  T008: Void & Refund
+            T006: Onboarding Funnel  →  T016: Activation Timeline
         ══════════════════════════════════════════════════════════════════ */}
-                <TabsContent value="merchants" className="space-y-6">
-                    <SectionHeader title="Merchant Onboarding Funnel" description="Conversion through lifecycle stages and stuck merchant alerts" />
+                {/* Same phone treatment as Revenue & Risk: captions and stat
+                    meta lines dropped. */}
+                <TabsContent
+                    value="merchants"
+                    className="space-y-6 max-md:[&_[data-slot=panel-caption]]:hidden max-md:[&_[data-slot=stat-meta]]:hidden"
+                >
+                    {/* No SectionHeaders here: each panel's own title already
+                        names its section, and the pair read as a double heading. */}
                     <MerchantOnboardingFunnel />
-
-                    <SectionHeader title="Merchant Activation Timeline" description="Days to first transaction histogram and never-activated merchant list" />
                     <MerchantActivationTimeline />
-
-                    {/* ── T008: Void & Refund Intelligence ─────────────────────────── */}
-                    <SectionHeader title="Void & Refund Intelligence" description="Platform benchmarks, outlier detection, reason breakdown, and staff void leaderboard" />
-                    <VoidRefundIntelligence />
                 </TabsContent>
 
                 {/* ══════════════════════════════════════════════════════════════════
             TAB 4 — OPERATIONS
             T013: Order Type  →  T009: Discounts  →  T012: Staff  →  T014: KDS  →  T015: Audit
         ══════════════════════════════════════════════════════════════════ */}
-                <TabsContent value="operations" className="space-y-6">
+                <TabsContent
+                    value="operations"
+                    className="space-y-6 max-md:[&_[data-slot=panel-caption]]:hidden max-md:[&_[data-slot=stat-meta]]:hidden"
+                >
                     <SectionHeader
                         title="Order Type Intelligence"
                         description="Dine-in vs takeout vs delivery vs online — service channel breakdown and merchant mix"
@@ -938,8 +748,8 @@ export default function AnalyticsPage() {
 
                     {/* ── T015: Audit Log Activity Monitor ─────────────────────────── */}
                     <SectionHeader
-                        title="Audit Log Activity Monitor"
-                        description="Platform-wide admin activity, severity distribution, top actors, and failed action feed"
+                        title="Audit Log Activity"
+                        description="Admin actions across all merchants and HQ in the last 30 days: severity, most active admins, and failed actions"
                     />
                     <AuditLogActivityMonitor />
                 </TabsContent>
@@ -948,28 +758,31 @@ export default function AnalyticsPage() {
             TAB 5 — DEVICE FLEET
             Device Stability Index + Terminal Utilization + Fleet Health
         ══════════════════════════════════════════════════════════════════ */}
-                <TabsContent value="fleet" className="space-y-6">
+                <TabsContent
+                    value="fleet"
+                    className="space-y-6 max-md:[&_[data-slot=panel-caption]]:hidden max-md:[&_[data-slot=stat-meta]]:hidden"
+                >
                     <SectionHeader
-                        title="LANDI Device Stability Index"
-                        description="App version stability rates, hardware model breakdown, and rollout safety signals"
+                        title="Device Stability"
+                        description="Offline heartbeats and kicked sessions, by app version"
                     />
-                    <DeviceStabilityIndex />
+                    <DeviceStabilityIndex besideChart={<UtilizationDistribution days={terminalDays} />} />
 
                     <SectionHeader
-                        title="Terminal Utilization Heatmap"
-                        description="Active vs zombie stations, under-utilized merchants, and reclaimable hardware"
+                        title="Terminal Utilization"
+                        description="Underused tablets to reclaim or rebill"
                     />
-                    <TerminalUtilizationHeatmap />
+                    <TerminalUtilizationHeatmap days={terminalDays} onDaysChange={setTerminalDays} />
 
                     <SectionHeader
-                        title="Fleet Health Dashboard"
-                        description="Real-time device health across all active POS terminals — merchant → location → device"
+                        title="Fleet Health"
+                        description="Live status of every POS terminal, by merchant and location"
                     />
                     <FleetHealthDashboard />
 
                     <SectionHeader
-                        title="Payment Terminal Health Monitor"
-                        description="Dejavoo terminal connectivity, settlement status, and station pairing across the fleet"
+                        title="Payment Terminals"
+                        description="Dejavoo connectivity, settlement, and pairing"
                     />
                     <PaymentTerminalHealthMonitor />
                 </TabsContent>
@@ -978,7 +791,10 @@ export default function AnalyticsPage() {
             TAB 6 — GROWTH
             T017: Location Density & Geographic Insights
         ══════════════════════════════════════════════════════════════════ */}
-                <TabsContent value="growth" className="space-y-6">
+                <TabsContent
+                    value="growth"
+                    className="space-y-6 max-md:[&_[data-slot=panel-caption]]:hidden max-md:[&_[data-slot=stat-meta]]:hidden"
+                >
                     <SectionHeader
                         title="Location Density & Geographic Insights"
                         description="Where our merchants are concentrated — state and city breakdown, whitespace markets for sales expansion"

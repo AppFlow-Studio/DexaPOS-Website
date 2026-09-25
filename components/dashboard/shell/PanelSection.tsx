@@ -77,7 +77,7 @@ export function PanelSection({
           )}
 
           {caption && (
-            <p className={cn('mt-1 text-sm text-muted-foreground', captionClassName)}>
+            <p data-slot="panel-caption" className={cn('mt-1 text-sm text-muted-foreground', captionClassName)}>
               {caption}
             </p>
           )}
