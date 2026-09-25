@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { storefrontScopedStorage } from "../lib/scoped-storage";
 import { StorefrontItem, StorefrontModifierOption } from "@/types/storefront";
 import {
   getStorefrontBrowsePrice,
@@ -196,7 +197,10 @@ export const useCart = create<CartStore>()(
       },
     }),
     {
+      // Namespaced per storefront so stores sharing a browser origin (all
+      // path-routed `/sites/{slug}` stores) don't bleed carts into each other.
       name: "storefront-cart-storage",
+      storage: storefrontScopedStorage,
       partialize: (state) => ({ items: state.items, isOpen: state.isOpen, goGreen: state.goGreen }),
     }
   )

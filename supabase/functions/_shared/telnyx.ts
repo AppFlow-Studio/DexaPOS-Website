@@ -5,6 +5,27 @@ const TELNYX_API_KEY = Deno.env.get('TELNYX_API_KEY') ?? '';
 const TELNYX_FROM_NUMBER = Deno.env.get('TELNYX_FROM_NUMBER') ?? '';
 const TELNYX_MESSAGING_PROFILE_ID =
   Deno.env.get('TELNYX_MESSAGING_PROFILE_ID') ?? '';
+const TELNYX_WEBHOOK_URL = Deno.env.get('TELNYX_WEBHOOK_URL') ?? '';
+const TELNYX_WEBHOOK_FAILOVER_URL =
+  Deno.env.get('TELNYX_WEBHOOK_FAILOVER_URL') ?? '';
+
+export interface SmsSendSuccess {
+  id: string;
+  status: string;
+  fromNumber: string | null;
+  messagingProfileId: string | null;
+}
+
+export interface SmsSendFailure {
+  error: string;
+  errorCode?: string | null;
+  id?: string;
+  status?: string;
+  fromNumber?: string | null;
+  messagingProfileId?: string | null;
+}
+
+export type SmsSendResult = SmsSendSuccess | SmsSendFailure;
 
 export function isTelnyxConfigured(): boolean {
   return (
@@ -24,7 +45,7 @@ export function normalizeE164(raw: string): string | null {
 export async function sendSMS(
   to: string,
   body: string,
-): Promise<{ id: string } | { error: string }> {
+): Promise<SmsSendResult> {
   if (!isTelnyxConfigured()) {
     return {
       error:
@@ -33,13 +54,21 @@ export async function sendSMS(
   }
 
   const normalized = normalizeE164(to);
-  if (!normalized) return { error: `Invalid phone number: ${to}` };
+  if (!normalized) return { error: 'Invalid phone number' };
 
-  const payload: Record<string, unknown> = { to: normalized, text: body };
+  const payload: Record<string, unknown> = {
+    to: normalized,
+    text: body,
+    use_profile_webhooks: true,
+  };
   if (TELNYX_FROM_NUMBER) {
     payload.from = TELNYX_FROM_NUMBER;
   } else if (TELNYX_MESSAGING_PROFILE_ID) {
     payload.messaging_profile_id = TELNYX_MESSAGING_PROFILE_ID;
+  }
+  if (TELNYX_WEBHOOK_URL) payload.webhook_url = TELNYX_WEBHOOK_URL;
+  if (TELNYX_WEBHOOK_FAILOVER_URL) {
+    payload.webhook_failover_url = TELNYX_WEBHOOK_FAILOVER_URL;
   }
 
   try {
@@ -53,8 +82,16 @@ export async function sendSMS(
       body: JSON.stringify(payload),
     });
 
-    // deno-lint-ignore no-explicit-any
-    let json: any = {};
+    let json: {
+      data?: {
+        id?: string;
+        to?: Array<{ status?: string }>;
+        from?: { phone_number?: string } | string;
+        messaging_profile_id?: string;
+        errors?: Array<{ code?: string; detail?: string; title?: string }>;
+      };
+      errors?: Array<{ code?: string; detail?: string; title?: string }>;
+    } = {};
     try {
       json = await resp.json();
     } catch {
@@ -63,19 +100,42 @@ export async function sendSMS(
 
     const data = json?.data;
     const firstError = json?.errors?.[0];
-    const providerStatus = data?.status as string | undefined;
-    const ok =
-      resp.ok &&
-      !!data?.id &&
-      providerStatus !== 'sending_failed' &&
-      providerStatus !== 'delivery_failed';
+    const providerStatus = data?.to?.[0]?.status;
+    const ok = resp.ok && !!data?.id;
 
     if (!ok) {
       const message =
         firstError?.detail || firstError?.title || 'Could not send SMS';
-      return { error: message };
+      return { error: message, errorCode: firstError?.code ?? null };
     }
-    return { id: data.id as string };
+    const responseFrom =
+      typeof data.from === 'string' ? data.from : data.from?.phone_number;
+    const fromNumber = responseFrom ?? (TELNYX_FROM_NUMBER || null);
+    const responseProfile =
+      data.messaging_profile_id ?? (TELNYX_MESSAGING_PROFILE_ID || null);
+    if (
+      providerStatus === 'sending_failed' ||
+      providerStatus === 'delivery_failed'
+    ) {
+      const providerError = data.errors?.[0];
+      return {
+        error:
+          providerError?.detail ||
+          providerError?.title ||
+          'Telnyx rejected the SMS',
+        errorCode: providerError?.code ?? null,
+        id: data.id,
+        status: providerStatus,
+        fromNumber,
+        messagingProfileId: responseProfile,
+      };
+    }
+    return {
+      id: data.id as string,
+      status: providerStatus ?? 'sent',
+      fromNumber,
+      messagingProfileId: responseProfile,
+    };
   } catch (err) {
     const message = (err as { message?: string })?.message ?? 'Failed to send SMS';
     return { error: message };

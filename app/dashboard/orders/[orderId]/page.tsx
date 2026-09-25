@@ -515,6 +515,12 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* OrderOut Direct delivery: dispatch state. Failed states are loud —
+          the customer already paid for a courier that isn't coming. */}
+      {order.orderout_delivery_dispatch && (
+        <DeliveryDispatchBanner dispatch={order.orderout_delivery_dispatch} />
+      )}
+
       <div className="grid gap-6 md:grid-cols-3">
         {/* Main Content */}
         <div className="md:col-span-2 space-y-6">
@@ -1258,4 +1264,129 @@ export default function OrderDetailPage() {
       </AlertDialog>
     </div>
   );
+}
+
+const DISPATCH_STATUS_COPY: Record<string, string> = {
+  pending_assign: "Finding a driver",
+  pending_merchant: "Finding a driver",
+  scheduled: "Scheduled",
+  runner_assigned: "Driver assigned",
+  en_route_pickup: "Driver heading to store",
+  arrived_pickup: "Driver at store",
+  picked_up: "Picked up",
+  en_route_dropoff: "On the way",
+  arrived_dropoff: "Driver at customer",
+  completed: "Delivered",
+  cancelled: "Courier cancelled",
+};
+
+function DeliveryDispatchBanner({
+  dispatch,
+}: {
+  dispatch: NonNullable<OrderResponse["orderout_delivery_dispatch"]>;
+}) {
+  const etaLabel = dispatch.eta
+    ? new Date(dispatch.eta).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : null;
+
+  if (dispatch.state === "failed") {
+    const courierCancelled = dispatch.last_error === "courier_cancelled";
+    return (
+      <Card className="border-destructive/40 bg-destructive/5">
+        <CardContent className="flex items-start gap-3 py-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold text-destructive">
+              {courierCancelled ? "Courier cancelled this delivery" : "Delivery not dispatched"}
+            </p>
+            <p className="text-muted-foreground">
+              {courierCancelled
+                ? "The courier dropped the job after pickup was booked. The customer is waiting — call them and arrange another delivery."
+                : `The customer paid $${Number(dispatch.charged_fee).toFixed(2)} for delivery but no courier could be booked${
+                    dispatch.last_error ? ` (${dispatch.last_error})` : ""
+                  }. Call the customer or arrange delivery yourself.`}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (dispatch.state === "dispatched" || dispatch.state === "cancel_pending") {
+    const statusLabel = dispatch.delivery_status
+      ? DISPATCH_STATUS_COPY[dispatch.delivery_status] ?? dispatch.delivery_status
+      : "Courier booked";
+    const cancelRejected = dispatch.state === "dispatched" && Boolean(dispatch.cancel_rejected_at);
+    return (
+      <Card className={cancelRejected ? "border-amber-400/60 bg-amber-50/60" : ""}>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 py-4 text-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <Truck className="h-4 w-4 text-muted-foreground" />
+            {dispatch.state === "cancel_pending" ? "Cancelling courier…" : statusLabel}
+          </div>
+          {dispatch.courier_name && (
+            <span className="text-muted-foreground">
+              Driver: <span className="text-foreground">{dispatch.courier_name}</span>
+              {dispatch.courier_phone ? ` · ${dispatch.courier_phone}` : ""}
+            </span>
+          )}
+          {etaLabel && <span className="text-muted-foreground">ETA {etaLabel}</span>}
+          {dispatch.requote_delta != null && Number(dispatch.requote_delta) > 0 && (
+            <span className="text-muted-foreground">
+              Courier cost +${Number(dispatch.requote_delta).toFixed(2)} over what the customer paid
+            </span>
+          )}
+          {dispatch.tracking_url && (
+            <a
+              href={dispatch.tracking_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto inline-flex items-center gap-1 font-medium text-primary hover:underline"
+            >
+              Track <Globe className="h-3.5 w-3.5" />
+            </a>
+          )}
+          {cancelRejected && (
+            <p className="basis-full text-amber-800">
+              The order was cancelled but OrderOut refused the courier cancellation — the driver already has the food.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (dispatch.state === "push_unconfirmed") {
+    return (
+      <Card className="border-amber-400/60 bg-amber-50/60">
+        <CardContent className="flex items-start gap-3 py-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold text-amber-900">Courier booking unconfirmed</p>
+            <p className="text-amber-800">
+              OrderOut did not answer when the courier was booked
+              {dispatch.last_error ? ` (${dispatch.last_error})` : ""}. Check the OrderOut dashboard for this
+              order: if it is there, this page updates itself once OrderOut confirms it; if not, arrange delivery
+              yourself. Nothing is re-sent automatically, so a courier can never be booked twice.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (dispatch.state === "awaiting_accept" || dispatch.state === "pending") {
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+          <Truck className="h-4 w-4" />
+          {dispatch.state === "awaiting_accept"
+            ? "Courier will be booked as soon as this order is accepted."
+            : `Booking a courier${dispatch.attempts > 1 ? ` (attempt ${dispatch.attempts})` : ""}…`}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return null;
 }

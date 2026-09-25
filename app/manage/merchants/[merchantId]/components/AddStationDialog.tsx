@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2, Monitor, ShoppingCart, UtensilsCrossed, TabletSmartphone } from 'lucide-react'
+import { Loader2, Monitor, UtensilsCrossed, TabletSmartphone } from 'lucide-react'
 import { useAdminCreateStation, useAdminNextStationNumber } from '@/lib/queries/use-admin-stations'
 import type { StationType, CreateStationInput } from '@/app/manage/actions/admin-merchant/stations'
 import { toast } from 'sonner'
@@ -52,19 +52,6 @@ const stationTypes: StationTypeOption[] = [
             can_process_payments: true,
             can_void_orders: true,
             can_apply_discounts: true,
-            can_update_kitchen_status: false,
-        },
-    },
-    {
-        type: 'checkout',
-        label: 'Checkout',
-        description: 'Payment-focused station',
-        icon: <ShoppingCart className="h-6 w-6" />,
-        defaultCapabilities: {
-            can_create_orders: false,
-            can_process_payments: true,
-            can_void_orders: false,
-            can_apply_discounts: false,
             can_update_kitchen_status: false,
         },
     },

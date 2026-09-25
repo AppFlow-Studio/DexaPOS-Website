@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, reverificationErrorResponse } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
-import { validateReauthCookie } from "@/lib/pin-reauth";
 
 // Roles stored in members.role that are allowed to reveal PINs
 const STAFF_MANAGE_ROLE_CODES = ["merchant.owner", "merchant.admin", "merchant.manager"];
+
+// Reveal is gated behind Clerk reverification ("sudo mode"): the user must have
+// verified a first factor within the last 5 minutes. Clerk prompts with whatever
+// factor they have — password for password users, email code for SSO/OAuth users.
+const PIN_REVEAL_REVERIFICATION = { level: "first_factor", afterMinutes: 5 } as const;
 
 // UUID v4 regex — same as impersonation.ts
 const UUID_REGEX =
@@ -16,20 +20,19 @@ export async function POST(
   req: Request,
   context: { params: Promise<{ memberId: string }> },
 ) {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Validate re-auth cookie (server-enforced 5-min window)
-  const cookieStore = await cookies();
-  const reauthCookie = cookieStore.get("pin_reauth")?.value;
-  if (!reauthCookie || !validateReauthCookie(reauthCookie, userId)) {
-    return NextResponse.json(
-      { error: "Re-authentication required", code: "REAUTH_REQUIRED" },
-      { status: 401 },
-    );
+  // Re-auth gate: require a fresh (<5 min) first-factor verification. If stale,
+  // return the Clerk reverification hint so the client's useReverification hook
+  // prompts the user to step up (password / email code) and retries.
+  if (!has({ reverification: PIN_REVEAL_REVERIFICATION })) {
+    return reverificationErrorResponse(PIN_REVEAL_REVERIFICATION);
   }
+
+  const cookieStore = await cookies();
 
   const { memberId } = await context.params;
   let locationId: string;

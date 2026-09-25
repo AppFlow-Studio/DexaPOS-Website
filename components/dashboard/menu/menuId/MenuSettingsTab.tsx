@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { useIsSingleLocation } from '@/stores/location-store'
 import { MenuChannelVisibilityControls } from '../MenuChannelVisibilityControls'
+import { MenuStationCoverage } from '../MenuStationCoverage'
 import type { MenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
 
 interface MenuSettingsTabProps {
@@ -135,6 +136,15 @@ export function MenuSettingsTab({
                         Select a location to configure platform visibility.
                     </p>
                 )}
+                {/* Per-station scope can narrow the switches above. This is the
+                    read-only view of that; each row links to the station's own
+                    Menus tab, where the selection is edited. */}
+                <MenuStationCoverage
+                    menuId={menu.id}
+                    visibility={channelVisibility}
+                    locationId={channelVisibilityLocationId}
+                    className="mt-3"
+                />
             </PanelSection>
 
             {/* Menu scope only has meaning when the merchant can choose among locations. */}

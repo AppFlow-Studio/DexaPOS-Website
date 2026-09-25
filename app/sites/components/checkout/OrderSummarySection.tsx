@@ -8,6 +8,8 @@ interface OrderSummarySectionProps {
   total: number;
   itemCount: number;
   showDeliveryFee: boolean;
+  /** OrderOut Direct: quote not ready yet — show a placeholder instead of "Free". */
+  deliveryFeePending?: boolean;
   taxRate?: number;
   discountAmount?: number;
   promoCode?: string;
@@ -22,6 +24,7 @@ export function OrderSummarySection({
   total,
   itemCount,
   showDeliveryFee,
+  deliveryFeePending = false,
   taxRate,
   discountAmount,
   promoCode,
@@ -42,7 +45,9 @@ export function OrderSummarySection({
         {showDeliveryFee && (
           <div className="flex justify-between" style={{ fontSize: "14px", color: "var(--text-secondary)" }}>
             <span>Delivery</span>
-            <span>{deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Free"}</span>
+            <span>
+              {deliveryFeePending ? "Calculated at checkout" : deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Free"}
+            </span>
           </div>
         )}
         {discountAmount && discountAmount > 0 ? (

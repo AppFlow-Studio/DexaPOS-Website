@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { sendSMS } from "@/lib/messaging/telnyx";
+import { logSmsSendResult } from "@/lib/messaging/message-log";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   getEffectiveMerchantContext,
@@ -347,13 +348,24 @@ export async function sendReceipt(
         receiptUrl
       );
       const smsResult = await sendSMS(params.recipient, text);
+      const ledger = await logSmsSendResult(supabase, {
+        merchantId: (order as { merchant_id: string }).merchant_id,
+        customerId: (order as { customer_id?: string | null }).customer_id ?? null,
+        toNumber: params.recipient,
+        body: text,
+      }, smsResult);
 
       const newStatus = "error" in smsResult ? "failed" : "sent";
       await supabase
         .from("receipt_sends")
         .update({
           status: newStatus,
-          error_message: "error" in smsResult ? smsResult.error : null,
+          error_message:
+            "error" in smsResult
+              ? smsResult.error
+              : ledger.ok
+                ? null
+                : `Ledger: ${ledger.error}`,
         })
         .eq("id", (pendingRow as { id: string }).id);
 

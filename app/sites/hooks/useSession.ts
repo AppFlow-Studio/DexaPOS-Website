@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { storefrontScopedStorage } from "../lib/scoped-storage";
 import { getSession } from "../session-actions";
 
 export interface SessionCustomer {
@@ -158,7 +159,11 @@ export const useSession = create<SessionStore>()(
       },
     }),
     {
+      // Same per-storefront namespacing as the cart: a shared browser origin
+      // must not let one store's session token / customer / active order leak
+      // into another store's tab.
       name: "storefront-session",
+      storage: storefrontScopedStorage,
       partialize: (state) => ({
         sessionToken: state.sessionToken,
         customer: state.customer,

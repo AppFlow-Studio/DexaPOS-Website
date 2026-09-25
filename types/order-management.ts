@@ -315,6 +315,29 @@ export interface OrderStatusHistory {
   metadata?: Record<string, any>;
 }
 
+export interface OrderoutDeliveryDispatchSummary {
+  state:
+    | "awaiting_accept"
+    | "pending"
+    | "push_unconfirmed"
+    | "dispatched"
+    | "failed"
+    | "cancel_pending"
+    | "cancelled";
+  delivery_status: string | null;
+  courier_name: string | null;
+  courier_phone: string | null;
+  tracking_url: string | null;
+  eta: string | null;
+  charged_fee: number;
+  requote_delta: number | null;
+  last_error: string | null;
+  attempts: number;
+  dispatched_at: string | null;
+  cancel_rejected_at: string | null;
+  failed_at: string | null;
+}
+
 export interface OrderResponse {
   id: string;
   order_number: string;
@@ -380,6 +403,11 @@ export interface OrderResponse {
   payment_pricing_mode?: "card" | "cash" | "mixed";
   cash_discount_applied?: boolean;
   cash_discount_amount?: number;
+  /**
+   * OrderOut Direct courier booking for website delivery orders (left-joined by
+   * GetOrderDetails). Absent on every other order.
+   */
+  orderout_delivery_dispatch?: OrderoutDeliveryDispatchSummary | null;
 }
 
 export interface TableSessionWithEvents {

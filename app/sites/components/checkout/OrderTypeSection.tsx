@@ -7,6 +7,7 @@ import { MapPin, Plus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoreMapEmbed } from "./StoreMapEmbed";
+import { CHECKOUT_FIELD_RING } from "./field-styles";
 import type { SavedAddress } from "../../customer-actions";
 
 interface OrderTypeSectionProps {
@@ -137,6 +138,10 @@ export function OrderTypeSection({
             </div>
           )}
 
+          {selectedAddressId !== "new" && savedAddresses.length > 0 && (
+            <ZoneFeedback state={zoneCheckState} message={zoneCheckMessage} />
+          )}
+
           {(selectedAddressId === "new" || savedAddresses.length === 0) && (
             <div className="space-y-2">
               <AddressAutocomplete
@@ -153,6 +158,7 @@ export function OrderTypeSection({
                 }
                 placeholder="Street address"
                 inputStyle={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
+                inputClassName={CHECKOUT_FIELD_RING}
               />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input
@@ -160,6 +166,7 @@ export function OrderTypeSection({
                   onChange={(e) => onNewAddressChange({ ...newAddress, city: e.target.value })}
                   placeholder="City"
                   autoComplete="address-level2"
+                  className={CHECKOUT_FIELD_RING}
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
                 <Input
@@ -167,6 +174,7 @@ export function OrderTypeSection({
                   onChange={(e) => onNewAddressChange({ ...newAddress, state: e.target.value })}
                   placeholder="State"
                   autoComplete="address-level1"
+                  className={CHECKOUT_FIELD_RING}
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
                 <Input
@@ -174,6 +182,7 @@ export function OrderTypeSection({
                   onChange={(e) => onNewAddressChange({ ...newAddress, zip: e.target.value })}
                   placeholder="ZIP"
                   autoComplete="postal-code"
+                  className={CHECKOUT_FIELD_RING}
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
               </div>
@@ -182,51 +191,10 @@ export function OrderTypeSection({
                 onChange={(e) => onNewAddressChange({ ...newAddress, notes: e.target.value })}
                 placeholder="Delivery notes (apt #, gate code...)"
                 autoComplete="off"
+                className={CHECKOUT_FIELD_RING}
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
               />
-              {/* Zone eligibility feedback */}
-              {zoneCheckState !== "idle" && (
-                <div
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-                  style={
-                    zoneCheckState === "valid"
-                      ? {
-                          backgroundColor: "color-mix(in srgb, #22c55e 12%, var(--bg))",
-                          color: "#15803d",
-                          border: "1px solid color-mix(in srgb, #22c55e 40%, transparent)",
-                          borderRadius: "var(--radius)",
-                        }
-                      : zoneCheckState === "invalid"
-                        ? {
-                            backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-                            color: "#dc2626",
-                            border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
-                            borderRadius: "var(--radius)",
-                          }
-                        : {
-                            backgroundColor: "var(--card)",
-                            color: "var(--text-secondary)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "var(--radius)",
-                          }
-                  }
-                >
-                  {zoneCheckState === "checking" && (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                  )}
-                  {zoneCheckState === "valid" && (
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  )}
-                  {zoneCheckState === "invalid" && (
-                    <XCircle className="h-4 w-4 shrink-0" />
-                  )}
-                  <span>
-                    {zoneCheckState === "checking"
-                      ? "Checking delivery availability…"
-                      : zoneCheckMessage}
-                  </span>
-                </div>
-              )}
+              <ZoneFeedback state={zoneCheckState} message={zoneCheckMessage} />
 
               {isAuthenticated && onSaveNewAddressChange && (
                 <div className="flex items-center gap-2 pt-1">
@@ -249,5 +217,51 @@ export function OrderTypeSection({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Address eligibility / quote line. Under self-fulfilment this is the delivery
+ * zone check; under OrderOut Direct it shows the live courier fee and ETA.
+ */
+function ZoneFeedback({
+  state,
+  message,
+}: {
+  state: "idle" | "checking" | "valid" | "invalid";
+  message?: string;
+}) {
+  if (state === "idle") return null;
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+      style={
+        state === "valid"
+          ? {
+              backgroundColor: "color-mix(in srgb, #22c55e 12%, var(--bg))",
+              color: "#15803d",
+              border: "1px solid color-mix(in srgb, #22c55e 40%, transparent)",
+              borderRadius: "var(--radius)",
+            }
+          : state === "invalid"
+            ? {
+                backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+                color: "#dc2626",
+                border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
+                borderRadius: "var(--radius)",
+              }
+            : {
+                backgroundColor: "var(--card)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+              }
+      }
+    >
+      {state === "checking" && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+      {state === "valid" && <CheckCircle2 className="h-4 w-4 shrink-0" />}
+      {state === "invalid" && <XCircle className="h-4 w-4 shrink-0" />}
+      <span>{state === "checking" ? (message ?? "Checking delivery availability…") : message}</span>
+    </div>
   );
 }

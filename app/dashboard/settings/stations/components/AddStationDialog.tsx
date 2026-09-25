@@ -252,14 +252,6 @@ export function AddStationDialog({
           setCanUpdateKitchenStatus(true);
           setViewScope("location");
           break;
-        case "checkout":
-          setCanCreateOrders(false);
-          setCanProcessPayments(true);
-          setCanVoidOrders(false);
-          setCanApplyDiscounts(true);
-          setCanUpdateKitchenStatus(false);
-          setViewScope("own");
-          break;
         case "kds":
           setCanCreateOrders(false);
           setCanProcessPayments(false);
@@ -394,26 +386,25 @@ export function AddStationDialog({
           }
         }
       } else {
-        const created = await createMutation.mutateAsync({
-          clerkOrgId,
-          input: stationData,
-        });
-        // After creating a KDS station, fetch its display and save routing rules
-        if (isKds && created && kdsRoutingMode === "prep_station" && selectedPrepStationNames.length > 0) {
-          // The KDS display was created in the createStation action
-          // We need to fetch it to get the display ID
-          const { getKdsDisplayByStationId } = await import("@/app/dashboard/actions/stations");
-          const displayResult = await getKdsDisplayByStationId(created.id);
-          if (displayResult.success && displayResult.data) {
-            await setRoutingRulesMutation.mutateAsync({
-              kdsDisplayId: displayResult.data.id,
-              rules: selectedPrepStationNames.map((name) => ({
+        // Persist routing rules together with the station. createStation creates
+        // the KDS display and its rules in one server call, so filters apply
+        // immediately on create.
+        const routingRules =
+          isKds && kdsRoutingMode === "prep_station"
+            ? selectedPrepStationNames.map((name) => ({
                 rule_type: "prep_station",
                 rule_value: name,
-              })),
-            });
-          }
-        }
+              }))
+            : [];
+        await createMutation.mutateAsync({
+          clerkOrgId,
+          input: {
+            ...stationData,
+            kds_config: kdsConfig
+              ? { ...kdsConfig, routing_rules: routingRules }
+              : undefined,
+          },
+        });
       }
       handleClose();
     } catch (error) {
@@ -492,7 +483,7 @@ export function AddStationDialog({
             {/* Station Type Selection */}
             <div className="grid gap-2">
               <Label>Station Type</Label>
-              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
                 <StationTypeCard
                   type="register"
                   label="Register"
@@ -500,14 +491,6 @@ export function AddStationDialog({
                   icon={getStationTypeIcon("register")}
                   selected={stationType === "register"}
                   onClick={() => setStationType("register")}
-                />
-                <StationTypeCard
-                  type="checkout"
-                  label="Checkout"
-                  sublabel="Payment only"
-                  icon={getStationTypeIcon("checkout")}
-                  selected={stationType === "checkout"}
-                  onClick={() => setStationType("checkout")}
                 />
                 <StationTypeCard
                   type="kds"

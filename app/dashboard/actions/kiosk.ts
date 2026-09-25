@@ -6,6 +6,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getFunctionErrorMessage } from "@/lib/supabase/function-error";
 import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 import { LogAuditEvent } from "./audit-logs";
 import { getCurrentUserMerchantRole } from "./role-check";
@@ -671,7 +672,9 @@ export async function uploadKioskAsset(
       },
     });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      return { success: false, error: await getFunctionErrorMessage(error, "Upload failed") };
+    }
     const response = data as { success?: boolean; cdnUrl?: string; error?: string } | null;
     if (!response?.success || !response.cdnUrl) {
       return { success: false, error: response?.error ?? "Upload failed" };
