@@ -9,6 +9,14 @@
 
 export type KioskOrderTypes = 'both' | 'dine_in_only' | 'takeout_only'
 
+/**
+ * How a dine-in order gets its seat:
+ * - off:   no seat
+ * - ask:   the guest picks from `seat_options`
+ * - fixed: this kiosk always sends `fixed_seat_label` (no prompt)
+ */
+export type KioskSeatMode = 'off' | 'ask' | 'fixed'
+
 export interface KioskSeatOption {
   id: string
   label: string
@@ -18,6 +26,15 @@ export interface StationKioskSettings {
   order_types: KioskOrderTypes
   /** Dine-In only: start as Dine-In without asking (false = single button). */
   dine_in_only_skip_prompt: boolean
+  /** Fixed table for every dine-in order from this kiosk (null = none). */
+  table_label: string | null
+  seat_mode: KioskSeatMode
+  /** Used when seat_mode === 'fixed'. */
+  fixed_seat_label: string | null
+  /**
+   * Legacy flag read by older kiosk builds. Always derived as
+   * `seat_mode === 'ask'`; never edit directly.
+   */
   seat_selection_enabled: boolean
   seat_options: KioskSeatOption[]
 }
@@ -28,9 +45,14 @@ export const KIOSK_SEAT_OPTIONS_MAX = 200
 export const DEFAULT_STATION_KIOSK_SETTINGS: StationKioskSettings = {
   order_types: 'both',
   dine_in_only_skip_prompt: true,
+  table_label: null,
+  seat_mode: 'off',
+  fixed_seat_label: null,
   seat_selection_enabled: false,
   seat_options: [],
 }
+
+const SEAT_MODES: readonly KioskSeatMode[] = ['off', 'ask', 'fixed']
 
 const ORDER_TYPES: readonly KioskOrderTypes[] = [
   'both',
@@ -43,6 +65,13 @@ function newSeatId(): string {
     return crypto.randomUUID()
   }
   return `seat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Trim, collapse whitespace and clamp; empty → null. */
+export function normalizeKioskLabel(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const label = raw.trim().replace(/\s+/g, ' ').slice(0, KIOSK_SEAT_LABEL_MAX)
+  return label || null
 }
 
 /**
@@ -61,7 +90,7 @@ export function normalizeSeatOptions(raw: unknown): KioskSeatOption[] {
           ? (entry as { label?: unknown }).label
           : null
     if (typeof rawLabel !== 'string') continue
-    const label = rawLabel.trim().replace(/\s+/g, ' ').slice(0, KIOSK_SEAT_LABEL_MAX)
+    const label = normalizeKioskLabel(rawLabel)
     if (!label) continue
     const key = label.toLowerCase()
     if (seen.has(key)) continue
@@ -88,15 +117,46 @@ export function normalizeStationKioskSettings(raw: unknown): StationKioskSetting
   const orderTypes = ORDER_TYPES.includes(obj.order_types as KioskOrderTypes)
     ? (obj.order_types as KioskOrderTypes)
     : DEFAULT_STATION_KIOSK_SETTINGS.order_types
+  const fixedSeatLabel = normalizeKioskLabel(obj.fixed_seat_label)
+  // Rows saved before seat_mode existed only carry the boolean.
+  let seatMode: KioskSeatMode = SEAT_MODES.includes(obj.seat_mode as KioskSeatMode)
+    ? (obj.seat_mode as KioskSeatMode)
+    : obj.seat_selection_enabled === true
+      ? 'ask'
+      : 'off'
+  if (seatMode === 'fixed' && !fixedSeatLabel) seatMode = 'off'
   return {
     order_types: orderTypes,
     dine_in_only_skip_prompt:
       typeof obj.dine_in_only_skip_prompt === 'boolean'
         ? obj.dine_in_only_skip_prompt
         : DEFAULT_STATION_KIOSK_SETTINGS.dine_in_only_skip_prompt,
-    seat_selection_enabled: obj.seat_selection_enabled === true,
+    table_label: normalizeKioskLabel(obj.table_label),
+    seat_mode: seatMode,
+    fixed_seat_label: fixedSeatLabel,
+    seat_selection_enabled: seatMode === 'ask',
     seat_options: normalizeSeatOptions(obj.seat_options),
   }
+}
+
+/** "1" / "12B" → "Table 1" / "Table 12B"; named labels ("Counter") stay as-is. */
+function withPrefix(label: string | null | undefined, prefix: string): string {
+  const value = (label ?? '').trim()
+  if (!value) return ''
+  return /^\d\S*$/.test(value) ? `${prefix}${value}` : value
+}
+
+/**
+ * Where a dine-in order goes, e.g. "Table 1, Seat 3". Mirrors
+ * `composeKioskLocationLabel` in the POS (`lib/formatTableLabel.ts`).
+ */
+export function composeKioskLocationLabel(
+  table: string | null | undefined,
+  seat: string | null | undefined,
+): string {
+  return [withPrefix(table, 'Table '), withPrefix(seat, 'Seat ')]
+    .filter(Boolean)
+    .join(', ')
 }
 
 /**
@@ -119,7 +179,9 @@ export function isStationKioskSettingsDirty(
   if (
     a.order_types !== b.order_types ||
     a.dine_in_only_skip_prompt !== b.dine_in_only_skip_prompt ||
-    a.seat_selection_enabled !== b.seat_selection_enabled ||
+    a.table_label !== b.table_label ||
+    a.seat_mode !== b.seat_mode ||
+    a.fixed_seat_label !== b.fixed_seat_label ||
     a.seat_options.length !== b.seat_options.length
   ) {
     return true

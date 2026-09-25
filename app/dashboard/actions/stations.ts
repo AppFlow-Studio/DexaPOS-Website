@@ -752,6 +752,16 @@ export async function updateStation(
           data: null,
         };
       }
+      if (
+        input.kiosk_settings.seat_mode === "fixed" &&
+        !input.kiosk_settings.fixed_seat_label?.trim()
+      ) {
+        return {
+          success: false,
+          error: "Enter the fixed seat for this kiosk",
+          data: null,
+        };
+      }
       // Re-normalise server-side: never trust the client's shape.
       updateData.kiosk_settings = normalizeStationKioskSettings(
         input.kiosk_settings,

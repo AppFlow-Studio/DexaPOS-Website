@@ -68,6 +68,45 @@ export async function GetLocationTableCount(locationId: string): Promise<number>
 }
 
 /**
+ * Active table/booth names for a location, sorted naturally ("2" before "10").
+ * Used as suggestions (e.g. the station Kiosk tab's fixed table), never as a
+ * hard constraint — callers still accept free text.
+ */
+export async function GetLocationTableNames(locationId: string): Promise<string[]> {
+    if (!locationId) {
+        return []
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    try {
+        const { data, error } = await supabase
+            .from('floor_plan_objects')
+            .select('name')
+            .eq('location_id', locationId)
+            .in('category', ['table', 'booth'])
+            .eq('is_active', true)
+
+        if (error) {
+            console.error('[GetLocationTableNames] Error:', error)
+            return []
+        }
+
+        const names = new Set<string>()
+        for (const row of data ?? []) {
+            const name = row.name?.trim()
+            if (name) names.add(name)
+        }
+        return [...names].sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
+        )
+    } catch (error) {
+        console.error('[GetLocationTableNames] Unexpected error:', error)
+        return []
+    }
+}
+
+/**
  * Get floor plan statistics for all locations
  */
 export async function GetLocationsWithFloorPlanStats(clerkOrgId: string): Promise<
