@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
-import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -337,10 +336,15 @@ function ZombieInsightBanner({
     estimatedWastedHardwareValue: number
     hardwareCostPerUnit: number
 }) {
-    const merchantsWithZombies = merchants.filter(m => m.zombieStations > 0)
-    const worstMerchant = [...merchantsWithZombies].sort((a, b) => b.zombieStations - a.zombieStations)[0]
+    const merchantsWithZombies = merchants
+        .filter(m => m.zombieStations > 0)
+        .sort((a, b) => b.zombieStations - a.zombieStations)
 
-    if (!worstMerchant) return null
+    if (merchantsWithZombies.length === 0) return null
+
+    const MAX_ROWS = 4
+    const shown = merchantsWithZombies.slice(0, MAX_ROWS)
+    const hiddenCount = merchantsWithZombies.length - shown.length
 
     const fmtDollars = (n: number) =>
         n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` :
@@ -353,30 +357,61 @@ function ZombieInsightBanner({
                 icon={Ghost}
                 label={`${merchantsWithZombies.length} merchant${merchantsWithZombies.length !== 1 ? 's have' : ' has'} ${totalZombieStations} inactive tablet${totalZombieStations !== 1 ? 's' : ''}`}
                 caption="No transaction in 30+ days"
-                action={
-                    <Link href={`/manage/merchants/${worstMerchant.merchantId}`}>
-                        <Button variant="outline" size="sm" className="shrink-0 rounded-full">
-                            <ExternalLink className="mr-1 h-3 w-3" />
-                            View Merchant
-                        </Button>
-                    </Link>
-                }
             >
-                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-                    <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-                        Worst offender:{' '}
-                        <span className="font-semibold text-foreground">{worstMerchant.merchantName}</span>{' '}
-                        ({worstMerchant.zombieStations} zombie{worstMerchant.zombieStations !== 1 ? 's' : ''} · paying for{' '}
-                        {worstMerchant.totalStations} but only using {worstMerchant.activeStations}).
-                    </p>
-
+                {/* The headline cost on the left, and on the right every
+                    merchant behind the title's count (worst first) — the old
+                    single "worst offender" line left most of the row empty and
+                    named only one of the N merchants the title promises. */}
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-stretch sm:gap-6">
+                    {/* Short label: the tile's label is single-line, and the
+                        long form truncated at a fixed `w-64`. "Estimated"
+                        moves into the meta line. */}
                     <InsetTile
-                        className="shrink-0 sm:w-64"
+                        className="shrink-0 sm:w-56"
                         icon={<DollarSign />}
-                        label="Estimated wasted hardware value"
+                        label="Wasted hardware value"
                         value={fmtDollars(estimatedWastedHardwareValue)}
-                        meta={`Based on ~${fmtDollars(hardwareCostPerUnit)}/unit assumption`}
+                        meta={`Estimated at ~${fmtDollars(hardwareCostPerUnit)}/unit`}
                     />
+
+                    <ul className="min-w-0 flex-1 space-y-1">
+                        {shown.map((m) => {
+                            const idlePct = m.totalStations > 0 ? (m.zombieStations / m.totalStations) * 100 : 0
+                            return (
+                                <li key={m.merchantId}>
+                                    <Link
+                                        href={`/manage/merchants/${m.merchantId}`}
+                                        className="group flex min-w-0 items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-muted/60"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex min-w-0 items-baseline justify-between gap-3">
+                                                <span className="truncate text-sm font-medium text-foreground">
+                                                    {m.merchantName}
+                                                </span>
+                                                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                                    <span className="font-semibold text-foreground">{m.zombieStations}</span>
+                                                    {' '}idle of {m.totalStations}
+                                                </span>
+                                            </div>
+                                            {/* Idle share of the merchant's fleet. */}
+                                            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                                                <div
+                                                    className="h-full rounded-full bg-amber-500/80"
+                                                    style={{ width: `${idlePct}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
+                                    </Link>
+                                </li>
+                            )
+                        })}
+                        {hiddenCount > 0 && (
+                            <li className="px-3 pt-1 text-xs text-muted-foreground">
+                                +{hiddenCount} more merchant{hiddenCount !== 1 ? 's' : ''} with idle tablets
+                            </li>
+                        )}
+                    </ul>
                 </div>
             </PanelSection>
         </Panel>
