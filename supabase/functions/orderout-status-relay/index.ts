@@ -6,7 +6,7 @@
 //
 // Invoked two ways, both best-effort on their own:
 //   - pg_net poke from trg_relay_orderout_status the instant a row is enqueued
-//   - the `orderout-status-relay-drain` cron job, every minute
+//   - the `frequent-jobs` cron dispatcher (public.run_frequent_jobs), every minute
 // The queue is the source of truth; a lost invocation only costs latency.
 //
 // Auth: x-internal-secret must equal INTERNAL_NOTIFICATION_SECRET. Deploy with

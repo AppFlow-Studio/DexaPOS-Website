@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { useSession } from "@clerk/nextjs";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@supabase/supabase-js";
+import { useQuery } from "@tanstack/react-query";
 import { LifeBuoy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UnreadTicketCounts } from "@/app/dashboard/actions/support";
@@ -24,64 +21,24 @@ interface NotificationBellProps {
 /**
  * Support affordance (lifebuoy glyph — deliberately NOT a bell, which reads as
  * notifications). Links to the support inbox; the badge count is RPC-backed
- * (survives a hard refresh) and kept live by a realtime subscription on the
- * support tables: any insert/update invalidates the count so it re-fetches
- * within seconds.
+ * (survives a hard refresh), polled every 60s and refreshed when the tab
+ * regains focus.
  *
- * We build a single authenticated Supabase client for the component lifetime so
- * postgres_changes pass RLS (the merchant sees their own tickets, HQ sees all).
+ * No Realtime: Supabase keeps six Postgres Changes connections open while any
+ * postgres_changes subscription exists, and this badge was one of the last.
+ * A support badge doesn't need sub-minute latency.
  */
 export function NotificationBell({ fetchCounts, href, queryKey }: NotificationBellProps) {
-  const queryClient = useQueryClient();
-  const { session } = useSession();
-
-  // Keep the latest session in a ref so the memoized client always mints a
-  // fresh token without being torn down and resubscribed on every render.
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
-
-  const supabase = useMemo(
-    () =>
-      createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-        { accessToken: async () => (await sessionRef.current?.getToken()) ?? null }
-      ),
-    []
-  );
-
   const { data } = useQuery<UnreadTicketCounts>({
     queryKey: [queryKey],
     queryFn: fetchCounts,
-    // Realtime is the primary signal; this is a slow safety-net poll.
-    refetchInterval: 120_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     staleTime: 30_000,
   });
 
   const total = data?.total ?? 0;
-
-  useEffect(() => {
-    const invalidate = () =>
-      queryClient.invalidateQueries({ queryKey: [queryKey] });
-
-    const channel = supabase
-      .channel(`support-unread-${queryKey}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "support_ticket_messages" },
-        invalidate
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "support_tickets" },
-        invalidate
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, queryClient, queryKey]);
 
   const badge = total > 99 ? "99+" : String(total);
 

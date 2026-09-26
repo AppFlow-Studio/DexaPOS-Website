@@ -7,22 +7,11 @@
 import { create } from "zustand";
 import { FloorPlan, FloorPlanObject, TableWithSession, WaitlistEntry, Reservation } from "@/types/floor-plan";
 import { TableStatus } from "@/types/floor-plan";
-import { RealtimeChannel } from "@supabase/supabase-js";
 import { subscribeWithSelector } from "zustand/middleware";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { createClient } from '@supabase/supabase-js';
 import { TABLE_SHAPES } from "@/utils/tables/table-shapes";
 import { getNextAvailableTableNumber } from "@/utils/tables/floor-plan-helpers";
 
-// Helper to create authenticated Supabase client
-function createAuthenticatedClient() {
-    // For realtime, we'll use the publishable key
-    // Auth will be handled via RLS policies
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! 
-    );
-}
 import {
     InitializeFloorPlan,
     LoadFloorPlanStatus,
@@ -67,7 +56,6 @@ interface FloorPlanState {
 
     // Connection
     isOnline: boolean;
-    realtimeChannel: RealtimeChannel | null;
 
     // Actions
     initialize: (locationId: string) => Promise<void>;
@@ -124,9 +112,6 @@ interface FloorPlanState {
     // Computed state
     hasUnsavedChanges: () => boolean;
 
-    // Internal
-    setupRealtimeSubscriptions: (locationId: string) => void;
-
     // Auth reset — clears all persisted and in-memory state
     reset: () => void;
 }
@@ -153,7 +138,6 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 past: [],
                 future: [],
                 isOnline: true,
-                realtimeChannel: null,
 
                 // ====================================================================
                 // INITIALIZATION & CLEANUP
@@ -184,9 +168,6 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                             get().loadReservations()
                         ]);
 
-                        // Setup realtime subscriptions
-                        get().setupRealtimeSubscriptions(locationId);
-
                         set({ isLoading: false, lastSyncAt: new Date() });
                     } catch (error: any) {
                         set({ isLoading: false, error: error.message });
@@ -194,82 +175,8 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     }
                 },
 
-                setupRealtimeSubscriptions: (locationId: string) => {
-                    // Create Supabase client for realtime
-                    const supabaseClient = createAuthenticatedClient();
-
-                    // Clean up existing subscription
-                    const existingChannel = get().realtimeChannel;
-                    if (existingChannel) {
-                        supabaseClient.removeChannel(existingChannel);
-                    }
-
-                    // Subscribe to table sessions (most frequent updates)
-                    const channel = supabaseClient
-                        .channel(`floor-plan-${locationId}`)
-                        .on(
-                            'postgres_changes',
-                            {
-                                event: '*',
-                                schema: 'public',
-                                table: 'table_sessions',
-                                filter: `location_id=eq.${locationId}`
-                            },
-                            () => {
-                                // Reload floor plan status
-                                get().loadFloorPlanStatus();
-                            }
-                        )
-                        .on(
-                            'postgres_changes',
-                            {
-                                event: '*',
-                                schema: 'public',
-                                table: 'table_session_tables'
-                            },
-                            () => {
-                                get().loadFloorPlanStatus();
-                            }
-                        )
-                        .on(
-                            'postgres_changes',
-                            {
-                                event: '*',
-                                schema: 'public',
-                                table: 'waitlist',
-                                filter: `location_id=eq.${locationId}`
-                            },
-                            () => {
-                                get().loadWaitlist();
-                            }
-                        )
-                        .on(
-                            'postgres_changes',
-                            {
-                                event: '*',
-                                schema: 'public',
-                                table: 'reservations',
-                                filter: `location_id=eq.${locationId}`
-                            },
-                            () => {
-                                get().loadReservations();
-                            }
-                        )
-                        .subscribe((status) => {
-                            set({ isOnline: status === 'SUBSCRIBED' });
-                        });
-
-                    set({ realtimeChannel: channel });
-                },
-
                 cleanup: () => {
-                    const channel = get().realtimeChannel;
-                    if (channel) {
-                        const supabaseClient = createAuthenticatedClient();
-                        supabaseClient.removeChannel(channel);
-                    }
                     set({
-                        realtimeChannel: null,
                         locationId: null,
                         floorPlans: [],
                         activeFloorPlanId: null,
@@ -280,13 +187,7 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 },
 
                 reset: () => {
-                    const channel = get().realtimeChannel;
-                    if (channel) {
-                        const supabaseClient = createAuthenticatedClient();
-                        supabaseClient.removeChannel(channel);
-                    }
                     set({
-                        realtimeChannel: null,
                         locationId: null,
                         floorPlans: [],
                         activeFloorPlanId: null,

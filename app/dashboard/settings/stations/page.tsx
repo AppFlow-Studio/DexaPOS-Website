@@ -11,7 +11,6 @@ import {
   StationType,
   getStationTypeLabel,
 } from "./hooks/useStations";
-import { useDeviceRealtime } from "./hooks/useDeviceRealtime";
 import { StationsTable } from "./components/StationsTable";
 import { StationCard } from "./components/StationCard";
 import { AddStationDialog } from "./components/AddStationDialog";
@@ -81,9 +80,6 @@ export default function StationsPage() {
     isError,
     error,
   } = useStationsWithHeartbeats(selectedLocationId);
-
-  // Subscribe to real-time heartbeat updates
-  useDeviceRealtime(selectedLocationId);
 
   // Mutations
   const deleteStationMutation = useDeleteStation();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Loader2, MessageSquareText, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,9 @@ import {
   type QrGuestAlertsSnapshot,
 } from "@/app/dashboard/online-ordering/actions";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase/client";
+import { usePrivateBroadcast } from "@/hooks/usePrivateBroadcast";
+
+const QR_ALERT_EVENTS = ["qr_guest_alert_changed"] as const;
 
 function formatRelativeAge(value: string) {
   const then = new Date(value).getTime();
@@ -42,43 +44,29 @@ export function QrGuestAlertsPanel({
 }) {
   const queryClient = useQueryClient();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery<QrGuestAlertsSnapshot>({
     queryKey: ["merchant-qr-guest-alerts", locationId],
     queryFn: () => getQrGuestAlertsSnapshot(locationId),
     enabled: Boolean(locationId),
     staleTime: 15 * 1000,
-    refetchInterval: 15 * 1000,
+    // Safety net: alerts are pushed on the private location channel below.
+    refetchInterval: 60 * 1000,
     refetchOnWindowFocus: true,
   });
 
-  useEffect(() => {
-    if (!locationId) return;
-
-    if (channelRef.current) {
-      void supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-
-    const channel = supabase
-      .channel(`location:${locationId}:orders`)
-      .on("broadcast", { event: "qr_guest_alert_changed" }, () => {
-        void queryClient.invalidateQueries({
-          queryKey: ["merchant-qr-guest-alerts", locationId],
-        });
-      })
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      if (channelRef.current) {
-        void supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-    };
-  }, [locationId, queryClient]);
+  // qr_guest_alert_changed is only ever sent PRIVATE on location:{id}:orders,
+  // so it needs an authenticated, private join (the anon client got nothing).
+  const invalidateAlerts = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: ["merchant-qr-guest-alerts", locationId],
+    });
+  }, [queryClient, locationId]);
+  usePrivateBroadcast(
+    locationId ? `location:${locationId}:orders` : null,
+    QR_ALERT_EVENTS,
+    invalidateAlerts,
+  );
 
   const resolveMutation = useMutation({
     mutationFn: async (alertId: string) => {

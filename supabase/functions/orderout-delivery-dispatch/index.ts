@@ -7,7 +7,7 @@
 //
 // Invoked two ways, both best-effort on their own:
 //   - pg_net poke from the accept/cancel triggers the instant a row is due
-//   - the `orderout-delivery-dispatch-drain` cron job, every minute
+//   - the `frequent-jobs` cron dispatcher (public.run_frequent_jobs), every minute
 // The table is the source of truth; a lost invocation only costs latency.
 //
 // Retries: claim_orderout_delivery_dispatch bumps next_attempt_at with

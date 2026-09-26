@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth, useSession } from '@clerk/nextjs'
+import { useAuth } from '@clerk/nextjs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@supabase/supabase-js'
 import { Bell, CheckCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -35,7 +34,6 @@ export function ReadOnlyNotificationBell() {
   const pathname = usePathname()
   const queryClient = useQueryClient()
   const { userId, orgId } = useAuth()
-  const { session } = useSession()
   const [open, setOpen] = useState(false)
 
   const notificationQueryKey = useMemo(
@@ -52,7 +50,11 @@ export function ReadOnlyNotificationBell() {
     queryKey: notificationQueryKey,
     queryFn: () => GetReadOnlyNotifications(20),
     enabled: Boolean(userId),
+    // Polled, not Realtime: while any postgres_changes subscription exists,
+    // Supabase keeps six Postgres Changes connections open on the database.
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     staleTime: 15_000,
   })
 
@@ -65,29 +67,6 @@ export function ReadOnlyNotificationBell() {
     mutationFn: () => MarkAllReadOnlyNotificationsRead(),
     onSettled: () => queryClient.invalidateQueries({ queryKey: notificationQueryKey }),
   })
-
-  useEffect(() => {
-    if (!session) return
-
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: notificationQueryKey })
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-      { accessToken: async () => (await session.getToken()) ?? null },
-    )
-    const channel = supabase
-      .channel(`read-only-app-notifications:${userId ?? 'anonymous'}:${orgId ?? 'no-org'}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'app_notifications' },
-        invalidate,
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [notificationQueryKey, orgId, queryClient, session, userId])
 
   const unreadCount = data?.unreadCount ?? 0
   const notifications = data?.notifications ?? []

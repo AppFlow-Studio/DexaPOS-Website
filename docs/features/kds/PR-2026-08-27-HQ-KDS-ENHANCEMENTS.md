@@ -1,5 +1,7 @@
 # PR — HQ KDS Enhancements: Board Mirror, Send Ledger, Unsent Items & Device Truth
 
+> **Update 2026-09-25:** the board snapshot / replay part of this PR is removed by `supabase/migrations/20260925120000_remove_kds_board_snapshots.sql` (see `Dexa-POS/docs/engineering/database/SUPABASE-CONNECTIONS-AND-STORAGE-2026-09-24.md`, Phase 2). Everything else here still applies.
+
 **Branch:** `kds-mirror` → `main`
 **Type:** Feature (HQ support tooling for KDS "orders not reaching the kitchen" investigations)
 

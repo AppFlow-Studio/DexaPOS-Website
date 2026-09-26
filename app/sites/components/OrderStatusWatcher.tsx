@@ -144,16 +144,6 @@ export function OrderStatusWatcher({
           }
           onDeliveryRef.current?.(payload);
         })
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "orders",
-            filter: `id=eq.${orderId}`,
-          },
-          (payload) => handleStatus((payload.new as { status?: string })?.status)
-        )
         .subscribe();
 
       channels.push(orderChannel);

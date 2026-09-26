@@ -1,3 +1,6 @@
+-- Update 2026-09-25: the board snapshot checks below no longer apply; the
+-- snapshot tables, functions, triggers and cron jobs are dropped by
+-- supabase/migrations/20260925120000_remove_kds_board_snapshots.sql.
 -- =============================================================================
 -- Staging verification for 20260827150000_hq_kds_board_mirror.sql
 -- =============================================================================

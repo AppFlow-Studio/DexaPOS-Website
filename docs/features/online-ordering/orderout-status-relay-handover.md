@@ -1,5 +1,7 @@
 # OrderOut Outbound Status Relay — Implementation & Handover
 
+> **Update 2026-09-25:** the per-job cron schedules named below (`orderout-status-relay-drain`, `orderout-delivery-dispatch-drain`, `orderout-delivery-dispatch-sweep`) are replaced by one job, `frequent-jobs`, which calls `public.run_frequent_jobs()` every minute and runs the same functions (the sweep at minutes ≡ 2 mod 5). Check it with `select jobname, schedule, active from cron.job where jobname = 'frequent-jobs';`. Migration: `supabase/migrations/20260925121000_connection_hardening.sql`.
+
 _Written 2026-07-27. Covers what was built, every Supabase object involved, how to deploy it to a new environment, and the traps that cost time the first time._
 
 **Ticket:** [🐛 [BE-BUG] OrderOut Outbound Status Relay](https://app.notion.com/p/BE-BUG-OrderOut-Outbound-Status-Relay-POS-Mark-Ready-Done-never-reaches-UberEats-DoorDash-Gru-3aa8280c1b1d8178b09dd7c2f859aab0)
