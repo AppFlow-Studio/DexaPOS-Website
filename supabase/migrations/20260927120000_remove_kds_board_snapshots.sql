@@ -27,7 +27,7 @@
 --      unexpected dependent object fails the migration instead of vanishing).
 --
 -- Mirrored byte-identical into Dexa-POS/supabase/migrations/.
--- Rollback: rollback/20260925120000_remove_kds_board_snapshots_rollback.sql
+-- Rollback: rollback/20260927120000_remove_kds_board_snapshots_rollback.sql
 -- (restores the objects; snapshot history is gone by decision).
 -- Run outside service hours: DROP TRIGGER on order_items takes a brief
 -- ACCESS EXCLUSIVE lock. On 55P03 (lock timeout) just re-run.
@@ -325,7 +325,7 @@ GRANT EXECUTE ON FUNCTION public.bulk_update_order_item_status_v2(
 ) TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.bulk_update_order_item_status_v2(uuid[], text, uuid, uuid, integer) IS
-  'KDS bump. Locks affected orders first, writes items/kds_item_status, rewrites orders.status only when it changes (touch otherwise). See 20260922120000_kds_bump_snapshot_queue.sql and 20260925120000_remove_kds_board_snapshots.sql.';
+  'KDS bump. Locks affected orders first, writes items/kds_item_status, rewrites orders.status only when it changes (touch otherwise). See 20260922120000_kds_bump_snapshot_queue.sql and 20260927120000_remove_kds_board_snapshots.sql.';
 
 -- 4. Snapshot functions and tables ---------------------------------------------
 DROP FUNCTION IF EXISTS public.drain_kds_board_snapshot_queue();

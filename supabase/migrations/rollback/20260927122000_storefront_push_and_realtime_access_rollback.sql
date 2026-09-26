@@ -1,4 +1,4 @@
--- Rollback for 20260925122000_storefront_push_and_realtime_access.sql
+-- Rollback for 20260927122000_storefront_push_and_realtime_access.sql
 -- Removes the storefront status trigger and the realtime.messages policy, and
 -- restores broadcast_order_changes verbatim from 20260816130000 (qr-session
 -- broadcast private again).

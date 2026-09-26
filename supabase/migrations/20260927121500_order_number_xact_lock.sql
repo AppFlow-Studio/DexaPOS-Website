@@ -28,7 +28,7 @@
 -- Mirrored byte-identical into Dexa-POS/supabase/migrations/, next to
 -- 20260629130000, so neither migration root holds the session-lock version as
 -- its latest.
--- Rollback: rollback/20260925121500_order_number_xact_lock_rollback.sql
+-- Rollback: rollback/20260927121500_order_number_xact_lock_rollback.sql
 --
 -- After applying, find session locks leaked by the old code (an idle backend
 -- can only be holding a session lock):
@@ -227,10 +227,10 @@ GRANT EXECUTE ON FUNCTION public.generate_order_number(uuid, uuid) TO authentica
 GRANT EXECUTE ON FUNCTION public.generate_order_number_internal(uuid, uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.generate_order_number(uuid, uuid) IS
-  'Generates POS order numbers using the location local date for the daily sequence key. Locks (transaction-scoped) only when creating the day''s sequence. See 20260925121500_order_number_xact_lock.sql.';
+  'Generates POS order numbers using the location local date for the daily sequence key. Locks (transaction-scoped) only when creating the day''s sequence. See 20260927121500_order_number_xact_lock.sql.';
 
 COMMENT ON FUNCTION public.generate_order_number_internal(uuid, uuid) IS
-  'Generates merchant-wide order numbers using the location local date for the daily sequence key. Locks (transaction-scoped) only when creating the day''s sequence. See 20260925121500_order_number_xact_lock.sql.';
+  'Generates merchant-wide order numbers using the location local date for the daily sequence key. Locks (transaction-scoped) only when creating the day''s sequence. See 20260927121500_order_number_xact_lock.sql.';
 
 -- Registry rows for existing day sequences that have none.
 WITH parsed AS (
@@ -258,7 +258,7 @@ COMMIT;
 
 -- Verify
 --   select obj_description('public.generate_order_number(uuid,uuid)'::regprocedure, 'pg_proc');
---     -> mentions 20260925121500
+--     -> mentions 20260927121500
 --   select pg_get_functiondef('public.generate_order_number(uuid,uuid)'::regprocedure) !~ 'pg_advisory_lock\(';
 --     -> true
 --   Unregistered day sequences left (orphaned merchant or unparseable name):

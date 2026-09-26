@@ -17,7 +17,7 @@
 -- messages publication, not this one, so every broadcast keeps working.
 --
 -- The tables dropped are printed as NOTICEs; keep that list for the rollback.
--- Rollback: rollback/20260925124000_realtime_publication_empty_rollback.sql
+-- Rollback: rollback/20260927124000_realtime_publication_empty_rollback.sql
 -- =============================================================================
 
 DO $publication$

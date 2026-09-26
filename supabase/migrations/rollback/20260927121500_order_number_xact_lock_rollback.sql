@@ -1,4 +1,4 @@
--- Rollback for 20260925121500_order_number_xact_lock.sql
+-- Rollback for 20260927121500_order_number_xact_lock.sql
 -- Restores the previous bodies verbatim from
 -- Dexa-POS/supabase/migrations/20260629130000_order_numbers_location_timezone.sql
 -- (session-level pg_advisory_lock on every call; this brings back the

@@ -22,7 +22,7 @@
 --      Permissive, so it only adds access. Used by the dashboard QR guest
 --      alerts panel, the HQ KDS mirror and the dashboard floor view.
 --
--- Rollback: rollback/20260925122000_storefront_push_and_realtime_access_rollback.sql
+-- Rollback: rollback/20260927122000_storefront_push_and_realtime_access_rollback.sql
 -- =============================================================================
 
 BEGIN;
@@ -363,7 +363,7 @@ begin
         'order_type', new.order_type
       );
 
-      -- 20260925122000: public. The anon storefront listens on the public
+      -- 20260927122000: public. The anon storefront listens on the public
       -- channel; the session token in the topic is the unguessable secret.
       perform realtime.send(
         v_qr_payload,

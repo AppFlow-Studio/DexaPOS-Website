@@ -4,7 +4,7 @@
 -- =============================================================================
 -- Plan: Dexa-POS/docs/engineering/database/SUPABASE-CONNECTIONS-AND-STORAGE-2026-09-24.md,
 -- Phase 3 (3.1, 3.2, 3.4). 3.3 (order-number lock) is its own migration,
--- 20260925121500_order_number_xact_lock.sql, because it is mirrored into
+-- 20260927121500_order_number_xact_lock.sql, because it is mirrored into
 -- Dexa-POS/supabase/migrations/ and this file is not.
 --
 -- WHY
@@ -50,7 +50,7 @@
 --        payment_terminals INSERT / DELETE, and UPDATE of the assignment or
 --                          connection config (never health / counter columns)
 --
--- Rollback: rollback/20260925121000_connection_hardening_rollback.sql
+-- Rollback: rollback/20260927121000_connection_hardening_rollback.sql
 -- =============================================================================
 
 BEGIN;
@@ -128,7 +128,7 @@ REVOKE ALL ON FUNCTION public.run_frequent_jobs() FROM PUBLIC, anon, authenticat
 GRANT EXECUTE ON FUNCTION public.run_frequent_jobs() TO service_role;
 
 COMMENT ON FUNCTION public.run_frequent_jobs() IS
-  'pg_cron dispatcher (job frequent-jobs, every minute). Runs the sub-hourly jobs in one connection instead of one connection per job. See 20260925121000_connection_hardening.sql.';
+  'pg_cron dispatcher (job frequent-jobs, every minute). Runs the sub-hourly jobs in one connection instead of one connection per job. See 20260927121000_connection_hardening.sql.';
 
 DO $cron$
 DECLARE
@@ -279,7 +279,7 @@ $procedure$;
 REVOKE ALL ON PROCEDURE public.purge_operational_logs(integer, integer, timestamptz) FROM PUBLIC, anon, authenticated;
 
 COMMENT ON PROCEDURE public.purge_operational_logs(integer, integer, timestamptz) IS
-  'Nightly retention (job purge-operational-logs, 03:20 UTC): cron.job_run_details 7 d, resolved/abandoned webhook_dead_letter_queue 30 d, valor_webhook_events 30 d, and NULLs raw_payload on ignored/invalid_signature Valor rows. COMMITs per batch; call with CALL, never inside a transaction. See 20260925121000_connection_hardening.sql.';
+  'Nightly retention (job purge-operational-logs, 03:20 UTC): cron.job_run_details 7 d, resolved/abandoned webhook_dead_letter_queue 30 d, valor_webhook_events 30 d, and NULLs raw_payload on ignored/invalid_signature Valor rows. COMMITs per batch; call with CALL, never inside a transaction. See 20260927121000_connection_hardening.sql.';
 
 DO $schedule$
 BEGIN

@@ -1,4 +1,4 @@
--- Rollback for 20260925121000_connection_hardening.sql
+-- Rollback for 20260927121000_connection_hardening.sql
 -- Stops the station push first, then the retention job, then restores the
 -- seven individual cron jobs and removes the dispatcher. Rows already purged
 -- and raw_payload bodies already stripped are not restored.

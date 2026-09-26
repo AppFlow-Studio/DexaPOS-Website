@@ -1,4 +1,4 @@
--- Rollback for 20260925124000_realtime_publication_empty.sql
+-- Rollback for 20260927124000_realtime_publication_empty.sql
 -- Re-adds the tables the tracked migrations put in supabase_realtime. The
 -- forward migration printed the tables it actually dropped on each
 -- environment ("supabase_realtime: dropping ..."); add any of those missing

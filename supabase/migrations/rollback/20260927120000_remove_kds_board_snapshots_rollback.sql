@@ -1,4 +1,4 @@
--- Rollback for 20260925120000_remove_kds_board_snapshots.sql
+-- Rollback for 20260927120000_remove_kds_board_snapshots.sql
 -- Restores the KDS board snapshot feature: tables, capture/drain/purge/HQ
 -- functions, the order_items arrival triggers, both cron jobs, and the
 -- bump RPC body that enqueues a snapshot. Snapshot history is NOT restored
@@ -11,7 +11,7 @@
 -- 20260922120000 must run last so the final body keeps both.
 --
 -- psql (from supabase/migrations/rollback/):
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 20260925120000_remove_kds_board_snapshots_rollback.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 20260927120000_remove_kds_board_snapshots_rollback.sql
 -- SQL editor: paste the three files below, in this order, into one run.
 
 BEGIN;
