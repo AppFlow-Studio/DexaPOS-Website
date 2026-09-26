@@ -13,7 +13,7 @@
 -- it does not depend on the device surviving the payment-app round-trip.
 --
 -- Dedup: the client fire-and-forget is left in place (no app rebuild needed).
--- The partial unique index from 20260923120000 makes send-receipt exactly-once
+-- The partial unique index from 20260923164400 makes send-receipt exactly-once
 -- per order for confirmation sms, so the trigger and the client can never
 -- double-send — whichever inserts the receipt_sends row first wins.
 --
@@ -64,7 +64,7 @@ BEGIN
   END IF;
 
   -- Isolated network call: send-receipt is exactly-once per order (unique index
-  -- 20260923120000), so this cannot double the kiosk client's fire-and-forget.
+  -- 20260923164400), so this cannot double the kiosk client's fire-and-forget.
   BEGIN
     PERFORM net.http_post(
       url := fn_url,

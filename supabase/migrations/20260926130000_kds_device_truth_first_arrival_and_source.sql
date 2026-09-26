@@ -31,6 +31,18 @@
 --     first arrival (at/after that routing) - kds_routing_log.fired_at, tagged
 --     by first_source; NULL + lag_measured=false when the first row is a
 --     `rehydrate` re-emission (true first observation lost).
+--
+-- History note: this is the consolidated file. Staging first received the same
+-- code as two MCP-stamped rows (v1 20260926012929, then the v2 delta
+-- 20260926023324) whose function bodies differed from this file only in
+-- comments/whitespace (verified: code identical with comments stripped; view
+-- definitions identical via pg_get_viewdef). On 2026-09-26 this exact file was
+-- applied to staging and the two history rows were replaced by one
+-- 20260926130000 row, so staging, this repo and prod all carry the same
+-- version and bodies. Expected after apply (staging values, 2026-09-26):
+--   md5(pg_get_functiondef(report_kds_device_events))       = f09d337f7bf9ac3d8ad10df388253be9
+--   md5(pg_get_functiondef(get_kds_device_truth_for_order)) = 82fb45ab875ac9cfa8809a3cda3b4788
+-- Rollback: rollback/20260926130000_kds_device_truth_first_arrival_and_source_rollback.sql
 
 -- ---------------------------------------------------------------------------
 -- 1. Column
