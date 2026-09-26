@@ -24,6 +24,9 @@ export function useReceiptTemplates(locationId: string) {
     },
     enabled: !!locationId && locationId !== "all",
     staleTime: 30_000,
+    // Edits from this page invalidate the list; edits made elsewhere (another
+    // tab, the POS) show up when the tab regains focus.
+    refetchOnWindowFocus: true,
   });
 }
 

@@ -173,6 +173,11 @@ export function useStationsWithHeartbeats(locationId: string) {
     },
     enabled: !!locationId && locationId !== "all",
     staleTime: 30 * 1000,
+    // Device heartbeats land every 60s; the page polls at the same cadence
+    // (device_heartbeats is not in the realtime publication, so there is no
+    // push to subscribe to).
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
