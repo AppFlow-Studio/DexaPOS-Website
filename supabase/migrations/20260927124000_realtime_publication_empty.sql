@@ -14,7 +14,15 @@
 -- WAL pull, two each). Nothing in the POS app, the CFD build, the Website or
 -- the edge functions uses postgres_changes after Phase 5. Broadcast from the
 -- database (realtime.send / realtime.broadcast_changes) uses Realtime's own
--- messages publication, not this one, so every broadcast keeps working.
+-- publication (supabase_realtime_messages_publication, which carries the
+-- partitioned realtime.messages), not this one, so every broadcast keeps working.
+--
+-- Drops ONLY the public.* postgres_changes tables, iterating the actual
+-- publication members (pg_publication_rel) so a partitioned parent is dropped
+-- as itself and never by a leaf partition (ALTER PUBLICATION ... DROP TABLE on a
+-- partition fails 42704 "is not part of the publication"). realtime.messages is
+-- also a member of supabase_realtime here, but it is the broadcast transport and
+-- the rollback never re-adds it, so it is intentionally left in place.
 --
 -- The tables dropped are printed as NOTICEs; keep that list for the rollback.
 -- Rollback: rollback/20260927124000_realtime_publication_empty_rollback.sql
@@ -30,10 +38,14 @@ BEGIN
   END IF;
 
   FOR r IN
-    SELECT schemaname, tablename
-      FROM pg_publication_tables
-     WHERE pubname = 'supabase_realtime'
-     ORDER BY schemaname, tablename
+    SELECT n.nspname AS schemaname, c.relname AS tablename
+      FROM pg_publication p
+      JOIN pg_publication_rel pr ON pr.prpubid = p.oid
+      JOIN pg_class c ON c.oid = pr.prrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE p.pubname = 'supabase_realtime'
+       AND n.nspname = 'public'
+     ORDER BY n.nspname, c.relname
   LOOP
     RAISE NOTICE 'supabase_realtime: dropping %.%', r.schemaname, r.tablename;
     EXECUTE format('ALTER PUBLICATION supabase_realtime DROP TABLE %I.%I', r.schemaname, r.tablename);
@@ -42,6 +54,7 @@ END;
 $publication$;
 
 -- Verify
---   select count(*) from pg_publication_tables where pubname = 'supabase_realtime';  -- 0
+--   select count(*) from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public';  -- 0
+--   select count(*) from pg_publication_tables where pubname = 'supabase_realtime';  -- realtime.messages partitions only
 --   select count(*) from realtime.subscription;                                      -- 0 once old tabs reload
 --   select count(*) from pg_stat_activity where application_name = 'realtime_connect'; -- drops by ~6
