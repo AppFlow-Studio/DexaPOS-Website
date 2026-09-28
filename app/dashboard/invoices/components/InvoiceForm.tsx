@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import {
   Plus,
@@ -12,6 +13,7 @@ import {
   Package,
   Send,
   X,
+  MapPin,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Panel, PanelSection } from "@/components/dashboard/shell";
@@ -41,6 +43,7 @@ import { QuickAddCustomerDialog } from "./QuickAddCustomerDialog";
 import { SendInvoiceDialog } from "./SendInvoiceDialog";
 import { useCreateInvoice, useUpdateInvoice } from "../hooks/useInvoices";
 import { useLocationStore } from "@/stores/location-store";
+import { resolveInvoiceLocationId } from "@/lib/invoices/resolve-location";
 import type {
   Invoice,
   PaymentDueType,
@@ -56,7 +59,22 @@ type InvoiceMode = "itemized" | "quick";
 
 export function InvoiceForm({ existing }: InvoiceFormProps) {
   const router = useRouter();
-  const { selectedLocationId } = useLocationStore();
+  const { selectedLocationId, locations } = useLocationStore();
+  const [chosenLocationId, setChosenLocationId] = useState<string | null>(null);
+  const activeLocations = locations.filter((location) => location.is_active);
+  const invoiceLocationId = resolveInvoiceLocationId({
+    selectedLocationId,
+    activeLocationIds: activeLocations.map((location) => location.id),
+    existingLocationId: existing?.location_id,
+    isEditing: !!existing,
+    chosenLocationId,
+  });
+  const invoiceLocation = locations.find(
+    (location) => location.id === invoiceLocationId,
+  );
+  const canSaveAtLocation =
+    !!invoiceLocation &&
+    (invoiceLocation.is_active || existing?.location_id === invoiceLocation.id);
 
   // ── Customer ──────────────────────────────────────────────────────────────
   const [selectedCustomer, setSelectedCustomer] =
@@ -220,12 +238,14 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
   };
 
   const handleSave = async (status: "draft" | "sent") => {
+    if (!invoiceLocationId || !canSaveAtLocation) {
+      toast.error("Select a location before saving this invoice.");
+      return;
+    }
     setSavingAs(status);
-    const locationId =
-      selectedLocationId === "all" ? null : selectedLocationId;
 
     const input: CreateInvoiceInput = {
-      location_id: locationId,
+      location_id: invoiceLocationId,
       customer_id: selectedCustomer?.id ?? null,
       status,
       payment_due_type: paymentDueType,
@@ -266,11 +286,14 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
   // flips to "sent" once sendInvoice actually dispatches a channel — so an
   // abandoned send leaves a clean draft, not a phantom "sent" with no delivery.
   const handleSaveAndSend = async () => {
+    if (!invoiceLocationId || !canSaveAtLocation) {
+      toast.error("Select a location before saving this invoice.");
+      return;
+    }
     setSavingAs("sent");
-    const locationId = selectedLocationId === "all" ? null : selectedLocationId;
 
     const input: CreateInvoiceInput = {
-      location_id: locationId,
+      location_id: invoiceLocationId,
       customer_id: selectedCustomer?.id ?? null,
       status: "draft",
       payment_due_type: paymentDueType,
@@ -351,6 +374,35 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
           <Panel>
             <PanelSection icon={FileText} label="Invoice Details">
               <div className="space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Location</Label>
+                {canSaveAtLocation ? (
+                  <p className="flex items-center gap-2 rounded-full bg-muted/60 px-3 py-2 text-sm">
+                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {invoiceLocation?.name}
+                  </p>
+                ) : activeLocations.length > 0 ? (
+                  <Select
+                    value={chosenLocationId ?? undefined}
+                    onValueChange={setChosenLocationId}
+                  >
+                    <SelectTrigger className="h-9 w-full rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                      <SelectValue placeholder="Choose a location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeLocations.map((location) => (
+                        <SelectItem key={location.id} value={location.id}>
+                          {location.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p role="alert" className="text-sm text-destructive">
+                    Add an active location before creating an invoice.
+                  </p>
+                )}
+              </div>
               {/* Customer */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -748,7 +800,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
               className="h-10 w-full rounded-full text-[0.8125rem] font-medium shadow-sm"
               size="lg"
               onClick={handleSaveAndSend}
-              disabled={savingAs !== null}
+              disabled={savingAs !== null || !canSaveAtLocation}
             >
               {savingAs === "sent" ? (
                 "Saving…"
@@ -763,7 +815,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
               className="h-10 w-full rounded-full text-[0.8125rem] font-medium shadow-sm"
               variant="outline"
               onClick={() => handleSave("draft")}
-              disabled={savingAs !== null}
+              disabled={savingAs !== null || !canSaveAtLocation}
             >
               {savingAs === "draft" ? "Saving…" : "Save as Draft"}
             </Button>

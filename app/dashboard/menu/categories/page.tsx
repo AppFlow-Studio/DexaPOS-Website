@@ -131,6 +131,9 @@ export default function CategoriesPage() {
   const router = useRouter();
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const userRole = userInfo?.members?.[0]?.role;
+  const canManageSharedCategories =
+    userRole === "merchant.owner" || userRole === "merchant.admin";
   const queryClient = useQueryClient();
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
@@ -194,6 +197,7 @@ export default function CategoriesPage() {
     id: string;
     name: string;
     existingItemIds: string[];
+    isGlobal: boolean;
   } | null>(null);
 
   // Reordering state
@@ -466,11 +470,9 @@ export default function CategoriesPage() {
   const handleDelete = async () => {
     if (!deletingCategory) return;
 
-    // Prevent deletion of global categories when viewing a location
-    if (!isAllLocations && deletingCategory.is_global) {
-      toast.error("Cannot Delete Global Category", {
-        description:
-          'Global categories cannot be deleted when viewing a specific location. Switch to "All Locations" view to delete global categories.',
+    if (deletingCategory.is_global && !canManageSharedCategories) {
+      toast.error("Cannot Delete Shared Category", {
+        description: "Only owners and admins can delete shared categories.",
       });
       setDeletingCategory(null);
       return;
@@ -479,6 +481,7 @@ export default function CategoriesPage() {
     // Ensure location-specific categories can only be deleted when viewing that location
     if (
       !isAllLocations &&
+      !deletingCategory.is_global &&
       deletingCategory.location_id !== selectedLocationId
     ) {
       toast.error("Cannot Delete Category", {
@@ -492,7 +495,7 @@ export default function CategoriesPage() {
     try {
       const result = await DeleteCategory(
         deletingCategory.id,
-        selectedLocationId,
+        deletingCategory.location_id,
       );
       if (result.error) {
         toast.error("Delete Failed", {
@@ -525,16 +528,12 @@ export default function CategoriesPage() {
     }
   };
 
-  // Who can open the Edit Category dialog.
-  //
-  // UpdateCategory writes the `categories` row itself, so edits to name /
-  // description / order / active always apply merchant-wide. That is why the
-  // all-locations view is the general entry point. A location-specific category
-  // is the safe exception: it exists only at its own location, so editing it
-  // while scoped there affects nothing else. Same shape as `canDelete`.
+  // Shared category fields write to the same row from every branch. The editor
+  // explains this impact before saving; the action still enforces permissions.
   const canEditCategory = (category: CategoryWithItems) =>
-    isAllLocations ||
-    (!category.is_global && category.location_id === selectedLocationId);
+    category.is_global
+      ? canManageSharedCategories
+      : isAllLocations || category.location_id === selectedLocationId;
 
   const handleEditCategory = (
     category: CategoryWithItems,
@@ -743,22 +742,14 @@ export default function CategoriesPage() {
                   <p>
                     You can enable/disable global categories for this location.
                   </p>
-                  <p>Create new location-specific categories below.</p>
+                  <p>Choose all locations or this branch when creating a category.</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
           <Button onClick={() => setIsCreateSheetOpen(true)} className="gap-2">
-            {isSingleLocation ? (
-              <Plus className="h-4 w-4" />
-            ) : isAllLocations ? (
-              <Globe className="h-4 w-4" />
-            ) : (
-              <MapPin className="h-4 w-4" />
-            )}
-            {isSingleLocation
-              ? "Create Category"
-              : `Create ${isAllLocations ? "Global" : "Location"} Category`}
+            <Plus className="h-4 w-4" />
+            Create Category
           </Button>
         </div>
       </div>
@@ -994,12 +985,11 @@ export default function CategoriesPage() {
 
                 // Mobile More-actions menu. Defined here so it can render on
                 // the name row rather than in the control cluster below it.
-                const canDeleteCategory = isAllLocations
-                  ? true
-                  : !category.is_global &&
-                    category.location_id === selectedLocationId;
-                const canAddCategoryItems = isAllLocations
-                  ? category.is_global
+                const canDeleteCategory = category.is_global
+                  ? canManageSharedCategories
+                  : isAllLocations || category.location_id === selectedLocationId;
+                const canAddCategoryItems = category.is_global
+                  ? canManageSharedCategories
                   : category.location_id === selectedLocationId;
                 const isOrderingThis = orderingCategoryId === category.id;
                 const mobileActionsMenu = isSelectionMode ? null : (
@@ -1036,6 +1026,7 @@ export default function CategoriesPage() {
                               setAddItemCategoryContext({
                                 id: category.id,
                                 name: category.name,
+                                isGlobal: category.is_global,
                                 existingItemIds: (category.items || []).map(
                                   (i) => i.menu_item_id,
                                 ),
@@ -1386,18 +1377,13 @@ export default function CategoriesPage() {
                                 );
                               })()}
 
-                              {/* Edit button — available in the all-locations
-                                  view, and for a category this location owns.
-                                  Editing writes the category's core fields
-                                  globally, but a location-specific category
-                                  exists only at this location, so there is no
-                                  cross-location surprise. Mirrors `canDelete`
-                                  below. */}
+                              {/* Shared edits are explained in the form before save. */}
                               {canEditCategory(category) && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
+                                  aria-label={`Edit ${category.name}`}
                                   onClick={(e) =>
                                     handleEditCategory(category, e)
                                   }
@@ -1406,12 +1392,11 @@ export default function CategoriesPage() {
                                 </Button>
                               )}
 
-                              {/* Delete button - show for all categories when viewing all locations, or for location-specific categories when viewing that location */}
+                              {/* Shared deletion has a cross-location confirmation. */}
                               {(() => {
-                                const canDelete = isAllLocations
-                                  ? true // Can delete any category when viewing all locations
-                                  : !category.is_global &&
-                                    category.location_id === selectedLocationId; // Can only delete location-specific categories for the current location
+                                const canDelete = category.is_global
+                                  ? canManageSharedCategories
+                                  : isAllLocations || category.location_id === selectedLocationId;
 
                                 if (!canDelete) return null;
 
@@ -1565,10 +1550,8 @@ export default function CategoriesPage() {
                                   );
                                 }
 
-                                // Global categories: can only add when viewing all locations
-                                // Location categories: can only add when viewing that location
-                                const canAddItems = isAllLocations
-                                  ? category.is_global
+                                const canAddItems = category.is_global
+                                  ? canManageSharedCategories
                                   : category.location_id === selectedLocationId;
 
                                 // "Add Item" is desktop-only — on phones it lives
@@ -1583,6 +1566,7 @@ export default function CategoriesPage() {
                                         setAddItemCategoryContext({
                                           id: category.id,
                                           name: category.name,
+                                          isGlobal: category.is_global,
                                           existingItemIds: (
                                             category.items || []
                                           ).map((item) => item.menu_item_id),
@@ -1614,9 +1598,9 @@ export default function CategoriesPage() {
                                       </TooltipTrigger>
                                       <TooltipContent>
                                         <p>
-                                          {isAllLocations && !category.is_global
-                                            ? "This is a location-specific category. Switch to that location to add items."
-                                            : 'Switch to "All Locations" to add items to this global category.'}
+                                          {category.is_global
+                                            ? "Only owners and admins can add items to shared categories."
+                                            : "Switch to this category's location to add items."}
                                         </p>
                                       </TooltipContent>
                                     </Tooltip>
@@ -1651,8 +1635,8 @@ export default function CategoriesPage() {
 
                               if (categoryItems.length === 0) {
                                 // Scoping check for empty state add button
-                                const canAddItems = isAllLocations
-                                  ? category.is_global
+                                const canAddItems = category.is_global
+                                  ? canManageSharedCategories
                                   : category.location_id === selectedLocationId;
 
                                 return (
@@ -1671,6 +1655,7 @@ export default function CategoriesPage() {
                                           setAddItemCategoryContext({
                                             id: category.id,
                                             name: category.name,
+                                            isGlobal: category.is_global,
                                             existingItemIds: [],
                                           });
                                           setIsAddItemWizardOpen(true);
@@ -1681,9 +1666,9 @@ export default function CategoriesPage() {
                                       </Button>
                                     ) : (
                                       <p className="text-xs mt-2 text-muted-foreground/70">
-                                        {isAllLocations && !category.is_global
-                                          ? "Switch to the location to add items"
-                                          : 'Switch to "All Locations" to add items'}
+                                        {category.is_global
+                                          ? "Only owners and admins can add items to shared categories."
+                                          : "Switch to this category's location to add items."}
                                       </p>
                                     )}
                                   </div>
@@ -1846,6 +1831,7 @@ export default function CategoriesPage() {
           }
         }}
         clerkOrgId={clerkOrgId}
+        canCreateSharedCategory={canManageSharedCategories}
         menus={menusList}
         schedules={[]}
         editCategory={
@@ -1857,6 +1843,8 @@ export default function CategoriesPage() {
                 image_url: editingCategory.image,
                 display_order: editingCategory.display_order,
                 is_active: editingCategory.is_active,
+                is_global: editingCategory.is_global,
+                location_id: editingCategory.location_id,
                 merchant_id: "",
                 menu_id: null,
                 created_at: editingCategory.created_at,
@@ -1935,6 +1923,8 @@ export default function CategoriesPage() {
         }}
         categoryId={addItemCategoryContext?.id || ""}
         categoryName={addItemCategoryContext?.name || ""}
+        locationId={addItemCategoryContext?.isGlobal ? null : selectedLocationId}
+        isAllLocations={addItemCategoryContext?.isGlobal ?? isAllLocations}
         clerkOrgId={clerkOrgId || ""}
         existingItemIds={addItemCategoryContext?.existingItemIds || []}
         onSuccess={() => {
@@ -2021,7 +2011,7 @@ export default function CategoriesPage() {
             <DialogDescription>
               {deletingCategory?.is_global ? (
                 <>
-                  Are you sure you want to delete the global category &quot;
+                  Are you sure you want to delete the shared category &quot;
                   {deletingCategory?.name}&quot;? This will remove it from all
                   locations and unlink all items from this category.
                   <span className="block mt-2 font-medium text-foreground">
@@ -2030,10 +2020,10 @@ export default function CategoriesPage() {
                 </>
               ) : (
                 <>
-                  Are you sure you want to delete the location-specific category
+                  Are you sure you want to delete the category
                   &quot;{deletingCategory?.name}&quot;? This will unlink all
                   items from this category at{" "}
-                  {currentLocation?.name || "this location"}.
+                  {deletingCategory?.location_name || currentLocation?.name || "this location"}.
                   <span className="block mt-2 font-medium text-foreground">
                     This action cannot be undone.
                   </span>

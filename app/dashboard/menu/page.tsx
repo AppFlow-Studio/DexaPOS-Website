@@ -49,7 +49,6 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   CreateMenu,
-  ToggleMenuActive,
   DeleteMenu,
   GetMenuWithCategories,
   UpdateMenusOrder
@@ -60,15 +59,13 @@ import {
   MenuWithLocation
 } from '@/components/dashboard/menu/MenuListView'
 import { useLocationStore, useSelectedLocation, useIsSingleLocation, useGatedLocationId } from '@/stores/location-store'
-import { useLocationOnlineMenu, useSetPrimaryOnlineMenu } from '@/app/dashboard/online-ordering/hooks/useOrderOutStatus'
+import { useLocationOnlineMenu } from '@/app/dashboard/online-ordering/hooks/useOrderOutStatus'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useLocations } from '../hooks/useLocations'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 import { useState } from 'react'
-import { SetLocationMenuChannelVisibility } from '../actions/location-menus'
-import type { MenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
 const menuSchema = z.object({
   name: z
     .string()
@@ -115,11 +112,6 @@ export default function MenuPage () {
   // OrderOut canonical online-ordering menu for the resolved location (single-loc
   // resolves to its one store; multi-loc on "All" -> null, so no badge shown).
   const { data: onlineMenu } = useLocationOnlineMenu(clerkOrgId || '', gatedLocationId)
-  const setOnlineMenuMutation = useSetPrimaryOnlineMenu(clerkOrgId || '')
-  const handleSetOnlineMenu = (menuId: string) => {
-    if (!gatedLocationId) return
-    setOnlineMenuMutation.mutate({ locationId: gatedLocationId, menuId })
-  }
 
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
@@ -127,37 +119,6 @@ export default function MenuPage () {
   const [reorderedMenus, setReorderedMenus] = useState<MenuWithLocation[]>([])
   const [hasOrderChanges, setHasOrderChanges] = useState(false)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
-
-  const handleChannelVisibilityChange = async (
-    menuId: string,
-    visibility: MenuChannelVisibility
-  ) => {
-    if (!gatedLocationId) {
-      toast.error('Select a location', {
-        description: 'Platform visibility is configured separately for each location.'
-      })
-      return false
-    }
-
-    const result = await SetLocationMenuChannelVisibility(
-      gatedLocationId,
-      menuId,
-      visibility
-    )
-    if (result.error) {
-      toast.error('Visibility update failed', { description: result.error })
-      // Reported so the optimistic switch rolls itself back.
-      return false
-    }
-
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['menus'] }),
-      queryClient.invalidateQueries({ queryKey: ['location-online-menu'] }),
-      queryClient.invalidateQueries({ queryKey: ['orderout'] }),
-      queryClient.invalidateQueries({ queryKey: ['online-ordering'] })
-    ])
-    return true
-  }
 
   // Cast menus to include location info
   const menusList = (Array.isArray(menus) ? menus : []) as MenuWithLocation[]
@@ -276,32 +237,6 @@ export default function MenuPage () {
       }
       toast.error('Creation Failed', {
         description: 'Unable to create the menu. Please try again.'
-      })
-    }
-  }
-
-  const handleToggleActive = async (menuId: string) => {
-    try {
-      const result = await ToggleMenuActive(
-        menuId,
-        selectedLocationId || undefined
-      )
-      if (result.error) {
-        toast.error('Update Failed', {
-          description: result.error
-        })
-        return
-      }
-      toast.success('Status Updated', {
-        description: 'The menu status has been updated.'
-      })
-      queryClient.invalidateQueries({ queryKey: ['menus'] })
-      queryClient.invalidateQueries({ queryKey: ['categories'] })
-      queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
-      refetch()
-    } catch (error) {
-      toast.error('Update Failed', {
-        description: 'Unable to update the menu status. Please try again.'
       })
     }
   }
@@ -776,7 +711,6 @@ export default function MenuPage () {
             menus={filteredMenus}
             isLoading={isLoading}
             viewMode={viewMode}
-            onToggleActive={handleToggleActive}
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}
             onCreateNew={() => setIsCreateDialogOpen(true)}
@@ -792,12 +726,7 @@ export default function MenuPage () {
             onReorder={handleReorder}
             isFiltered={searchTerm.length > 0}
             onlineMenuId={onlineMenu?.primaryMenuId ?? null}
-            linkedMenuIds={onlineMenu?.linkedMenuIds ?? []}
-            onSetOnlineMenu={handleSetOnlineMenu}
-            onChannelVisibilityChange={handleChannelVisibilityChange}
-            channelVisibilityDisabled={!gatedLocationId}
             showLocations={isAllLocations && !isSingleLocation}
-            stationCoverageLocationId={gatedLocationId}
           />
           {filteredMenus.length > 0 && (
             <div className='flex items-center gap-2 mt-4 text-sm text-muted-foreground'>
