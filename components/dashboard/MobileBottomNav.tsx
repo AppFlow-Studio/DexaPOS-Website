@@ -26,6 +26,7 @@ export interface MoreNavItem {
   title: string;
   url: string;
   icon: LucideIcon;
+  activeWhen?: (pathname: string) => boolean;
 }
 
 interface MobileBottomNavProps {
@@ -172,7 +173,8 @@ export function MobileBottomNav({
               const Icon = item.icon;
               const isActive =
                 item.url === pathname ||
-                (item.url !== "/" && pathname.startsWith(item.url + "/"));
+                (item.url !== "/" && pathname.startsWith(item.url + "/")) ||
+                item.activeWhen?.(pathname) === true;
 
               return (
                 <Link

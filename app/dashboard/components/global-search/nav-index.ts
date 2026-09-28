@@ -100,7 +100,8 @@ export const NAV_INDEX: NavSearchItem[] = [
   { label: "Discrepancy", path: "/dashboard/reports/discrepancy", section: "Reports", icon: BarChart3 },
 
   // ── Financial ───────────────────────────────────────────────────────────
-  { label: "Transactions", path: "/dashboard/transactions", section: "Financial", icon: Receipt, keywords: ["payments history"] },
+  { label: "Financial Overview", path: "/dashboard/financial", section: "Financial", icon: Receipt, keywords: ["revenue", "financial activity"] },
+  { label: "Transactions", path: "/dashboard/transactions", section: "Financial", icon: Receipt, keywords: ["orders", "receipts"] },
   { label: "Invoices", path: "/dashboard/invoices", section: "Financial", icon: FileText, keywords: ["bills"] },
   { label: "Payments", path: "/dashboard/payments", section: "Financial", icon: CreditCard, keywords: ["card payments", "settlements"] },
   { label: "Tips", path: "/dashboard/tips", section: "Financial", icon: DollarSign, keywords: ["gratuity"] },

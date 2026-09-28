@@ -26,7 +26,7 @@ interface MenuStationCoverageProps {
 /**
  * The menu page's answer to "where does this menu actually show?".
  *
- * The POS / Kiosk switches beside this pill are location-wide. Per-station
+ * The POS / Kiosk switches in menu settings are location-wide. Per-station
  * scope (Settings → Stations → Menus) can narrow them further, and before this
  * pill nothing on the menu page said so: a manager switching Sushi off for
  * Kiosk had no way to see it was hiding it from two kiosks, or that a third

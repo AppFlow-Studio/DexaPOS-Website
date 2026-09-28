@@ -191,7 +191,10 @@ export default function PaymentsPage() {
     refetch: refetchPayments,
   } = usePayments(filters);
 
-  const paymentsList = Array.isArray(payments) ? payments : [];
+  const paymentsList = useMemo(
+    () => (Array.isArray(payments) ? payments : []),
+    [payments],
+  );
 
   const summary = useMemo(
     () => computePaymentSummary(paymentsList),
@@ -216,15 +219,15 @@ export default function PaymentsPage() {
       />
 
       {/* Tabs */}
-      <Tabs defaultValue="payments">
+      <Tabs defaultValue="activity">
         <div className="w-full min-w-0 overflow-x-auto pb-1">
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             <TabsTrigger
-              value="payments"
+              value="activity"
               className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
             >
               <CreditCard className="h-4 w-4" />
-              Payments
+              Activity
             </TabsTrigger>
             <TabsTrigger
               value="batches"
@@ -236,7 +239,7 @@ export default function PaymentsPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="payments" className="mt-6 space-y-6">
+        <TabsContent value="activity" className="mt-6 space-y-6">
           {/* Stats Cards */}
           <PaymentStats summary={summary} isLoading={paymentsLoading} />
 

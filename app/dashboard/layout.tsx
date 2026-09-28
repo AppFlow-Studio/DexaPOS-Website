@@ -113,6 +113,9 @@ import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import { isOverlayOpen, useOverlayOpen } from "@/lib/hooks/overlay-open";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
 import { GlobalSearch } from "./components/global-search/GlobalSearch";
+import { FinancialNav } from "@/components/dashboard/financial/FinancialNav";
+import { isFinancialWorkspacePath } from "@/lib/navigation/financial";
+import { resolveInitialLocationSelection } from "@/lib/locations/initial-selection";
 
 const navMain = [
   {
@@ -165,21 +168,6 @@ const navMain = [
         title: "Menus",
         url: "/dashboard/menu",
         icon: Utensils,
-      },
-      {
-        title: "Items",
-        url: "/dashboard/menu/items",
-        icon: List,
-      },
-      {
-        title: "Out of stock",
-        url: "/dashboard/menu/out-of-stock",
-        icon: CircleSlash,
-      },
-      {
-        title: "Categories",
-        url: "/dashboard/menu/categories",
-        icon: Tag,
       },
       {
         title: "Discounts",
@@ -364,19 +352,9 @@ const navMain = [
     title: "Financial",
     items: [
       {
-        title: "Transactions",
-        url: "/dashboard/transactions",
+        title: "Financial Overview",
+        url: "/dashboard/financial",
         icon: Receipt,
-      },
-      {
-        title: "Invoices",
-        url: "/dashboard/invoices",
-        icon: FileText,
-      },
-      {
-        title: "Payments",
-        url: "/dashboard/payments",
-        icon: CreditCard,
       },
       {
         title: "Tips",
@@ -779,12 +757,14 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                             <SidebarMenuButton
                               asChild
                               isActive={
-                                pathname === menuItem.url ||
-                                // Every page starts with "/dashboard/", so the
-                                // home item matches exactly or it lights up
-                                // alongside whichever page is really open.
-                                (menuItem.url !== "/dashboard" &&
-                                  pathname.startsWith(menuItem.url + "/"))
+                                menuItem.url === "/dashboard/financial"
+                                  ? isFinancialWorkspacePath(pathname)
+                                  : pathname === menuItem.url ||
+                                    // Every page starts with "/dashboard/", so the
+                                    // home item matches exactly or it lights up
+                                    // alongside whichever page is really open.
+                                    (menuItem.url !== "/dashboard" &&
+                                      pathname.startsWith(menuItem.url + "/"))
                               }
                             >
                               <Link href={menuItem.url}>
@@ -1274,6 +1254,7 @@ export default function MerchantDashboardLayout({
   // Zustand store
   const {
     selectedLocationId,
+    lastBranchLocationId,
     setSelectedLocation,
     setLocations,
     setLoading,
@@ -1330,12 +1311,23 @@ export default function MerchantDashboardLayout({
 
     // Single-location accounts manage one menu — the global core. Keep their
     // scope on 'all' (which omits location_id and writes the core) so we never
-    // create per-location overlay rows. Multi-location accounts are untouched.
+    // create per-location overlay rows. Multi-location accounts start in a
+    // branch on first load; later explicit scope selections are preserved.
     if (
       activeLocationCount === 1 &&
       selectedLocationId !== "all"
     ) {
       setSelectedLocation("all");
+    } else if (!wasInitialized && activeLocationCount > 1) {
+      const initialLocationId = resolveInitialLocationSelection(
+        selectedLocationId === "all"
+          ? lastBranchLocationId ?? "all"
+          : selectedLocationId,
+        locations,
+      );
+      if (initialLocationId !== selectedLocationId) {
+        setSelectedLocation(initialLocationId);
+      }
     }
   }, [
     clerkOrgId,
@@ -1348,6 +1340,7 @@ export default function MerchantDashboardLayout({
     initialize,
     isInitialized,
     selectedLocationId,
+    lastBranchLocationId,
     activeLocationCount,
   ]);
 
@@ -1460,10 +1453,7 @@ export default function MerchantDashboardLayout({
     { title: "Service Charge", url: "/dashboard/tables/service-charge", icon: Percent },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
 
-    // Menus & Products — "Menus" has a bottom-bar tab.
-    { title: "Items", url: "/dashboard/menu/items", icon: List },
-    { title: "Out of stock", url: "/dashboard/menu/out-of-stock", icon: CircleSlash },
-    { title: "Categories", url: "/dashboard/menu/categories", icon: Tag },
+    // Menus & Products — the Menu bottom-bar tab opens its section navigation.
     { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
     { title: "Modifiers", url: "/dashboard/menu/modifiers", icon: Layers },
 
@@ -1494,9 +1484,7 @@ export default function MerchantDashboardLayout({
     { title: "Discrepancy", url: "/dashboard/reports/discrepancy", icon: ShieldAlert },
 
     // Financial
-    { title: "Transactions", url: "/dashboard/transactions", icon: Receipt },
-    { title: "Invoices", url: "/dashboard/invoices", icon: FileText },
-    { title: "Payments", url: "/dashboard/payments", icon: CreditCard },
+    { title: "Financial Overview", url: "/dashboard/financial", icon: Receipt, activeWhen: isFinancialWorkspacePath },
     { title: "Tip Distribution", url: "/dashboard/tips", icon: Users },
     { title: "My Tips", url: "/dashboard/tips/my-tips", icon: User },
     { title: "TSYS Disputes", url: "/dashboard/payments/disputes", icon: ShieldAlert },
@@ -1564,7 +1552,10 @@ export default function MerchantDashboardLayout({
             <ReadOnlyNotificationBell />
           </div>
         </header>
-        <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
+        <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">
+          {isFinancialWorkspacePath(pathname) && <FinancialNav pathname={pathname} />}
+          {children}
+        </div>
       </main>
       <MobileBottomNav
         tabs={dashboardBottomTabs}

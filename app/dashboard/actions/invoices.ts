@@ -86,7 +86,7 @@ export interface CreateInvoiceItemInput {
 }
 
 export interface CreateInvoiceInput {
-  location_id?: string | null;
+  location_id: string;
   customer_id?: string | null;
   status?: InvoiceStatus;
   payment_due_type: PaymentDueType;
@@ -353,7 +353,21 @@ export async function CreateInvoice(
   const merchantId = await getMerchantId(clerkOrgId);
   if (!merchantId) return { error: "Merchant not found" };
 
+  if (!input.location_id || input.location_id === "all") {
+    return { error: "Select a location for this invoice" };
+  }
+
   const supabase = createServerSupabaseClient();
+  const { data: invoiceLocation } = await supabase
+    .from("locations")
+    .select("id")
+    .eq("id", input.location_id)
+    .eq("merchant_id", merchantId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!invoiceLocation) {
+    return { error: "Select an active location for this invoice" };
+  }
   const invoiceNumber = await generateInvoiceNumber(merchantId, supabase);
 
   const discountAmount = input.discount_amount ?? 0;
@@ -367,7 +381,7 @@ export async function CreateInvoice(
     .from("invoices")
     .insert({
       merchant_id: merchantId,
-      location_id: input.location_id || null,
+      location_id: input.location_id,
       customer_id: input.customer_id || null,
       invoice_number: invoiceNumber,
       status: input.status ?? "draft",
@@ -458,9 +472,28 @@ export async function UpdateInvoice(
   // Fetch existing for audit
   const { data: existing } = await supabase
     .from("invoices")
-    .select("merchant_id, invoice_number, status, total_amount")
+    .select("merchant_id, location_id, invoice_number, status, total_amount")
     .eq("id", invoiceId)
     .single();
+
+  if (!existing) return { error: "Invoice not found" };
+  if (!existing.location_id && input.location_id === undefined) {
+    return { error: "Select a location for this invoice" };
+  }
+  if (input.location_id !== undefined) {
+    if (!input.location_id || input.location_id === "all") {
+      return { error: "Select a location for this invoice" };
+    }
+    const { data: invoiceLocation } = await supabase
+      .from("locations")
+      .select("id")
+      .eq("id", input.location_id)
+      .eq("merchant_id", existing.merchant_id)
+      .maybeSingle();
+    if (!invoiceLocation) {
+      return { error: "Location not found for this merchant" };
+    }
+  }
 
   const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
