@@ -403,6 +403,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/cancel-online-order/index.ts"
 
+# CodePay kiosk sale status lookup (Cloud API recall/orderquery). Verifies the
+# Clerk session itself; config in the CODEPAY_CLOUD_CONFIG function secret.
+[functions.codepay-transaction-status]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/codepay-transaction-status/index.ts"
+
 [functions.create-online-order]
 enabled = true
 verify_jwt = false
