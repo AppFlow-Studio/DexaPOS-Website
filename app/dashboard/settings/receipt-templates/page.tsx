@@ -23,7 +23,6 @@ import {
   useReceiptTemplates,
   useUpsertReceiptTemplate,
 } from "./hooks/useReceiptTemplates";
-import { useReceiptTemplateRealtime } from "./hooks/useReceiptTemplateRealtime";
 import { TemplateTypeTabs } from "./components/TemplateTypeTabs";
 import { ReceiptPreview } from "./components/ReceiptPreview";
 import { ReceiptSettingsForm } from "./components/ReceiptSettingsForm";
@@ -80,9 +79,6 @@ export default function ReceiptTemplatesPage() {
     isError,
     error,
   } = useReceiptTemplates(selectedLocationId);
-
-  // Realtime
-  useReceiptTemplateRealtime(selectedLocationId);
 
   // Mutations
   const upsertMutation = useUpsertReceiptTemplate();
