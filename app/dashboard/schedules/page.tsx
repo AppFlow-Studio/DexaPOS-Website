@@ -3,15 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduleDashboard } from "@/components/scheduling/dashboard/Dashboard";
-import { MenuSchedulesView } from "@/components/scheduling/dashboard/MenuSchedulesView";
 import { ScheduleReports } from "@/components/scheduling/reports/ScheduleReports";
 import { PageHeader, PageShell } from "@/components/dashboard/shell";
-import { BarChart3, CalendarDays, UtensilsCrossed } from "lucide-react";
+import { BarChart3, CalendarDays } from "lucide-react";
 
+// Menu schedules live under Menus (/dashboard/menu/schedules).
 const SCHEDULE_TABS = [
   { value: "staff", label: "Staff shifts", icon: CalendarDays },
   { value: "reports", label: "Reports", icon: BarChart3 },
-  { value: "menu", label: "Menu availability", icon: UtensilsCrossed },
 ] as const;
 
 export default function SchedulesPage() {
@@ -39,7 +38,7 @@ export default function SchedulesPage() {
     <PageShell>
       <PageHeader
         title="Staff Scheduling"
-        subtitle="Build team schedules, review labor coverage, and manage menu availability."
+        subtitle="Build team schedules and review labor coverage."
       />
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="min-w-0">
@@ -67,10 +66,6 @@ export default function SchedulesPage() {
 
         <TabsContent value="reports" className="mt-5">
           <ScheduleReports />
-        </TabsContent>
-
-        <TabsContent value="menu" className="mt-5">
-          <MenuSchedulesView />
         </TabsContent>
       </Tabs>
     </PageShell>
