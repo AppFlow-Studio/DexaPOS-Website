@@ -36,7 +36,7 @@ import {
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import type { KitchenStationStats } from "@/types/analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import {
@@ -89,7 +89,6 @@ export default function KitchenPerformancePage() {
   const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
   const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
   const { data: kitchen, isLoading, isError } = useKitchenPerformance(queryDateRange.from, queryDateRange.to);
 
@@ -146,7 +145,6 @@ export default function KitchenPerformancePage() {
       <ReportPageHeader
         title="Kitchen Performance"
         description="Ticket times, throughput and station efficiency"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

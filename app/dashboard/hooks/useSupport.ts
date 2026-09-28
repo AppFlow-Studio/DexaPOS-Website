@@ -5,6 +5,7 @@ import { useClerkOrgId } from "./useLocationScoped";
 import {
   GetMyTickets,
   GetTicketDetail,
+  GetDeviceTicketLinks,
   CreateTicket,
   AddMessage,
   ReopenTicket,
@@ -50,6 +51,22 @@ export function useTicketDetail(ticketId: string | null) {
   });
 }
 
+/** Open tickets keyed by device id, for the bands on the Devices page. */
+export function useDeviceTicketLinks() {
+  const clerkOrgId = useClerkOrgId();
+
+  return useQuery({
+    queryKey: ["support-device-tickets", clerkOrgId],
+    queryFn: async () => {
+      if (!clerkOrgId) return {};
+      const result = await GetDeviceTicketLinks(clerkOrgId);
+      return result.data ?? {};
+    },
+    enabled: !!clerkOrgId,
+    staleTime: 30_000,
+  });
+}
+
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export function useCreateTicket() {
@@ -64,6 +81,7 @@ export function useCreateTicket() {
       locationId?: string;
       metadata?: Record<string, unknown>;
       attachments?: AttachmentInput[];
+      deviceId?: string;
     }) => {
       if (!clerkOrgId) throw new Error("Not authenticated");
       return CreateTicket(clerkOrgId, input);
@@ -74,6 +92,10 @@ export function useCreateTicket() {
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["support-tickets", clerkOrgId] });
+      // The ticket may have been filed against a device: refresh the bands and
+      // the device's own history so the new note shows without a reload.
+      queryClient.invalidateQueries({ queryKey: ["support-device-tickets", clerkOrgId] });
+      queryClient.invalidateQueries({ queryKey: ["merchant-device-registry"] });
       toast.success("Ticket submitted!", {
         description: `Your ticket ${result.data?.ticket_number} has been created.`,
       });

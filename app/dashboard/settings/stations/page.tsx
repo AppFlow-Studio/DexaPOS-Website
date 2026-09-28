@@ -50,11 +50,9 @@ import {
 import { useState, useMemo, useEffect } from "react";
 import {
   useGatedLocationId,
-  useGatedLocation,
 } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -71,7 +69,6 @@ export default function StationsPage() {
   const gatedLocationId = useGatedLocationId();
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
-  const selectedLocation = useGatedLocation();
   const clerkOrgId = useClerkOrgId();
 
   // Fetch stations with heartbeat data
@@ -313,12 +310,6 @@ export default function StationsPage() {
         <PageHeader
           title="Stations"
           subtitle="Configure and manage your POS stations."
-          indicator={
-            <LocationIndicator
-              isAllLocations={isAllLocations}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <StationsBodySkeleton />
       </PageShell>
@@ -332,7 +323,6 @@ export default function StationsPage() {
         <PageHeader
           title="Stations"
           subtitle="Configure and manage your POS stations."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
 
         <Panel padded>
@@ -356,12 +346,6 @@ export default function StationsPage() {
         <PageHeader
           title="Stations"
           subtitle="Configure registers, kiosks, and kitchen displays."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
           actions={<Skeleton className="h-9 w-32 rounded-full" />}
         />
         <StationsBodySkeleton />
@@ -376,12 +360,6 @@ export default function StationsPage() {
         <PageHeader
           title="Stations"
           subtitle="Configure registers, kiosks, and kitchen displays."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Panel padded>
           <div className="flex min-h-64 flex-col items-center justify-center text-center">
@@ -410,12 +388,6 @@ export default function StationsPage() {
       <PageHeader
         title="Stations"
         subtitle="Configure registers, kiosks, and kitchen displays."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <Button
             className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"

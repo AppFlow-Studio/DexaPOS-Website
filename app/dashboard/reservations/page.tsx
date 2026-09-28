@@ -10,7 +10,6 @@ import {
   Panel,
   StatRow,
   StatTile,
-  LocationIndicator,
 } from "@/components/dashboard/shell";
 import { DatePopover } from "@/components/ui/date-popover";
 import {
@@ -102,12 +101,6 @@ export default function ReservationsPage() {
       <PageHeader
         title="Reservations"
         subtitle="Track bookings, arrivals and seating for the selected day"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={gatedLocation?.name}
-          />
-        }
         actions={
           <Button
             className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"

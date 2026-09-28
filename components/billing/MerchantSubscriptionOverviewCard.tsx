@@ -8,16 +8,12 @@ import {
   AlertTriangle,
   Building2,
   Check,
-  ChevronDown,
   CreditCard,
   Download,
   Eye,
-  FileText,
   Loader2,
-  Monitor,
-  Puzzle,
+  MoreHorizontal,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -28,17 +24,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Empty } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -47,7 +43,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboard/shell'
 import {
   getMerchantSubscriptionInvoiceDocument,
@@ -61,6 +56,9 @@ import {
   type MerchantSubscriptionInvoiceViewRecord,
   type MerchantTierPlanViewRecord,
   type MerchantBillableServiceViewRecord,
+  type MerchantPendingHardwareRequestViewRecord,
+  type MerchantPendingServiceRequestViewRecord,
+  type MerchantServiceAssignmentViewRecord,
 } from '@/app/dashboard/actions/subscription-billing'
 import {
   useMerchantSubscriptionOverview,
@@ -71,11 +69,22 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
-import { cn } from '@/lib/utils'
 import {
-  invoiceStatusLabel,
-  subscriptionStatusLabel,
-} from '@/lib/constants/subscription-status'
+  describeTierPricing,
+  monthlyTierCharge,
+  planFitLabel,
+  planFitsLocationCount,
+} from '@/lib/subscription-billing/tier-pricing'
+import {
+  describePaymentFailure,
+  estimateNextCharge,
+  groupInvoicesByMonth,
+  serviceSubtotal,
+  cardFee,
+  UNPAID_INVOICE_STATUSES,
+} from '@/lib/subscription-billing/merchant-billing-statement'
+import { cn } from '@/lib/utils'
+import { invoiceStatusLabel } from '@/lib/constants/subscription-status'
 import {
   getMerchantTierFallbackName,
   getMerchantTierPresentation,
@@ -83,10 +92,37 @@ import {
 
 interface MerchantSubscriptionOverviewCardProps {
   merchantName: string
+  /**
+   * Which part of the page to open on. Comes from `?section=` so the billing
+   * emails (and the public invoice page) can deep-link straight to the
+   * payments — they used to point at `/dashboard/subscriptions/billing`, which
+   * is now a redirect onto `?section=billing`.
+   */
+  initialSection?: SubscriptionSection
 }
 
-const LOCATION_PAGE_SIZE = 10
-type SubscriptionSection = 'plan' | 'addons' | 'hardware' | 'billing'
+/**
+ * Deep-link targets. The page is one scroll — no tabs — so a section is an
+ * anchor to scroll to, not a panel to switch to. The names are kept from the
+ * tabbed version because live emails carry `?section=billing`.
+ */
+export type SubscriptionSection = 'overview' | 'locations' | 'billing'
+
+const SECTION_ANCHORS: Record<SubscriptionSection, string | null> = {
+  overview: null,
+  locations: 'subscription-locations',
+  billing: 'subscription-payments',
+}
+
+type InvoiceFilter = 'all' | 'unpaid' | 'paid'
+
+/** Invoices shown per month before "Show N more". */
+const INVOICES_PER_MONTH = 3
+
+const SUPPORT_HREF = '/dashboard/support/new?category=billing'
+
+/** `DS-CTL-01` pill control, as a literal so Tailwind generates it (C7). */
+const PILL = 'h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm'
 
 const EMPTY_PLAN_STATUS: MerchantPlanStatusView = {
   plan: null,
@@ -96,44 +132,17 @@ const EMPTY_PLAN_STATUS: MerchantPlanStatusView = {
   subscription_status: null,
   current_period_end: null,
 }
+// Stable identities: an inline `?? []` allocates a fresh array on every render,
+// which makes every `useMemo` that depends on it recompute every time.
 const EMPTY_LOCATIONS: MerchantBillingLocationViewRecord[] = []
 const EMPTY_DEVICES_BY_LOCATION: Record<string, MerchantProvisionedDeviceViewRecord[]> = {}
 const EMPTY_INVOICES: MerchantSubscriptionInvoiceViewRecord[] = []
 const EMPTY_BILLING_PROFILES: Record<string, MerchantSubscriptionBillingProfileViewRecord> = {}
 const EMPTY_TIER_PLANS: MerchantTierPlanViewRecord[] = []
-
-const SUBSCRIPTION_SECTIONS: Array<{
-  id: SubscriptionSection
-  label: string
-  icon: React.ComponentType<{ className?: string }>
-}> = [
-  {
-    id: 'addons',
-    label: 'Add-ons',
-    icon: Puzzle,
-  },
-  {
-    id: 'plan',
-    label: 'Plan & coverage',
-    icon: Building2,
-  },
-  {
-    id: 'hardware',
-    label: 'Hardware',
-    icon: Monitor,
-  },
-  {
-    id: 'billing',
-    label: 'Billing',
-    icon: CreditCard,
-  },
-]
-const PLAN_NAME_BY_CODE: Record<string, string> = {
-  basic: 'Single Location',
-  multi_location: 'Multi-Location',
-  // franchise tier is retired and folds into Multi-Location.
-  franchise: 'Multi-Location',
-}
+const EMPTY_SERVICES: MerchantBillableServiceViewRecord[] = []
+const EMPTY_ASSIGNMENTS: MerchantServiceAssignmentViewRecord[] = []
+const EMPTY_SERVICE_REQUESTS: MerchantPendingServiceRequestViewRecord[] = []
+const EMPTY_HARDWARE_REQUESTS: MerchantPendingHardwareRequestViewRecord[] = []
 
 function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -145,7 +154,9 @@ function formatMoney(amount: number): string {
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
 
-  const date = new Date(value)
+  // A bare `YYYY-MM-DD` parses as UTC midnight — the previous day west of
+  // Greenwich. Anchor date-only values to local noon instead.
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value)
   if (Number.isNaN(date.getTime())) return value
 
   return date.toLocaleDateString('en-US', {
@@ -155,42 +166,77 @@ function formatDate(value: string | null | undefined): string {
   })
 }
 
+function formatShortDate(value: string | null | undefined): string {
+  if (!value) return '-'
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Whether a date (or `YYYY-MM-DD`) falls before today, in local time. */
+function isPastDate(value: string): boolean {
+  const day = /^\d{4}-\d{2}-\d{2}/.exec(value)?.[0]
+  if (!day) return false
+  const today = new Date()
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return day < todayKey
+}
+
 function formatLocationAddress(location: MerchantBillingLocationViewRecord): string {
   return [location.address_line1, location.city, location.state, location.postal_code]
     .filter(Boolean)
     .join(', ') || 'Address not set'
 }
 
-/** Flat, uncoloured status badge — no per-status tint or dot. */
-function StatusBadge({
-  label,
-}: {
-  style?: { dot: string; text: string; bg: string }
-  label: string
-}) {
+function formatCity(location: MerchantBillingLocationViewRecord): string {
+  return [location.city, location.state].filter(Boolean).join(', ')
+}
+
+/**
+ * Flat, uncoloured status badge — no per-status tint or dot (`DS-CTL-09`).
+ *
+ * Urgency is carried by the alert banners at the top instead, which the
+ * design system does allow to take a tint. A failed invoice therefore reads
+ * as urgent at the top of the page rather than by turning its row red.
+ */
+function StatusBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex w-fit shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
       {label}
     </span>
   )
 }
 
-function buildPaymentMethodLabel(profile: MerchantSubscriptionBillingProfileViewRecord | null): string {
-  if (!profile) return 'Not set'
+const CARD_BRAND_NAMES: Record<string, string> = {
+  visa: 'Visa',
+  mastercard: 'Mastercard',
+  mc: 'Mastercard',
+  amex: 'Amex',
+  americanexpress: 'Amex',
+  discover: 'Discover',
+  diners: 'Diners Club',
+  dinersclub: 'Diners Club',
+  jcb: 'JCB',
+}
+
+/** "Visa •• 1111" — the card as the owner recognises it. */
+function cardLabel(profile: MerchantSubscriptionBillingProfileViewRecord | null): string {
+  if (!profile) return 'No card'
 
   if (profile.billing_method === 'card') {
-    const brand = profile.card_brand || 'Card'
-    const suffix = profile.card_last_four ? `**** ${profile.card_last_four}` : ''
-    return [brand, suffix].filter(Boolean).join(' ')
+    // Brand and last four are best-effort from the vault: the brand can be
+    // null or a processor token such as "credit-card".
+    const brand = CARD_BRAND_NAMES[(profile.card_brand ?? '').toLowerCase().replace(/[\s_-]/g, '')] ?? 'Card'
+    return profile.card_last_four ? `${brand} •• ${profile.card_last_four}` : brand
   }
 
   const bank = profile.bank_name || 'Bank account'
-  const suffix = profile.account_number_last_four ? `**** ${profile.account_number_last_four}` : ''
-  return [bank, suffix].filter(Boolean).join(' ')
+  return profile.account_number_last_four ? `${bank} •• ${profile.account_number_last_four}` : bank
 }
 
-function formatTierPrice(monthlyPriceCents: number): string {
-  return monthlyPriceCents > 0 ? `${formatMoney(monthlyPriceCents / 100)}/mo` : 'Contact for pricing'
+function cardExpiry(profile: MerchantSubscriptionBillingProfileViewRecord | null): string | null {
+  if (profile?.billing_method !== 'card' || !profile.card_exp_month || !profile.card_exp_year) return null
+  return `Expires ${String(profile.card_exp_month).padStart(2, '0')}/${profile.card_exp_year}`
 }
 
 function formatTierBillingUnit(plan: MerchantTierPlanViewRecord): string {
@@ -208,14 +254,10 @@ function formatTierBillingUnit(plan: MerchantTierPlanViewRecord): string {
   return `${plan.min_locations ?? 0}-${plan.max_locations} locations`
 }
 
+/** What an add-on will cost this location per month, card fee included. */
 function addOnMonthlyAmount(service: MerchantBillableServiceViewRecord, quantity: number): number {
-  const safeQuantity = Math.max(1, Math.floor(quantity || 1))
-  const subtotal = service.pricing_model === 'flat'
-    ? service.base_price_monthly
-    : service.pricing_model === 'per_unit'
-      ? service.base_price_monthly * safeQuantity
-      : service.base_price_monthly + Math.max(0, safeQuantity - service.included_quantity) * (service.additional_unit_price ?? 0)
-  return subtotal + subtotal * (service.card_surcharge_pct / 100)
+  const subtotal = serviceSubtotal(service, quantity)
+  return subtotal + cardFee(subtotal, service.card_surcharge_pct, 'card')
 }
 
 function merchantTierHighlights(plan: MerchantTierPlanViewRecord): string[] {
@@ -226,84 +268,178 @@ function merchantTierHighlights(plan: MerchantTierPlanViewRecord): string[] {
   ]
 }
 
-function usageLabel(planStatus: MerchantPlanStatusView): string {
-  const maxLocations = planStatus.plan?.max_locations ?? null
-  const count = planStatus.active_location_count
-
-  if (maxLocations === null) {
-    return `${count} active locations`
-  }
-
-  return `${count} of ${maxLocations} locations used`
+function plural(count: number, one: string, many = `${one}s`): string {
+  return `${count} ${count === 1 ? one : many}`
 }
 
-function SubscriptionSectionButton({
-  section,
-  active,
-  onClick,
+/**
+ * A tinted alert at the top of the page.
+ *
+ * `DS-CTL-09` bars colour from *status display* — a badge, a row, a label
+ * describing what a record is. It explicitly permits a tinted banner, which is
+ * what this is: not a description of state, but a call to act on one.
+ */
+function AttentionBanner({
+  tone,
+  title,
+  body,
+  action,
 }: {
-  section: (typeof SUBSCRIPTION_SECTIONS)[number]
-  active: boolean
-  onClick: () => void
+  tone: 'critical' | 'warning'
+  title: React.ReactNode
+  body: React.ReactNode
+  action?: React.ReactNode
 }) {
-  const Icon = section.icon
-
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-subscription-section={section.id}
-      aria-current={active ? 'page' : undefined}
+    <div
+      role={tone === 'critical' ? 'alert' : undefined}
       className={cn(
-        'flex min-w-max flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-center transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        active
-          ? 'bg-white text-foreground shadow-sm dark:bg-background'
-          : 'text-muted-foreground hover:text-foreground',
+        'flex min-w-0 flex-col gap-4 rounded-2xl px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between',
+        tone === 'critical' && 'bg-red-50 text-red-950 dark:bg-red-950/30 dark:text-red-100',
+        tone === 'warning' && 'bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100',
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className="truncate text-sm font-medium">{section.label}</span>
-    </button>
+      <div className="flex min-w-0 items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <div className="font-semibold">{title}</div>
+          <div className="mt-1 text-sm opacity-85">{body}</div>
+        </div>
+      </div>
+      {action ? <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+    </div>
+  )
+}
+
+/** A label/value pair. */
+function Field({ label, value, meta }: { label: string; value: React.ReactNode; meta?: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="mt-1 font-medium">{value}</div>
+      {meta ? <div className="mt-0.5 text-xs text-muted-foreground">{meta}</div> : null}
+    </div>
+  )
+}
+
+/** One line of the "What makes it up" breakdown. */
+function BreakdownRow({
+  label,
+  meta,
+  amount,
+  emphasis = false,
+}: {
+  label: string
+  meta?: React.ReactNode
+  amount: string
+  emphasis?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex min-w-0 items-baseline justify-between gap-4 rounded-xl px-3 py-2.5',
+        emphasis && 'mt-2 bg-muted/60 py-3',
+      )}
+    >
+      <div className="min-w-0">
+        <div className={cn('text-sm', emphasis && 'font-semibold')}>{label}</div>
+        {meta ? <div className="text-xs text-muted-foreground">{meta}</div> : null}
+      </div>
+      <div className={cn('shrink-0 tabular-nums', emphasis ? 'text-base font-semibold' : 'text-sm font-medium')}>
+        {amount}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Submitted → DEXA review → Active. Every open request is waiting on DEXA, so
+ * the second step is always the current one. Neutral marks only: filled for
+ * reached, hollow for not yet (`DS-CTL-09`).
+ */
+function RequestTracker({ finalStep }: { finalStep: string }) {
+  const steps = ['Submitted', 'DEXA review', finalStep]
+  const current = 1
+
+  return (
+    <ol aria-label="Request progress" className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+      {steps.map((step, index) => (
+        <li
+          key={step}
+          aria-current={index === current ? 'step' : undefined}
+          className={cn(
+            'flex items-center gap-1.5',
+            index === current ? 'font-semibold text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'h-2 w-2 shrink-0 rounded-full',
+              index <= current ? 'bg-foreground' : 'ring-1 ring-inset ring-muted-foreground',
+            )}
+          />
+          {step}
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function SectionSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: rows }).map((_, index) => (
+        <Skeleton key={index} className="h-14 w-full rounded-2xl" />
+      ))}
+    </div>
   )
 }
 
 export function MerchantSubscriptionOverviewCard({
   merchantName,
+  initialSection = 'overview',
 }: MerchantSubscriptionOverviewCardProps) {
   const overviewQuery = useMerchantSubscriptionOverview()
   const merchantTierPlansQuery = useMerchantTierPlans()
-  const [selectedLocationId, setSelectedLocationId] = useState('')
+
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
-  const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
+  const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>('all')
+  const [expandedMonths, setExpandedMonths] = useState<string[]>([])
+
+  const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false)
   const [selectedRequestedPlanId, setSelectedRequestedPlanId] = useState('')
-  const [hasAcceptedPlanAuthorization, setHasAcceptedPlanAuthorization] =
-    useState(false)
+  const [hasAcceptedPlanAuthorization, setHasAcceptedPlanAuthorization] = useState(false)
   const [isSubmittingPlanRequest, setIsSubmittingPlanRequest] = useState(false)
+
+  const [manageLocationId, setManageLocationId] = useState<string | null>(null)
+
+  const [hardwareDialogLocationId, setHardwareDialogLocationId] = useState<string | null>(null)
   const [isSubmittingHardwareRequest, setIsSubmittingHardwareRequest] = useState(false)
   const [hardwareRequestQuantity, setHardwareRequestQuantity] = useState('1')
   const [hardwareRequestNote, setHardwareRequestNote] = useState('')
-  const [activeSection, setActiveSection] = useState<SubscriptionSection>('plan')
-  const [locationPage, setLocationPage] = useState(1)
-  const [openLocationIds, setOpenLocationIds] = useState<string[]>([])
-  const [selectedAddOn, setSelectedAddOn] = useState<MerchantBillableServiceViewRecord | null>(null)
+
+  const [addOnDialog, setAddOnDialog] = useState<{
+    locationId: string
+    service: MerchantBillableServiceViewRecord
+  } | null>(null)
   const [addOnQuantity, setAddOnQuantity] = useState('1')
   const [hasAcceptedAddOnAuthorization, setHasAcceptedAddOnAuthorization] = useState(false)
   const [isSubmittingAddOnRequest, setIsSubmittingAddOnRequest] = useState(false)
 
-  const devicesRef = useRef<HTMLDivElement | null>(null)
-  const sectionNavRef = useRef<HTMLElement | null>(null)
+  const hasScrolledToSection = useRef(false)
   const isLoading = overviewQuery.isLoading
   const merchantPlanStatus = overviewQuery.data?.merchantPlanStatus ?? EMPTY_PLAN_STATUS
   const pendingTierRequest = overviewQuery.data?.pendingTierRequest ?? null
-  const pendingHardwareRequests = overviewQuery.data?.pendingHardwareRequests ?? []
-  const availableServices = overviewQuery.data?.availableServices ?? []
-  const serviceAssignments = overviewQuery.data?.serviceAssignments ?? []
-  const pendingServiceRequests = overviewQuery.data?.pendingServiceRequests ?? []
-  const serviceRequestHistory = overviewQuery.data?.serviceRequestHistory ?? []
+  const pendingHardwareRequests =
+    overviewQuery.data?.pendingHardwareRequests ?? EMPTY_HARDWARE_REQUESTS
+  const availableServices = overviewQuery.data?.availableServices ?? EMPTY_SERVICES
+  const serviceAssignments = overviewQuery.data?.serviceAssignments ?? EMPTY_ASSIGNMENTS
+  const pendingServiceRequests =
+    overviewQuery.data?.pendingServiceRequests ?? EMPTY_SERVICE_REQUESTS
   const locations = overviewQuery.data?.locations ?? EMPTY_LOCATIONS
   const merchantTierPlans = useMemo(
     () =>
@@ -317,81 +453,244 @@ export function MerchantSubscriptionOverviewCard({
   const billingProfilesByLocationId =
     overviewQuery.data?.billingProfilesByLocationId ?? EMPTY_BILLING_PROFILES
   const primaryBillingProfile = overviewQuery.data?.primaryBillingProfile ?? null
-  const billingSettingsHref = `/dashboard/settings/billing?billingScope=${encodeURIComponent(
-    primaryBillingProfile?.location_id || '__merchant_wide__',
-  )}`
+  const nextBillingDate =
+    overviewQuery.data?.tierNextBillingDate ?? merchantPlanStatus.current_period_end
+
+  const billingScopeHref = (scope: string | null) =>
+    `/dashboard/settings/billing?billingScope=${encodeURIComponent(scope || '__merchant_wide__')}`
+  const planCardHref = billingScopeHref(primaryBillingProfile?.location_id ?? null)
 
   const invoicePreviewHtml = useMemo(
     () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
     [invoicePreviewDocument],
   )
 
-  const selectedLocation = useMemo(
-    () => locations.find((location) => location.id === selectedLocationId) ?? locations[0] ?? null,
-    [locations, selectedLocationId],
+  const servicesById = useMemo(() => {
+    const map: Record<string, MerchantBillableServiceViewRecord> = {}
+    availableServices.forEach((service) => {
+      map[service.id] = service
+    })
+    return map
+  }, [availableServices])
+
+  const locationsById = useMemo(() => {
+    const map: Record<string, MerchantBillingLocationViewRecord> = {}
+    locations.forEach((location) => {
+      map[location.id] = location
+    })
+    return map
+  }, [locations])
+
+  // `monthly_price_cents` is 0 for every merchant tier since the 2026-09-10
+  // pricing change — the charge is per-location overage. The plan status RPC
+  // does not return those columns, so match the catalogue row by plan code.
+  const tierPlan = useMemo(
+    () => merchantTierPlans.find((plan) => plan.plan_code === merchantPlanStatus.plan?.code) ?? null,
+    [merchantPlanStatus.plan?.code, merchantTierPlans],
+  )
+  const tierCharge = useMemo(
+    () => monthlyTierCharge(tierPlan, merchantPlanStatus.active_location_count),
+    [merchantPlanStatus.active_location_count, tierPlan],
   )
 
-  const usage = useMemo(() => usageLabel(merchantPlanStatus), [merchantPlanStatus])
+  /** What the merchant will be charged next cycle, card fee included. */
+  const nextCharge = useMemo(
+    () =>
+      estimateNextCharge({
+        tierSubtotal: tierCharge.total,
+        tierSurchargePct: tierPlan?.card_surcharge_pct ?? 0,
+        tierBillingMethod: primaryBillingProfile?.billing_method ?? 'card',
+        assignments: serviceAssignments,
+        servicesById,
+        locationBillingMethod: (locationId) =>
+          billingProfilesByLocationId[locationId]?.billing_method ?? 'card',
+      }),
+    [billingProfilesByLocationId, primaryBillingProfile?.billing_method, serviceAssignments, servicesById, tierCharge.total, tierPlan?.card_surcharge_pct],
+  )
 
-  const selectedRequestedPlan = useMemo(() => {
-    const currentPlanCode = merchantPlanStatus.plan?.code ?? null
-    const preferredPlan = merchantPlanStatus.required_plan_code
-      ? merchantTierPlans.find(
-          (plan) => plan.plan_code === merchantPlanStatus.required_plan_code,
-        )
-      : null
-    const fallbackPlan =
-      merchantTierPlans.find((plan) => plan.plan_code !== currentPlanCode) ??
-      merchantTierPlans[0] ??
-      null
-    const defaultPlan = preferredPlan ?? fallbackPlan
+  /**
+   * Whether the plan's price is in the catalogue at all. A tier with no
+   * catalogue row is sold by agreement; rendering a confident "$0.00" would
+   * tell the owner they owe nothing, directly above failed invoices for real
+   * money. The free single-location tier *is* in the catalogue, so its $0.00
+   * is true and shown.
+   */
+  const pricingKnown = Boolean(tierPlan) || nextCharge.addOnSubtotal > 0
 
-    return (
-      merchantTierPlans.find((plan) => plan.id === selectedRequestedPlanId) ??
-      defaultPlan
+  const failedInvoices = useMemo(
+    () =>
+      invoices
+        .filter((invoice) => invoice.status === 'failed')
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [invoices],
+  )
+
+  /**
+   * One overdue banner for every failed payment, not one banner each.
+   *
+   * The previous page stacked a pink banner per failed invoice, each with its
+   * own "Update card" — six on one screen for five failures — and printed the
+   * raw processor error in every one.
+   */
+  const overdue = useMemo(() => {
+    if (failedInvoices.length === 0) return null
+
+    const reasons = failedInvoices.map((invoice) => describePaymentFailure(invoice.last_payment_error))
+    const distinctMessages = [...new Set(reasons.map((reason) => reason.message))]
+    // Retrying with a different card cannot fix a problem on our side, so
+    // "Update card" is not offered as the fix when that is the only cause.
+    const processorOnly = reasons.every((reason) => reason.kind === 'processor')
+
+    // Which card to fix: the plan card for tier invoices, the location's card
+    // for location invoices. Only deep-link a scope when it is unambiguous.
+    const scopes = new Set(
+      failedInvoices.map((invoice) =>
+        subscriptionBillingScope(invoice.metadata) === 'merchant_tier'
+          ? primaryBillingProfile?.location_id ?? null
+          : invoice.location_id,
+      ),
     )
-  }, [merchantPlanStatus.plan?.code, merchantPlanStatus.required_plan_code, merchantTierPlans, selectedRequestedPlanId])
+    const [onlyScope] = [...scopes]
+    const updateCardHref = scopes.size === 1 ? billingScopeHref(onlyScope) : '/dashboard/settings/billing'
 
-  const transactionSummary = useMemo(() => {
-    const collected = invoices
-      .filter((invoice) => invoice.status === 'paid')
-      .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
-
-    const pending = invoices
-      .filter((invoice) => ['open', 'processing', 'failed'].includes(invoice.status))
-      .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
+    const nextRetry = failedInvoices
+      .map((invoice) => invoice.next_retry_at)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0] ?? null
 
     return {
-      collected,
-      pending,
-      count: invoices.length,
+      count: failedInvoices.length,
+      total: failedInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
+      since: failedInvoices[0].created_at,
+      reason: distinctMessages.length === 1 ? distinctMessages[0] : null,
+      processorOnly,
+      updateCardHref,
+      nextRetry,
     }
-  }, [invoices])
+  }, [failedInvoices, primaryBillingProfile?.location_id])
 
-  const totalLocationPages = Math.max(1, Math.ceil(locations.length / LOCATION_PAGE_SIZE))
-  const effectiveLocationPage = Math.min(locationPage, totalLocationPages)
-  const paginatedLocations = useMemo(() => {
-    const start = (effectiveLocationPage - 1) * LOCATION_PAGE_SIZE
-    return locations.slice(start, start + LOCATION_PAGE_SIZE)
-  }, [effectiveLocationPage, locations])
+  /**
+   * Locations that are live but have no way to be charged. Previously
+   * invisible: the page only ever showed the profiles that *did* exist.
+   */
+  const locationsWithoutBilling = useMemo(
+    () => locations.filter((location) => location.is_active && !billingProfilesByLocationId[location.id]),
+    [billingProfilesByLocationId, locations],
+  )
 
-  const refresh = async () => {
-    const [overviewResult, tierPlansResult] = await Promise.all([
-      overviewQuery.refetch(),
-      merchantTierPlansQuery.refetch(),
-    ])
+  const invoiceCounts = useMemo(
+    () => ({
+      all: invoices.length,
+      unpaid: invoices.filter((invoice) => UNPAID_INVOICE_STATUSES.includes(invoice.status)).length,
+      paid: invoices.filter((invoice) => invoice.status === 'paid').length,
+    }),
+    [invoices],
+  )
 
-    const errorMessage =
-      overviewResult.error instanceof Error
-        ? overviewResult.error.message
-        : tierPlansResult.error instanceof Error
-          ? tierPlansResult.error.message
-          : ''
+  const invoiceMonths = useMemo(() => {
+    const filtered =
+      invoiceFilter === 'all'
+        ? invoices
+        : invoiceFilter === 'paid'
+          ? invoices.filter((invoice) => invoice.status === 'paid')
+          : invoices.filter((invoice) => UNPAID_INVOICE_STATUSES.includes(invoice.status))
+    return groupInvoicesByMonth(filtered)
+  }, [invoiceFilter, invoices])
 
-    if (errorMessage) {
-      toast.error(errorMessage || 'Failed to load subscription billing data.')
+  /**
+   * Requests waiting on DEXA. They used to sit among the urgent alerts and
+   * inflate the "Needs attention" count, though nothing about them needs the
+   * owner.
+   */
+  const inProgress = useMemo(() => {
+    const items: Array<{ key: string; title: string; meta: string; finalStep: string }> = []
+
+    if (pendingTierRequest) {
+      items.push({
+        key: `tier-${pendingTierRequest.id}`,
+        title: `Plan change to ${pendingTierRequest.requested_plan_name}`,
+        meta: `${pendingTierRequest.request_number} · submitted ${formatDate(pendingTierRequest.requested_at)}`,
+        finalStep: 'Active',
+      })
     }
-  }
+
+    pendingServiceRequests.forEach((request) => {
+      const service = servicesById[request.service_id]
+      const location = locationsById[request.location_id]
+      items.push({
+        key: `svc-${request.id}`,
+        title: `${service?.display_name ?? 'Add-on'} for ${location?.name ?? 'a location'}`,
+        meta: `${request.request_number} · submitted ${formatDate(request.requested_at)} · ${formatMoney(
+          request.authorized_total,
+        )}/mo once active`,
+        finalStep: 'Active',
+      })
+    })
+
+    pendingHardwareRequests.forEach((request) => {
+      items.push({
+        key: `hw-${request.id}`,
+        title: `Hardware for ${request.location_name}`,
+        meta: `${request.request_number} · submitted ${formatDate(request.requested_at)}`,
+        finalStep: 'Provisioned',
+      })
+    })
+
+    return items
+  }, [locationsById, pendingHardwareRequests, pendingServiceRequests, pendingTierRequest, servicesById])
+
+  const currentPlanCode = merchantPlanStatus.plan?.code ?? null
+
+  /**
+   * Which plan the dialog opens on.
+   *
+   * `required_plan_code` is the tier the merchant's location count *requires*,
+   * which for a compliant merchant is the tier they are already on. Letting it
+   * win outright opens the dialog with the current plan selected, which
+   * disables the authorization checkbox and the submit button and reads as a
+   * broken dialog. Only honour it when it is actually a different plan;
+   * otherwise fall through to the first plan that is not the current one.
+   */
+  const selectedRequestedPlan = useMemo(() => {
+    const explicitChoice = merchantTierPlans.find((plan) => plan.id === selectedRequestedPlanId)
+    if (explicitChoice) return explicitChoice
+
+    const requiredPlan =
+      merchantPlanStatus.required_plan_code && merchantPlanStatus.required_plan_code !== currentPlanCode
+        ? merchantTierPlans.find((plan) => plan.plan_code === merchantPlanStatus.required_plan_code)
+        : null
+    if (requiredPlan) return requiredPlan
+
+    const locationCount = merchantPlanStatus.active_location_count
+    const eligible = merchantTierPlans.filter(
+      (plan) => plan.plan_code !== currentPlanCode && planFitsLocationCount(plan, locationCount),
+    )
+
+    // No fallback to an ineligible tier: preselecting one the merchant cannot
+    // move to renders a price delta for a request that can never be approved,
+    // directly above the note explaining there is nothing to switch to.
+    return eligible[0] ?? null
+  }, [
+    currentPlanCode,
+    merchantPlanStatus.active_location_count,
+    merchantPlanStatus.required_plan_code,
+    merchantTierPlans,
+    selectedRequestedPlanId,
+  ])
+
+  /**
+   * The money difference the merchant is agreeing to, stated before they agree.
+   * Both sides are priced at the merchant's current location count, because
+   * that is what drives a tier's cost — comparing the flat
+   * `monthly_price_cents` would compare 0 against 0.
+   */
+  const planDelta = useMemo(() => {
+    if (!selectedRequestedPlan) return null
+    const locationCount = merchantPlanStatus.active_location_count
+    const current = tierCharge.total
+    const next = monthlyTierCharge(selectedRequestedPlan, locationCount).total
+    return { current, next, difference: next - current }
+  }, [merchantPlanStatus.active_location_count, tierCharge.total, selectedRequestedPlan])
 
   useEffect(() => {
     const errorMessage =
@@ -406,48 +705,21 @@ export function MerchantSubscriptionOverviewCard({
     }
   }, [merchantTierPlansQuery.error, overviewQuery.error])
 
+  /**
+   * Honour `?section=` once the sections have real content — scrolling while
+   * the skeletons are up lands short when the data arrives and pushes the
+   * target down.
+   */
   useEffect(() => {
-    if (!window.matchMedia('(max-width: 767px)').matches) return
+    if (isLoading || hasScrolledToSection.current) return
+    hasScrolledToSection.current = true
+    const anchor = SECTION_ANCHORS[initialSection]
+    if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [initialSection, isLoading])
 
-    const navigation = sectionNavRef.current
-    const selectedButton = navigation?.querySelector<HTMLElement>(
-      `[data-subscription-section="${activeSection}"]`,
-    )
-
-    if (!navigation || !selectedButton) return
-
-    const centeredPosition =
-      selectedButton.offsetLeft -
-      (navigation.clientWidth - selectedButton.offsetWidth) / 2
-
-    navigation.scrollTo({
-      left: Math.max(0, centeredPosition),
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
-    })
-  }, [activeSection])
-
-  const toggleLocationOpen = (locationId: string) => {
-    setOpenLocationIds((current) =>
-      current.includes(locationId) ? current.filter((value) => value !== locationId) : [...current, locationId],
-    )
-  }
-
-  const focusLocation = (locationId: string) => {
-    setSelectedLocationId(locationId)
-    setActiveSection('hardware')
-    setOpenLocationIds((current) => (current.includes(locationId) ? current : [...current, locationId]))
-    setTimeout(() => {
-      devicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 100)
-  }
-
-  const selectLocation = (locationId: string) => {
-    setSelectedLocationId(locationId)
-    setOpenLocationIds((current) =>
-      current.includes(locationId) ? current : [...current, locationId],
-    )
+  const showUnpaidPayments = () => {
+    setInvoiceFilter('unpaid')
+    document.getElementById(SECTION_ANCHORS.billing!)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const loadInvoiceDocument = async (invoiceId: string): Promise<SubscriptionInvoiceDocumentData | null> => {
@@ -484,13 +756,18 @@ export function MerchantSubscriptionOverviewCard({
     }
   }
 
+  const openPlanRequestDialog = () => {
+    setHasAcceptedPlanAuthorization(false)
+    setIsPlanDialogOpen(true)
+  }
+
   const handleRequestPlan = async () => {
     if (!selectedRequestedPlan) {
       toast.error('Select a subscription plan first.')
       return
     }
 
-    if (selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code) {
+    if (selectedRequestedPlan.plan_code === currentPlanCode) {
       toast.error('This is already your current subscription plan.')
       return
     }
@@ -525,23 +802,25 @@ export function MerchantSubscriptionOverviewCard({
 
     await overviewQuery.refetch()
     setHasAcceptedPlanAuthorization(false)
-    setContactModalMode(null)
+    setIsPlanDialogOpen(false)
   }
 
-  const openPlanRequestDialog = () => {
-    setHasAcceptedPlanAuthorization(false)
-    setContactModalMode('plan')
+  const openHardwareDialog = (locationId: string) => {
+    setHardwareRequestQuantity('1')
+    setHardwareRequestNote('')
+    setManageLocationId(null)
+    setHardwareDialogLocationId(locationId)
   }
 
   const handleRequestHardware = async () => {
-    if (!selectedLocation) {
+    if (!hardwareDialogLocationId) {
       toast.error('Select a location first.')
       return
     }
 
     setIsSubmittingHardwareRequest(true)
     const result = await RequestSubscriptionHardware({
-      locationId: selectedLocation.id,
+      locationId: hardwareDialogLocationId,
       quantity: Number(hardwareRequestQuantity),
       note: hardwareRequestNote,
     })
@@ -562,1016 +841,1270 @@ export function MerchantSubscriptionOverviewCard({
     await overviewQuery.refetch()
     setHardwareRequestQuantity('1')
     setHardwareRequestNote('')
-    setContactModalMode(null)
+    setHardwareDialogLocationId(null)
+  }
+
+  const openAddOnDialog = (locationId: string, service: MerchantBillableServiceViewRecord) => {
+    setAddOnQuantity('1')
+    setHasAcceptedAddOnAuthorization(false)
+    setManageLocationId(null)
+    setAddOnDialog({ locationId, service })
   }
 
   const handleRequestAddOn = async () => {
-    if (!selectedLocation || !selectedAddOn) return
+    if (!addOnDialog) return
+
     setIsSubmittingAddOnRequest(true)
     const result = await RequestMerchantServiceAddOn(
       {
-        locationId: selectedLocation.id,
-        serviceId: selectedAddOn.id,
+        locationId: addOnDialog.locationId,
+        serviceId: addOnDialog.service.id,
         quantity: Number(addOnQuantity),
       },
       { accepted: hasAcceptedAddOnAuthorization },
     )
     setIsSubmittingAddOnRequest(false)
+
     if (!result.success) {
       toast.error(result.error || 'Failed to submit the add-on request.')
       return
     }
+
     toast.success(`Add-on request ${result.requestNumber ?? ''} submitted for DEXA review.`.trim())
     if (result.notificationWarning) toast.warning(result.notificationWarning)
-    setSelectedAddOn(null)
+
+    setAddOnDialog(null)
     setAddOnQuantity('1')
     setHasAcceptedAddOnAuthorization(false)
     await overviewQuery.refetch()
   }
 
-  const planAmountLabel = merchantPlanStatus.plan
-    ? merchantPlanStatus.plan.monthly_price_cents > 0
-      ? `${formatMoney(merchantPlanStatus.plan.monthly_price_cents / 100)}/mo`
-      : 'Contact for pricing'
-    : 'Contact your DEXA rep'
-
   const requiredPlanLabel = merchantPlanStatus.required_plan_code
     ? getMerchantTierFallbackName(merchantPlanStatus.required_plan_code)
     : null
 
+  /**
+   * A merchant on the only tier that covers their location count has nowhere
+   * to move. Without saying so the dialog is a dead end: every row disabled,
+   * no consent box, and a greyed submit with no reason given.
+   */
+  const hasEligibleAlternativePlan = useMemo(
+    () =>
+      merchantTierPlans.some(
+        (plan) =>
+          plan.plan_code !== currentPlanCode &&
+          planFitsLocationCount(plan, merchantPlanStatus.active_location_count),
+      ),
+    [currentPlanCode, merchantPlanStatus.active_location_count, merchantTierPlans],
+  )
+
+  const hardwareDialogLocation = hardwareDialogLocationId
+    ? locationsById[hardwareDialogLocationId] ?? null
+    : null
+  const addOnDialogLocation = addOnDialog ? locationsById[addOnDialog.locationId] ?? null : null
+  const addOnDialogCharge = addOnDialog
+    ? addOnMonthlyAmount(addOnDialog.service, Number(addOnQuantity))
+    : 0
+
+  const manageLocation = manageLocationId ? locationsById[manageLocationId] ?? null : null
+
+  /** The plan's payer, in the words an owner uses. */
+  const planPayerSentence = !primaryBillingProfile
+    ? 'No card is set up to pay for the plan yet.'
+    : primaryBillingProfile.location_id
+      ? `The plan is paid by ${primaryBillingProfile.location_name ?? 'your first location'}'s card. Each location pays for its own add-ons.`
+      : `The plan is paid by your account card, ${cardLabel(primaryBillingProfile)}. Each location pays for its own add-ons.`
+
+  const hasAlerts =
+    merchantPlanStatus.subscription_status === 'suspended' ||
+    Boolean(overdue) ||
+    merchantPlanStatus.is_over_limit ||
+    locationsWithoutBilling.length > 0
+
+  const subtitle = merchantPlanStatus.plan
+    ? `${merchantPlanStatus.plan.name} plan · ${plural(merchantPlanStatus.active_location_count, 'active location')} · billed monthly`
+    : merchantName
+
+  /** Per-location facts for the "who pays" table and cards. */
+  const locationRows = locations.map((location) => {
+    const profile = billingProfilesByLocationId[location.id] ?? null
+    const assignments = serviceAssignments.filter((item) => item.location_id === location.id)
+    const activeAddOns = assignments
+      .map((assignment) => servicesById[assignment.service_id])
+      .filter((service): service is MerchantBillableServiceViewRecord => Boolean(service))
+    const pendingAddOns = pendingServiceRequests
+      .filter((item) => item.location_id === location.id)
+      .map((item) => servicesById[item.service_id]?.display_name ?? 'Add-on')
+    const paysPlan = Boolean(primaryBillingProfile && profile?.id === primaryBillingProfile.id)
+    const monthly =
+      (nextCharge.locations[location.id]?.total ?? 0) + (paysPlan ? nextCharge.tier.total : 0)
+
+    return {
+      location,
+      profile,
+      activeAddOns,
+      pendingAddOns,
+      paysPlan,
+      monthly,
+      deviceCount: devicesByLocationId[location.id]?.length ?? location.device_count,
+    }
+  })
+
+  const addOnSummary = (row: (typeof locationRows)[number]) => {
+    if (row.activeAddOns.length === 0 && row.pendingAddOns.length === 0) {
+      return <span className="text-muted-foreground">None</span>
+    }
+    return (
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {row.activeAddOns.length > 0 ? (
+          <span>{row.activeAddOns.map((service) => service.display_name).join(', ')}</span>
+        ) : null}
+        {row.pendingAddOns.map((name) => (
+          <StatusBadge key={name} label={`${name} · pending`} />
+        ))}
+      </div>
+    )
+  }
+
+  const paidBy = (row: (typeof locationRows)[number]) => {
+    if (!row.location.is_active) return <span className="text-muted-foreground">Not billed</span>
+    if (!row.profile) {
+      return (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <StatusBadge label="No card" />
+          <Link
+            href={billingScopeHref(row.location.id)}
+            className="text-sm font-medium text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]"
+          >
+            Add card
+          </Link>
+        </div>
+      )
+    }
+    return (
+      <div className="min-w-0">
+        <div className="truncate">{cardLabel(row.profile)}</div>
+        <div className="truncate text-xs text-muted-foreground">
+          {row.paysPlan ? 'Also pays the plan' : 'This location only'}
+        </div>
+      </div>
+    )
+  }
+
+  const monthlyLabel = (row: (typeof locationRows)[number]) =>
+    row.location.is_active ? formatMoney(row.monthly) : '—'
+
   return (
     <PageShell>
       <PageHeader
-        title="Subscription & Billing"
-        subtitle="Review plan coverage, provisioned hardware, payments, and invoices."
+        title="Subscription"
+        subtitle={subtitle}
+        actions={
+          <Button type="button" variant="outline" className={PILL} onClick={openPlanRequestDialog}>
+            Change plan
+          </Button>
+        }
       />
 
-      {merchantPlanStatus.subscription_status === 'suspended' ? (
-        <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-900 dark:bg-red-950/30 dark:text-red-300">
-          <div className="font-medium">Your subscription is suspended.</div>
-          <div className="mt-1">Contact your DEXA rep to restore billing and reactivate coverage.</div>
-        </div>
+      {/* ------------------------------------------------------------------ */}
+      {/* Alerts — only things the owner must act on. Requests waiting on     */}
+      {/* DEXA are "In progress" further down, not here.                      */}
+      {/* ------------------------------------------------------------------ */}
+      {hasAlerts ? (
+        <section aria-label="Needs you" className="min-w-0 space-y-2">
+          {merchantPlanStatus.subscription_status === 'suspended' ? (
+            <AttentionBanner
+              tone="critical"
+              title="Your subscription is suspended"
+              body="Your POS features are limited until billing is restored. Contact DEXA billing to reactivate."
+              action={
+                <Button asChild className={PILL}>
+                  <Link href={SUPPORT_HREF}>Contact DEXA billing</Link>
+                </Button>
+              }
+            />
+          ) : null}
+
+          {overdue ? (
+            <AttentionBanner
+              tone="critical"
+              title={<span className="tabular-nums">{formatMoney(overdue.total)} overdue</span>}
+              body={
+                <>
+                  {plural(overdue.count, 'card payment')} didn&rsquo;t go through since{' '}
+                  {formatShortDate(overdue.since)}.{' '}
+                  {overdue.reason ?? 'Each payment lists its reason below.'}{' '}
+                  {overdue.nextRetry ? `We'll try again on ${formatDate(overdue.nextRetry)}.` : null}
+                </>
+              }
+              action={
+                <>
+                  {overdue.processorOnly ? (
+                    <Button asChild className={PILL}>
+                      <Link href={SUPPORT_HREF}>Contact DEXA billing</Link>
+                    </Button>
+                  ) : (
+                    <>
+                      <Button asChild className={PILL}>
+                        <Link href={overdue.updateCardHref}>Update payment method</Link>
+                      </Button>
+                      <Button asChild variant="outline" className={cn(PILL, 'border-transparent bg-background/70')}>
+                        <Link href={SUPPORT_HREF}>Contact DEXA billing</Link>
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={cn(PILL, 'shadow-none hover:bg-background/60')}
+                    onClick={showUnpaidPayments}
+                  >
+                    See the {overdue.count === 1 ? 'payment' : `${overdue.count} payments`}
+                  </Button>
+                </>
+              }
+            />
+          ) : null}
+
+          {merchantPlanStatus.is_over_limit &&
+          merchantPlanStatus.plan &&
+          merchantPlanStatus.plan.max_locations !== null ? (
+            <AttentionBanner
+              tone="warning"
+              title={`Over your plan limit — ${merchantPlanStatus.active_location_count} of ${merchantPlanStatus.plan.max_locations} locations`}
+              body={`Request an upgrade${requiredPlanLabel ? ` to ${requiredPlanLabel}` : ''} to bring every location back under coverage.`}
+              action={
+                <Button type="button" className={PILL} onClick={openPlanRequestDialog}>
+                  Request upgrade
+                </Button>
+              }
+            />
+          ) : null}
+
+          {locationsWithoutBilling.length > 0 ? (
+            <AttentionBanner
+              tone="warning"
+              title={
+                locationsWithoutBilling.length === 1
+                  ? `${locationsWithoutBilling[0].name} has no card`
+                  : `${locationsWithoutBilling.length} locations have no card`
+              }
+              body={
+                locationsWithoutBilling.length === 1
+                  ? "Its add-ons can't be charged until one is added."
+                  : `${locationsWithoutBilling.map((location) => location.name).join(', ')}. Their add-ons can't be charged until each has a card.`
+              }
+              action={
+                <Button asChild variant="outline" className={cn(PILL, 'border-transparent bg-background/70')}>
+                  <Link
+                    href={
+                      locationsWithoutBilling.length === 1
+                        ? billingScopeHref(locationsWithoutBilling[0].id)
+                        : '/dashboard/settings/billing'
+                    }
+                  >
+                    Add card
+                  </Link>
+                </Button>
+              }
+            />
+          ) : null}
+        </section>
       ) : null}
 
-      <Panel className="min-w-0 overflow-hidden">
-        <div className="px-4 py-5 sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <p className="truncate text-lg font-semibold">
-                  {merchantPlanStatus.plan?.name || 'Plan not activated'}
-                </p>
-                {merchantPlanStatus.plan ? (
-                  <StatusBadge label={subscriptionStatusLabel(merchantPlanStatus.subscription_status)} />
-                ) : null}
+      {/* ------------------------------------------------------------------ */}
+      {/* Next charge — what, when, and to which card.                        */}
+      {/* ------------------------------------------------------------------ */}
+      <Panel>
+        <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <div className="min-w-0 px-4 py-6 sm:px-6 sm:py-8">
+            <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Next charge</h2>
+            {isLoading ? (
+              <Skeleton className="mt-3 h-12 w-44" />
+            ) : !merchantPlanStatus.plan ? (
+              <div className="mt-2 text-[1.75rem] font-semibold leading-tight tracking-[-0.02em]">
+                No active plan
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {planAmountLabel} · {merchantPlanStatus.active_location_count} locations ·{' '}
-                {locations.reduce((sum, location) => sum + location.device_count, 0)} devices
+            ) : pricingKnown ? (
+              <div className="mt-2 text-[2.5rem] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+                {formatMoney(nextCharge.total)}
+              </div>
+            ) : (
+              <div className="mt-2 text-[1.75rem] font-semibold leading-tight tracking-[-0.02em]">
+                Priced by agreement
+              </div>
+            )}
+            <p className="mt-3 text-sm text-muted-foreground">
+              {!nextBillingDate
+                ? 'Date set once your plan is activated'
+                : isPastDate(nextBillingDate)
+                  ? // The billing date only advances when a cycle is invoiced
+                    // and collected, so a lapsed account still shows the one
+                    // it missed. Saying "On Sep 7" on Sep 26 reads as a typo.
+                    `Was due ${formatDate(nextBillingDate)} · not collected yet`
+                  : `On ${formatDate(nextBillingDate)}`}
+            </p>
+            {merchantPlanStatus.plan && !pricingKnown ? (
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Your plan is priced by agreement, so we can&rsquo;t total it here. Your DEXA rep can
+                confirm the amount.
               </p>
+            ) : null}
+
+            <div className="mt-5 flex min-w-0 flex-wrap items-center gap-3 rounded-2xl bg-muted/60 px-4 py-3">
+              <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">
+                  {primaryBillingProfile ? cardLabel(primaryBillingProfile) : 'No card on file'}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {cardExpiry(primaryBillingProfile) ?? 'Pays for the plan'}
+                </div>
+              </div>
+              <Button asChild size="sm" variant="outline" className={cn(PILL, 'shrink-0')}>
+                <Link href={planCardHref}>{primaryBillingProfile ? 'Change' : 'Add card'}</Link>
+              </Button>
             </div>
           </div>
 
-          <nav
-            ref={sectionNavRef}
-            aria-label="Subscription sections"
-            className="mt-4 flex min-w-0 scroll-smooth gap-1 overflow-x-auto rounded-full bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {SUBSCRIPTION_SECTIONS.map((section) => (
-              <SubscriptionSectionButton
-                key={section.id}
-                section={section}
-                active={activeSection === section.id}
-                onClick={() => setActiveSection(section.id)}
+          <div className="min-w-0 px-4 pb-6 sm:px-6 lg:bg-muted/20 lg:py-8">
+            <h3 className="text-sm text-muted-foreground">What makes it up</h3>
+            {isLoading ? (
+              <SectionSkeleton rows={3} />
+            ) : (
+              <div className="mt-3 space-y-1">
+                <BreakdownRow
+                  label={`${merchantPlanStatus.plan?.name ?? 'No active'} plan`}
+                  meta={
+                    tierCharge.extraLocations > 0
+                      ? `${plural(tierCharge.extraLocations, 'location')} after the first × ${formatMoney(tierCharge.perExtraLocation)}`
+                      : plural(merchantPlanStatus.active_location_count, 'active location')
+                  }
+                  amount={pricingKnown ? formatMoney(nextCharge.tier.subtotal) : '—'}
+                />
+                <BreakdownRow
+                  label="Location add-ons"
+                  meta={
+                    nextCharge.addOnCount === 0
+                      ? 'None active'
+                      : `${nextCharge.addOnCount} active · charged to each location's card`
+                  }
+                  amount={formatMoney(nextCharge.addOnSubtotal)}
+                />
+                {nextCharge.fee > 0 ? (
+                  <BreakdownRow
+                    label="Card processing fee"
+                    meta={
+                      tierPlan?.card_surcharge_pct
+                        ? `${tierPlan.card_surcharge_pct}% of card payments`
+                        : 'A percentage of card payments'
+                    }
+                    amount={formatMoney(nextCharge.fee)}
+                  />
+                ) : null}
+                <BreakdownRow
+                  label="Total"
+                  amount={pricingKnown ? formatMoney(nextCharge.total) : '—'}
+                  emphasis
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </Panel>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* What you pay for: the plan, and each location with its card.       */}
+      {/* ------------------------------------------------------------------ */}
+      <Panel>
+        <PanelSection
+          label="Plan"
+          action={
+            <Button type="button" variant="outline" className={PILL} onClick={openPlanRequestDialog}>
+              Compare plans
+            </Button>
+          }
+        >
+          {isLoading ? (
+            <Skeleton className="h-16 w-full rounded-2xl" />
+          ) : (
+            <div className="min-w-0">
+              <div className="text-xl font-semibold tracking-[-0.01em]">
+                {merchantPlanStatus.plan?.name ?? 'No plan yet'}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+                {merchantPlanStatus.plan
+                  ? [
+                      describeTierPricing(tierPlan) ?? 'No monthly fee',
+                      merchantPlanStatus.plan.max_locations === null
+                        ? `unlimited locations · you have ${merchantPlanStatus.active_location_count} active`
+                        : `up to ${plural(merchantPlanStatus.plan.max_locations, 'location')} · you have ${merchantPlanStatus.active_location_count} active`,
+                    ].join(' · ')
+                  : 'Choose a plan and send it to DEXA for approval.'}
+              </p>
+              {merchantPlanStatus.plan?.description ? (
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                  {merchantPlanStatus.plan.description}
+                </p>
+              ) : null}
+            </div>
+          )}
+        </PanelSection>
+
+        <div id={SECTION_ANCHORS.locations!} className="scroll-mt-6">
+          <PanelSection label="Locations and who pays" caption={isLoading ? undefined : planPayerSentence}>
+            {isLoading ? (
+              <SectionSkeleton rows={4} />
+            ) : locations.length === 0 ? (
+              <Empty
+                icon={Building2}
+                title="No locations yet"
+                description="Locations you add will appear here with the card that pays for them."
               />
-            ))}
-          </nav>
+            ) : (
+              <>
+                <Table variant="data" containerClassName="hidden xl:block" className="min-w-[860px]">
+                  <TableHeader className="[&_tr]:border-0">
+                    <TableRow>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Add-ons</TableHead>
+                      <TableHead>Paid by</TableHead>
+                      <TableHead className="text-right">Monthly</TableHead>
+                      <TableHead className="w-24 text-right">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {locationRows.map((row) => (
+                      <TableRow key={row.location.id}>
+                        <TableCell className="max-w-[16rem] whitespace-normal">
+                          <div className={cn('font-medium', !row.location.is_active && 'text-muted-foreground')}>
+                            {row.location.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {[
+                              formatCity(row.location),
+                              row.location.is_active ? plural(row.deviceCount, 'device') : 'Inactive',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        </TableCell>
+                        {/* `TableCell` is `whitespace-nowrap`; free text needs its own cap. */}
+                        <TableCell className="max-w-[18rem] whitespace-normal text-sm">
+                          {row.location.is_active ? addOnSummary(row) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="max-w-[14rem] whitespace-normal text-sm">{paidBy(row)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{monthlyLabel(row)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 rounded-full px-3 text-[0.8125rem] font-medium"
+                            onClick={() => setManageLocationId(row.location.id)}
+                          >
+                            Manage
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Below xl the table becomes cards, never a scrolling table (§5.3). */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                  {locationRows.map((row) => (
+                    <div key={`location-card-${row.location.id}`} className="min-w-0 rounded-2xl bg-muted/45 p-4">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className={cn('truncate font-medium', !row.location.is_active && 'text-muted-foreground')}>
+                            {row.location.name}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {row.location.is_active ? plural(row.deviceCount, 'device') : 'Inactive · not billed'}
+                          </div>
+                        </div>
+                        <div className="shrink-0 font-medium tabular-nums">{monthlyLabel(row)}</div>
+                      </div>
+                      {row.location.is_active ? (
+                        <div className="mt-3 grid min-w-0 grid-cols-2 gap-3 text-sm">
+                          <div className="min-w-0">
+                            <div className="text-xs text-muted-foreground">Add-ons</div>
+                            <div className="mt-0.5">{addOnSummary(row)}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs text-muted-foreground">Paid by</div>
+                            <div className="mt-0.5">{paidBy(row)}</div>
+                          </div>
+                        </div>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-3 h-9 w-full rounded-full text-[0.8125rem] font-medium hover:bg-background/60"
+                        onClick={() => setManageLocationId(row.location.id)}
+                      >
+                        Manage
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </PanelSection>
         </div>
 
-          {activeSection === 'plan' ? (
-            <div className="min-w-0">
-      <PanelSection
-        label="Current Plan"
-        caption="Review your current coverage or request a different merchant-wide subscription tier."
-        action={
-          <Button type="button" className="rounded-full" onClick={openPlanRequestDialog}>
-            Manage plan
-          </Button>
-        }
-      >
-        <div className="space-y-5">
-          {!merchantPlanStatus.plan ? (
-            <div className="rounded-2xl bg-muted/45 p-4 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground">No active plan</div>
-              <div className="mt-1">
-                Select a tier below and submit it to DEXA for approval.
-              </div>
+        {inProgress.length > 0 ? (
+          <PanelSection label="In progress" caption="Requests waiting on DEXA. Nothing here needs you.">
+            <div className="space-y-2">
+              {inProgress.map((item) => (
+                <div
+                  key={item.key}
+                  className="flex min-w-0 flex-col gap-3 rounded-2xl bg-muted/45 p-4 md:flex-row md:items-center md:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium">{item.title}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">{item.meta}</div>
+                  </div>
+                  <RequestTracker finalStep={item.finalStep} />
+                </div>
+              ))}
             </div>
+          </PanelSection>
+        ) : null}
+      </Panel>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Payments, grouped by month with the totals an accountant asks for.  */}
+      {/* ------------------------------------------------------------------ */}
+      <Panel id={SECTION_ANCHORS.billing!} className="scroll-mt-6">
+        <PanelSection
+          label="Payments"
+          caption="Grouped by month. The plan and each location are invoiced separately and charged automatically to their card."
+        >
+          <div className="mb-4 flex min-w-0 flex-wrap gap-2">
+            {([
+              { id: 'all', label: 'All' },
+              { id: 'unpaid', label: 'Unpaid' },
+              { id: 'paid', label: 'Paid' },
+            ] as Array<{ id: InvoiceFilter; label: string }>).map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                aria-pressed={invoiceFilter === filter.id}
+                onClick={() => setInvoiceFilter(filter.id)}
+                className={cn(
+                  'rounded-full border-0 px-3 py-1.5 text-[0.8125rem] font-medium shadow-none transition-colors',
+                  invoiceFilter === filter.id
+                    ? 'bg-muted text-foreground'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                {filter.label}
+                <span className="ml-1.5 tabular-nums opacity-70">{invoiceCounts[filter.id]}</span>
+              </button>
+            ))}
+          </div>
+
+          {isLoading ? (
+            <SectionSkeleton rows={4} />
+          ) : invoiceMonths.length === 0 ? (
+            <Empty
+              icon={CreditCard}
+              title={invoiceFilter === 'all' ? 'No payments yet' : 'Nothing matches this filter'}
+              description={
+                invoiceFilter === 'all'
+                  ? 'Invoices appear here once billing begins.'
+                  : invoiceFilter === 'unpaid'
+                    ? 'Every invoice is paid.'
+                    : 'No paid invoices yet.'
+              }
+            />
           ) : (
-            <>
-              <div className="grid gap-4 lg:grid-cols-3">
-                <div className="rounded-2xl bg-muted/45 p-4">
-                  <div className="text-sm text-muted-foreground">Current Tier</div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <div className="text-2xl font-semibold">{merchantPlanStatus.plan.name}</div>
-                    <StatusBadge label={merchantPlanStatus.plan.code.replace('_', ' ')} />
-                  </div>
-                  <div className="mt-3 text-sm text-muted-foreground">
-                    {merchantPlanStatus.plan.description || 'No description available'}
-                  </div>
-                </div>
+            <div className="space-y-6">
+              {invoiceMonths.map((month) => {
+                const isExpanded = expandedMonths.includes(month.key)
+                const shown = isExpanded ? month.invoices : month.invoices.slice(0, INVOICES_PER_MONTH)
+                const hidden = month.invoices.length - shown.length
 
-                <div className="rounded-2xl bg-muted/45 p-4">
-                  <div className="text-sm text-muted-foreground">Location Coverage</div>
-                  <div className="mt-3">
-                    <StatusBadge label={usage} />
-                  </div>
-                  <div className="mt-3 text-sm text-muted-foreground">
-                    Status:{' '}
-                    <span className="font-medium text-foreground">
-                      {subscriptionStatusLabel(merchantPlanStatus.subscription_status)}
-                    </span>
-                  </div>
-                </div>
+                return (
+                  <section key={month.key} aria-label={month.label} className="min-w-0">
+                    <div className="mb-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+                      <h3 className="font-semibold">{month.label}</h3>
+                      <p className="text-sm text-muted-foreground tabular-nums">
+                        {plural(month.invoices.length, 'invoice')} · {formatMoney(month.billed)} billed
+                        {month.unpaid > 0 ? ` · ${formatMoney(month.unpaid)} unpaid` : ' · all paid'}
+                      </p>
+                    </div>
 
-                <div className="rounded-2xl bg-muted/45 p-4">
-                  <div className="text-sm text-muted-foreground">Next Charge</div>
-                  <div className="mt-3 text-2xl font-semibold tabular-nums">{planAmountLabel}</div>
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    {formatDate(merchantPlanStatus.current_period_end)}
-                  </div>
-                </div>
-              </div>
+                    <div className="min-w-0 space-y-1 rounded-2xl bg-muted/20 p-1">
+                      {shown.map((invoice) => {
+                        const covers =
+                          subscriptionBillingScope(invoice.metadata) === 'merchant_tier'
+                            ? 'Plan'
+                            : invoice.location_name
+                        const reason =
+                          invoice.status === 'failed'
+                            ? describePaymentFailure(invoice.last_payment_error).message
+                            : null
+                        const isBusy = invoiceActionId === invoice.id
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div>
-                  <div className="text-sm text-muted-foreground">Merchant Payment Method</div>
-                  <div className="mt-1 font-medium">{buildPaymentMethodLabel(primaryBillingProfile)}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Billing Contact</div>
-                  <div className="mt-1 font-medium">{primaryBillingProfile?.billing_email || 'Not set'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Billing Anchor</div>
-                  <div className="mt-1 font-medium">{primaryBillingProfile?.location_name || 'Not configured'}</div>
-                </div>
-              </div>
-            </>
+                        return (
+                          <div
+                            key={invoice.id}
+                            className="flex min-w-0 items-center gap-3 rounded-xl bg-card/70 px-3 py-3"
+                          >
+                            <div className="hidden w-14 shrink-0 text-sm text-muted-foreground tabular-nums sm:block">
+                              {formatShortDate(invoice.created_at)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">{covers}</div>
+                              <div className="text-xs text-muted-foreground">
+                                <span className="sm:hidden">{formatShortDate(invoice.created_at)} · </span>
+                                {invoice.invoice_number}
+                                {reason ? ` · ${reason}` : ''}
+                              </div>
+                            </div>
+                            <div className="hidden shrink-0 sm:block">
+                              <StatusBadge label={invoiceStatusLabel(invoice.status)} />
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <span className="text-sm font-medium tabular-nums">{formatMoney(invoice.total_amount)}</span>
+                              <span className="sm:hidden">
+                                <StatusBadge label={invoiceStatusLabel(invoice.status)} />
+                              </span>
+                            </div>
+                            <div className="shrink-0">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 w-8 rounded-full p-0"
+                                    aria-label={`Actions for invoice ${invoice.invoice_number}`}
+                                    disabled={isBusy}
+                                  >
+                                    {isBusy ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                    ) : (
+                                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                                    )}
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    disabled={isInvoicePreviewLoading}
+                                    onSelect={() => handlePreviewInvoice(invoice.id)}
+                                  >
+                                    <Eye className="h-4 w-4" aria-hidden="true" />
+                                    View invoice
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleDownloadInvoice(invoice.id)}>
+                                    <Download className="h-4 w-4" aria-hidden="true" />
+                                    Download PDF
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {hidden > 0 || isExpanded ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 h-8 rounded-full px-3 text-[0.8125rem] font-medium"
+                        onClick={() =>
+                          setExpandedMonths((current) =>
+                            isExpanded ? current.filter((key) => key !== month.key) : [...current, month.key],
+                          )
+                        }
+                      >
+                        {isExpanded ? 'Show fewer' : `Show ${hidden} more in ${month.label.split(' ')[0]}`}
+                      </Button>
+                    ) : null}
+                  </section>
+                )
+              })}
+            </div>
           )}
+        </PanelSection>
+      </Panel>
 
-          {pendingTierRequest ? (
-            <div className="rounded-2xl bg-primary/[0.06] px-4 py-3 text-sm">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="font-medium text-foreground">
-                    {pendingTierRequest.request_number} is awaiting DEXA review
+      <div className="space-y-1 px-1 text-center text-sm text-muted-foreground">
+        {primaryBillingProfile?.billing_email ? (
+          <p>
+            Receipts and payment notices go to{' '}
+            <span className="font-medium text-foreground">{primaryBillingProfile.billing_email}</span> ·{' '}
+            <Link href={planCardHref} className="font-medium text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]">
+              Change
+            </Link>
+          </p>
+        ) : null}
+        <p>
+          Want to pause or cancel?{' '}
+          <Link href={SUPPORT_HREF} className="font-medium text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]">
+            Contact DEXA billing
+          </Link>
+        </p>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Manage a location — devices, add-ons and card in one pop-up.       */}
+      {/* ------------------------------------------------------------------ */}
+      <Dialog open={Boolean(manageLocation)} onOpenChange={(open) => (open ? null : setManageLocationId(null))}>
+        <DialogContent className="dashboard-sidebar-theme max-h-[85vh] max-w-lg overflow-y-auto">
+          {manageLocation ? (
+            (() => {
+              const row = locationRows.find((item) => item.location.id === manageLocation.id)
+              const devices = devicesByLocationId[manageLocation.id] ?? []
+              const assignments = serviceAssignments.filter((item) => item.location_id === manageLocation.id)
+              const pending = pendingServiceRequests.filter((item) => item.location_id === manageLocation.id)
+              const pendingHardware = pendingHardwareRequests.find(
+                (request) => request.location_id === manageLocation.id,
+              )
+              const availableToRequest = availableServices.filter(
+                (service) =>
+                  !assignments.some((item) => item.service_id === service.id) &&
+                  !pending.some((item) => item.service_id === service.id),
+              )
+
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>{manageLocation.name}</DialogTitle>
+                    <DialogDescription>{formatLocationAddress(manageLocation)}</DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-5">
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-medium">Card</h3>
+                      <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-muted/45 px-4 py-3">
+                        <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{cardLabel(row?.profile ?? null)}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {row?.profile
+                              ? row.paysPlan
+                                ? "Pays the plan and this location's add-ons"
+                                : "Pays this location's add-ons only"
+                              : 'Paid add-ons need a card on this location first.'}
+                          </div>
+                        </div>
+                        <Button asChild size="sm" variant="outline" className={cn(PILL, 'shrink-0')}>
+                          <Link href={billingScopeHref(manageLocation.id)}>{row?.profile ? 'Change' : 'Add card'}</Link>
+                        </Button>
+                      </div>
+                    </section>
+
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-medium">Add-ons</h3>
+                      <div className="space-y-1 rounded-2xl bg-muted/45 p-1">
+                        {assignments.length === 0 && pending.length === 0 ? (
+                          <p className="px-3 py-2.5 text-sm text-muted-foreground">No add-ons active.</p>
+                        ) : null}
+                        {assignments.map((assignment) => {
+                          const service = servicesById[assignment.service_id]
+                          if (!service) return null
+                          return (
+                            <div
+                              key={assignment.service_id}
+                              className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-card/70 px-3 py-2.5"
+                            >
+                              <span className="min-w-0 truncate text-sm">
+                                {service.display_name}
+                                {assignment.quantity > 1 ? ` × ${assignment.quantity}` : ''}
+                              </span>
+                              <span className="shrink-0 text-sm tabular-nums">
+                                {formatMoney(addOnMonthlyAmount(service, assignment.quantity))}/mo
+                              </span>
+                            </div>
+                          )
+                        })}
+                        {pending.map((request) => (
+                          <div
+                            key={request.id}
+                            className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-card/70 px-3 py-2.5"
+                          >
+                            <span className="min-w-0 truncate text-sm">
+                              {servicesById[request.service_id]?.display_name ?? 'Add-on'}
+                            </span>
+                            <StatusBadge label="Waiting on DEXA" />
+                          </div>
+                        ))}
+                      </div>
+
+                      {availableToRequest.length > 0 ? (
+                        <div className="space-y-1 pt-2">
+                          <p className="px-1 text-xs text-muted-foreground">Available to add</p>
+                          {availableToRequest.map((service) => (
+                            <div
+                              key={service.id}
+                              className="flex min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-1.5 hover:bg-muted/40"
+                            >
+                              <span className="min-w-0 truncate text-sm">
+                                {service.display_name}
+                                <span className="ml-2 text-muted-foreground tabular-nums">
+                                  {formatMoney(addOnMonthlyAmount(service, 1))}/mo
+                                </span>
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium shadow-sm"
+                                onClick={() => openAddOnDialog(manageLocation.id, service)}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <p className="px-1 text-xs text-muted-foreground">
+                        To remove an add-on,{' '}
+                        <Link href={SUPPORT_HREF} className="font-medium text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]">
+                          contact DEXA billing
+                        </Link>
+                        .
+                      </p>
+                    </section>
+
+                    <section className="space-y-2">
+                      <h3 className="text-sm font-medium">
+                        Devices
+                        <span className="ml-1.5 text-muted-foreground tabular-nums">{devices.length}</span>
+                      </h3>
+                      <div className="space-y-1 rounded-2xl bg-muted/45 p-1">
+                        {devices.length === 0 ? (
+                          <p className="px-3 py-2.5 text-sm text-muted-foreground">No devices assigned yet.</p>
+                        ) : (
+                          devices.map((device) => (
+                            <div
+                              key={device.id}
+                              className="flex min-w-0 items-start justify-between gap-3 rounded-xl bg-card/70 px-3 py-2.5"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm">{device.model_name}</div>
+                                <div className="truncate text-xs text-muted-foreground">
+                                  {device.serial_number}
+                                  {device.linked_station_name ? ` · ${device.linked_station_name}` : ''}
+                                </div>
+                              </div>
+                              <StatusBadge label={device.status.replace(/_/g, ' ')} />
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(PILL, 'w-full')}
+                        onClick={() => openHardwareDialog(manageLocation.id)}
+                        disabled={Boolean(pendingHardware)}
+                      >
+                        {pendingHardware ? `${pendingHardware.request_number} waiting on DEXA` : 'Request hardware'}
+                      </Button>
+                    </section>
                   </div>
-                  <div className="mt-1 text-muted-foreground">
-                    Requested plan: {pendingTierRequest.requested_plan_name} · Submitted{' '}
-                    {formatDate(pendingTierRequest.requested_at)}
-                  </div>
-                </div>
-                <Badge variant="outline">Pending</Badge>
-              </div>
-            </div>
+                </>
+              )
+            })()
           ) : null}
+        </DialogContent>
+      </Dialog>
 
-          <div className="space-y-3">
-            <div>
-              <div className="font-medium">Available plans</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                Select one plan, review it, and send a request to DEXA Billing.
-              </div>
-            </div>
-            {merchantTierPlans.length === 0 ? (
-              <div className="rounded-2xl bg-muted/45 p-4 text-sm text-muted-foreground">
-                No subscription plans are currently available.
-              </div>
-            ) : (
-              <div className="grid gap-4 xl:grid-cols-3">
+      {/* ------------------------------------------------------------------ */}
+      {/* Change plan — choice and authorization in one view.                 */}
+      {/* The tier grid used to sit on the page as three 320px cards, with    */}
+      {/* "Review plan request" below the fold and the authorization in a     */}
+      {/* dialog that also served hardware requests. By the time a merchant   */}
+      {/* authorised a recurring charge, the plan they picked was off-screen  */}
+      {/* and the price difference was never stated at all.                   */}
+      {/* ------------------------------------------------------------------ */}
+      <Dialog
+        open={isPlanDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHasAcceptedPlanAuthorization(false)
+            setIsPlanDialogOpen(false)
+          }
+        }}
+      >
+        <DialogContent className="dashboard-sidebar-theme max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Change plan</DialogTitle>
+            <DialogDescription>
+              DEXA reviews this request before anything is charged or activated.
+            </DialogDescription>
+          </DialogHeader>
+
+          {merchantTierPlans.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No subscription plans are currently available.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
                 {merchantTierPlans.map((plan) => {
+                  const isCurrent = plan.plan_code === currentPlanCode
                   const isSelected = selectedRequestedPlan?.id === plan.id
-                  const isCurrent = merchantPlanStatus.plan?.code === plan.plan_code
+                  const fits = planFitsLocationCount(plan, merchantPlanStatus.active_location_count)
+                  const fitNote = fits ? '' : planFitLabel(plan, merchantPlanStatus.active_location_count)
 
                   return (
                     <button
                       key={plan.id}
                       type="button"
                       aria-pressed={isSelected}
+                      aria-disabled={!fits || isCurrent}
+                      disabled={isCurrent || !fits}
                       onClick={() => {
                         setSelectedRequestedPlanId(plan.id)
                         setHasAcceptedPlanAuthorization(false)
                       }}
                       className={cn(
-                        'relative flex min-h-[320px] flex-col rounded-2xl bg-muted/45 p-6 text-left transition-all',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-                        'hover:bg-muted/65',
-                        isSelected && 'bg-primary/5 ring-2 ring-primary',
+                        'flex w-full min-w-0 items-start justify-between gap-3 rounded-2xl p-4 text-left transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                        isCurrent
+                          ? 'cursor-default bg-muted/30'
+                          : !fits
+                            ? 'cursor-not-allowed bg-muted/20 opacity-70'
+                            : isSelected
+                              ? 'bg-muted ring-1 ring-border'
+                              : 'bg-muted/45 hover:bg-muted/65',
                       )}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="text-xl font-semibold">{plan.display_name}</div>
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {isCurrent ? <Badge variant="secondary">Current</Badge> : null}
-                          {isSelected ? (
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                              <Check className="h-4 w-4" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          {isSelected && !isCurrent ? (
+                            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <Check className="h-3 w-3" aria-hidden="true" />
                             </span>
                           ) : null}
-                        </div>
-                      </div>
-                      <div className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
-                        {formatTierPrice(plan.monthly_price_cents)}
-                      </div>
-                      <div className="mt-3 text-sm text-muted-foreground">
-                        {plan.description || formatTierBillingUnit(plan)}
-                      </div>
-                      <div className="mt-6 rounded-xl bg-background/80 px-3 py-2 text-sm font-medium text-foreground">
-                        {formatTierBillingUnit(plan)}
-                      </div>
-                      <div className="mt-6 space-y-3 text-sm text-muted-foreground">
-                        {merchantTierHighlights(plan).map((line) => (
-                          <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
-                            <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-                            <span>{line}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-auto pt-8 text-sm font-medium text-primary">
-                        {isCurrent
-                          ? 'Your current plan'
-                          : isSelected
-                            ? 'Selected for request'
-                            : 'Select this plan'}
-                      </div>
+                          <span className="font-medium">{plan.display_name}</span>
+                          {isCurrent ? (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
+                              Current
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mt-0.5 block text-sm text-muted-foreground">
+                          {describeTierPricing(plan) ?? formatTierBillingUnit(plan)}
+                        </span>
+                        {fitNote ? (
+                          <span className="mt-1 block text-xs text-muted-foreground">{fitNote}</span>
+                        ) : null}
+                        {isSelected && !isCurrent ? (
+                          <span className="mt-2 block space-y-1 text-xs text-muted-foreground">
+                            {merchantTierHighlights(plan).map((line) => (
+                              <span key={`${plan.id}-${line}`} className="block">
+                                {line}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block font-medium tabular-nums">
+                          {formatMoney(
+                            monthlyTierCharge(plan, merchantPlanStatus.active_location_count).total,
+                          )}
+                          <span className="text-muted-foreground">/mo</span>
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          at {merchantPlanStatus.active_location_count} location
+                          {merchantPlanStatus.active_location_count === 1 ? '' : 's'}
+                        </span>
+                      </span>
                     </button>
                   )
                 })}
               </div>
-            )}
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                className="rounded-full"
-                disabled={
-                  Boolean(pendingTierRequest) ||
-                  !selectedRequestedPlan ||
-                  selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
-                }
-                onClick={openPlanRequestDialog}
-              >
-                Review plan request
-              </Button>
-            </div>
-          </div>
 
-          {merchantPlanStatus.is_over_limit &&
-          merchantPlanStatus.plan &&
-          merchantPlanStatus.plan.max_locations !== null ? (
-            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-                <div className="space-y-2">
-                  <div className="font-medium">
-                    You are over your plan limit ({merchantPlanStatus.active_location_count}/{merchantPlanStatus.plan.max_locations} locations).
+              {planDelta &&
+              selectedRequestedPlan &&
+              selectedRequestedPlan.plan_code !== currentPlanCode &&
+              planFitsLocationCount(selectedRequestedPlan, merchantPlanStatus.active_location_count) ? (
+                <div className="space-y-2 rounded-2xl bg-muted/45 p-4 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Today</span>
+                    <span className="tabular-nums">
+                      {merchantPlanStatus.plan?.name || 'No plan'}
+                      {planDelta.current > 0 ? ` · ${formatMoney(planDelta.current)}/mo` : ''}
+                    </span>
                   </div>
-                  <div>Request an upgrade{requiredPlanLabel ? ` to ${requiredPlanLabel}` : ''}.</div>
-                  <Button type="button" size="sm" onClick={openPlanRequestDialog}>
-                    Request upgrade
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </PanelSection>
-
-      <PanelSection
-        label="Locations"
-        caption="All merchant locations covered under the current plan. Click a row to focus billing history and devices."
-      >
-        <div className="space-y-4">
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading locations...</div>
-          ) : locations.length === 0 ? (
-            <Empty icon={Building2} title="No locations configured" description="Locations you add will appear here." />
-          ) : (
-            <>
-              <div className="hidden overflow-hidden rounded-2xl bg-muted/20 xl:block">
-                <Table className="min-w-[760px] [&_td]:px-4 [&_td]:py-3.5 [&_th]:px-4">
-                  <TableHeader className="bg-muted/50">
-                    <TableRow className="border-0 hover:bg-transparent">
-                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Name</TableHead>
-                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Address</TableHead>
-                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
-                      <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Device Count</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="[&_tr]:border-0">
-                    {paginatedLocations.map((location) => (
-                      <TableRow
-                        key={location.id}
-                        className="cursor-pointer border-0 transition-colors hover:bg-muted/55"
-                        data-state={selectedLocation?.id === location.id ? 'selected' : undefined}
-                        onClick={() => focusLocation(location.id)}
-                      >
-                        <TableCell>
-                          <div className="font-medium">{location.name}</div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{formatLocationAddress(location)}</TableCell>
-                        <TableCell>
-                          <StatusBadge label={location.is_active ? 'Active' : 'Inactive'} />
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">{location.device_count}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-                {paginatedLocations.map((location) => (
-                  <button
-                    key={`location-card-${location.id}`}
-                    type="button"
-                    onClick={() => focusLocation(location.id)}
-                    className={cn(
-                      'min-w-0 rounded-2xl bg-muted/45 p-4 text-left transition-colors hover:bg-muted/65',
-                      selectedLocation?.id === location.id && 'ring-1 ring-border',
-                    )}
-                  >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{location.name}</span>
-                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                          {formatLocationAddress(location)}
-                        </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Requested</span>
+                    <span className="tabular-nums">
+                      {selectedRequestedPlan.display_name}
+                      {planDelta.next > 0 ? ` · ${formatMoney(planDelta.next)}/mo` : ''}
+                    </span>
+                  </div>
+                  {/* Both tiers can be "Contact for pricing" (0 cents). A
+                      "+$0.00" difference would be a false reassurance. */}
+                  <div className="flex items-center justify-between gap-3 font-medium">
+                    <span>Monthly difference</span>
+                    {planDelta.current > 0 || planDelta.next > 0 ? (
+                      <span className="tabular-nums">
+                        {planDelta.difference >= 0 ? '+' : '−'}
+                        {formatMoney(Math.abs(planDelta.difference))}
                       </span>
-                      <StatusBadge label={location.is_active ? 'Active' : 'Inactive'} />
-                    </div>
-                    <span className="mt-4 block text-center text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      Devices
-                    </span>
-                    <span className="mt-1 block text-center text-sm font-medium tabular-nums">
-                      {location.device_count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {locations.length > LOCATION_PAGE_SIZE ? (
-                <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    Showing {(effectiveLocationPage - 1) * LOCATION_PAGE_SIZE + 1}-
-                    {Math.min(effectiveLocationPage * LOCATION_PAGE_SIZE, locations.length)} of {locations.length} locations
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                      disabled={effectiveLocationPage === 1}
-                      onClick={() => setLocationPage(Math.max(1, effectiveLocationPage - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                      disabled={effectiveLocationPage >= totalLocationPages}
-                      onClick={() => setLocationPage(Math.min(totalLocationPages, effectiveLocationPage + 1))}
-                    >
-                      Next
-                    </Button>
+                    ) : (
+                      <span>DEXA confirms on approval</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Takes effect</span>
+                    <span>On DEXA approval</span>
                   </div>
                 </div>
               ) : null}
-            </>
-          )}
-        </div>
-      </PanelSection>
-            </div>
-          ) : null}
 
-          {activeSection === 'hardware' ? (
-            <div ref={devicesRef} className="min-w-0">
-      <PanelSection
-        label="Devices"
-        caption="Provisioned Dexa hardware grouped by location. This section is read-only in V1."
-        action={
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-            onClick={() => setContactModalMode('hardware')}
-          >
-            Request hardware
-          </Button>
-        }
-      >
-        <div className="space-y-3">
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading hardware...</div>
-          ) : locations.length === 0 ? (
-            <Empty icon={Monitor} title="No locations available" description="Hardware review needs at least one location." />
-          ) : (
-            locations.map((location) => {
-              const locationDevices = devicesByLocationId[location.id] ?? []
-              const pendingHardwareRequest = pendingHardwareRequests.find(
-                (request) => request.location_id === location.id,
-              )
-              const isOpen =
-                openLocationIds.includes(location.id) ||
-                (openLocationIds.length === 0 && selectedLocation?.id === location.id)
-              return (
-                <Collapsible key={location.id} open={isOpen} onOpenChange={() => toggleLocationOpen(location.id)}>
-                  <div className="overflow-hidden rounded-2xl bg-muted/20">
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex w-full min-w-0 flex-col gap-3 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="min-w-0 w-full sm:flex-1">
-                          <div className="break-words font-medium">{location.name}</div>
-                          <div className="mt-0.5 break-words text-sm text-muted-foreground">{formatLocationAddress(location)}</div>
-                        </div>
-                        <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center sm:flex sm:w-auto sm:shrink-0 sm:gap-3">
-                          <span aria-hidden="true" className="sm:hidden" />
-                          {pendingHardwareRequest ? (
-                            <Badge variant="outline" className="rounded-full">
-                              {pendingHardwareRequest.request_number} pending
-                            </Badge>
-                          ) : null}
-                          <Badge variant="secondary" className="rounded-full tabular-nums">{locationDevices.length} devices</Badge>
-                          <ChevronDown className={`h-4 w-4 justify-self-end transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                        </div>
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="px-4 py-4">
-                        {locationDevices.length === 0 ? (
-                          <div className="rounded-xl bg-background/60 p-4 text-sm text-muted-foreground">
-                            No devices assigned - contact your DEXA rep.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="border-0 hover:bg-transparent">
-                                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Model</TableHead>
-                                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Serial</TableHead>
-                                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">POS ID</TableHead>
-                                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
-                                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Linked Station</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {locationDevices.map((device) => (
-                                  <TableRow key={device.id} className="border-0">
-                                    <TableCell>
-                                      <div className="flex items-center gap-2 font-medium">
-                                        <Monitor className="h-4 w-4 text-muted-foreground" />
-                                        {device.model_name}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>{device.serial_number}</TableCell>
-                                    <TableCell>{device.pos_id || 'Not assigned'}</TableCell>
-                                    <TableCell>
-                                      <Badge variant="secondary" className="rounded-full capitalize">{device.status.replace(/_/g, ' ')}</Badge>
-                                    </TableCell>
-                                    <TableCell>{device.linked_station_name || 'Not linked'}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        )}
-                      </div>
-                    </CollapsibleContent>
-                  </div>
-                </Collapsible>
-              )
-            })
-          )}
-        </div>
-      </PanelSection>
-            </div>
-          ) : null}
-
-          {activeSection === 'billing' ? (
-            <div className="min-w-0">
-      {transactionSummary.pending > 0 ? (
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <div>
-              <div className="font-medium">Outstanding balance: {formatMoney(transactionSummary.pending)}</div>
-              <div className="mt-1 text-sm text-amber-800">
-                Update the saved card so DEXA Billing can automatically retry eligible invoices.
-              </div>
-            </div>
-          </div>
-          <Button asChild size="sm" variant="outline" className="rounded-full border-amber-300 bg-white">
-            <Link href={billingSettingsHref}>Review payment method</Link>
-          </Button>
-        </div>
-      ) : null}
-      <PanelSection label="Merchant Payment Method" caption="The primary payment profile used for merchant-wide subscription billing.">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            This card pays the merchant tier only. Each location pays its own devices and add-ons using its own card.
-          </p>
-          <Button asChild size="sm" variant="outline" className="rounded-full">
-            <Link href={billingSettingsHref}>Update payment method</Link>
-          </Button>
-        </div>
-        {isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading payment method...</div>
-        ) : (
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-muted p-2.5">
-                <CreditCard className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <div className="font-medium">{buildPaymentMethodLabel(primaryBillingProfile)}</div>
-                <div className="text-sm text-muted-foreground">
-                  {primaryBillingProfile?.billing_method === 'card' && primaryBillingProfile?.card_exp_month && primaryBillingProfile?.card_exp_year
-                    ? `Expires ${String(primaryBillingProfile.card_exp_month).padStart(2, '0')}/${primaryBillingProfile.card_exp_year}`
-                    : primaryBillingProfile?.billing_method === 'ach'
-                      ? 'Bank account on file'
-                      : 'Payment method setup is handled by your Dexa team.'}
+              {pendingTierRequest ? (
+                <p className="text-sm text-muted-foreground">
+                  {pendingTierRequest.request_number} is already awaiting review. You can submit another
+                  change once it is resolved.
+                </p>
+              ) : merchantPlanStatus.plan && !hasEligibleAlternativePlan ? (
+                <div className="rounded-2xl bg-muted/45 p-4 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {merchantPlanStatus.plan.name} is the only tier that covers your{' '}
+                    {merchantPlanStatus.active_location_count} locations.
+                  </span>{' '}
+                  Your bill changes automatically as you add or remove locations, so there is nothing
+                  to switch to here. Contact your DEXA rep if you need different terms.
                 </div>
-                {primaryBillingProfile?.location_name ? (
-                  <div className="mt-1 text-xs text-muted-foreground">Billing anchor: {primaryBillingProfile.location_name}</div>
-                ) : null}
-              </div>
-            </div>
-            {primaryBillingProfile?.is_primary ? (
-              <Badge variant="secondary" className="rounded-full">Primary</Badge>
-            ) : null}
-          </div>
-        )}
-        {Object.keys(billingProfilesByLocationId).length > 0 ? (
-          <div className="mt-5 space-y-2">
-            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-              Location payment profiles
-            </div>
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {Object.values(billingProfilesByLocationId).map((profile) => (
-                <div key={profile.id} className="rounded-2xl bg-muted/35 px-4 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground">{profile.location_name || 'Location profile'}</div>
-                    {profile.id === primaryBillingProfile?.id ? (
-                      <Badge variant="outline" className="rounded-full text-[0.6875rem]">Billing anchor</Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 text-sm font-medium">{buildPaymentMethodLabel(profile)}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">Pays this location&apos;s subscription only.</p>
-                  <Link className="mt-2 inline-block text-sm text-primary underline" href={`/dashboard/settings/billing?billingScope=${encodeURIComponent(profile.location_id || '')}`}>
-                    Update location card
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </PanelSection>
-
-      <PanelSection
-        label="Transactions"
-        caption={`Merchant-wide subscription payment activity for ${merchantName}.`}
-      >
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl bg-muted/45 p-4">
-              <div className="text-sm text-muted-foreground">Collected</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums">{formatMoney(transactionSummary.collected)}</div>
-            </div>
-            <div className="rounded-2xl bg-muted/45 p-4">
-              <div className="text-sm text-muted-foreground">Pending</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums">{formatMoney(transactionSummary.pending)}</div>
-            </div>
-            <div className="rounded-2xl bg-muted/45 p-4">
-              <div className="text-sm text-muted-foreground">Transactions</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums">{transactionSummary.count}</div>
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading transactions...</div>
-          ) : invoices.length === 0 ? (
-            <div className="rounded-2xl bg-muted/30 p-4 text-sm text-muted-foreground">
-              No merchant subscription transactions yet.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-2xl bg-muted/20">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-0 hover:bg-transparent">
-                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
-                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reference</TableHead>
-                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Method</TableHead>
-                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Invoice</TableHead>
-                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Location</TableHead>
-                    <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoices.map((invoice) => {
-                    const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference =
-                      invoice.processor_transaction_id ||
-                      invoice.nmi_transaction_id ||
-                      invoice.last_payment_error ||
-                      '-'
-
-                    return (
-                      <TableRow key={`merchant-txn-${invoice.id}`} className="border-0">
-                        <TableCell>{formatDate(activityDate)}</TableCell>
-                        <TableCell className="max-w-[300px] truncate text-muted-foreground">{reference}</TableCell>
-                        <TableCell className="uppercase">{invoice.billing_method}</TableCell>
-                        <TableCell>
-                          <StatusBadge label={invoiceStatusLabel(invoice.status)} />
-                        </TableCell>
-                        <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                        <TableCell>{subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier' : invoice.location_name}</TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      </PanelSection>
-
-      <PanelSection
-        icon={FileText}
-        label="Billing History"
-        caption="Invoices are charged automatically through the saved Valor billing method. View and download records across all merchant locations."
-      >
-        {isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading invoices...</div>
-        ) : invoices.length === 0 ? (
-          <div className="rounded-2xl bg-muted/30 p-4 text-sm text-muted-foreground">
-            No merchant invoices have been generated yet.
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl bg-muted/20">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-0 hover:bg-transparent">
-                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
-                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Invoice</TableHead>
-                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Description</TableHead>
-                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Amount</TableHead>
-                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoices.map((invoice) => (
-                  <TableRow key={invoice.id} className="border-0">
-                    <TableCell>{formatDate(invoice.created_at)}</TableCell>
-                    <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                    <TableCell>
-                      <StatusBadge label={invoiceStatusLabel(invoice.status)} />
-                    </TableCell>
-                    <TableCell>
-                      {subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier subscription' : `Location subscription: ${invoice.location_name}`}
-                      {invoice.status === 'failed' ? (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {invoice.next_retry_at
-                            ? `Automatic retry scheduled ${formatDate(invoice.next_retry_at)}`
-                            : invoice.retry_exhausted_at
-                              ? 'Automatic retries are exhausted. Update the payment method or contact DEXA Billing.'
-                              : 'Payment failed. Update the payment method or contact DEXA Billing.'}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 rounded-full px-3 text-xs font-medium shadow-sm"
-                          onClick={() => handlePreviewInvoice(invoice.id)}
-                          disabled={isInvoicePreviewLoading}
-                        >
-                          {isInvoicePreviewLoading && invoiceActionId === invoice.id ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Eye className="mr-1.5 h-3.5 w-3.5" />
-                          )}
-                          View
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 rounded-full px-3 text-xs font-medium shadow-sm"
-                          onClick={() => handleDownloadInvoice(invoice.id)}
-                        >
-                          {invoiceActionId === invoice.id && !isInvoicePreviewLoading ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="mr-1.5 h-3.5 w-3.5" />
-                          )}
-                          Download
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </PanelSection>
-            </div>
-          ) : null}
-
-          {activeSection === 'addons' ? (
-            <div className="min-w-0">
-              <PanelSection
-                label="Location Add-ons"
-                caption="Request recurring paid features for one location. DEXA reviews the request and Valor must approve the charge before activation."
-                action={
-                  locations.length > 0 ? (
-                    <Select value={selectedLocation?.id || ''} onValueChange={selectLocation}>
-                      <SelectTrigger className="w-[220px]"><SelectValue placeholder="Select location" /></SelectTrigger>
-                      <SelectContent>
-                        {locations.map((location) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : null
-                }
-              >
-                {availableServices.length === 0 ? (
-                  <Empty icon={Puzzle} title="No add-ons available" description="DEXA has not published any paid software or service add-ons." />
-                ) : (
-                  <div className="divide-y divide-border/60">
-                    {availableServices.map((service) => {
-                      const assignment = serviceAssignments.find(
-                        (item) => item.location_id === selectedLocation?.id && item.service_id === service.id,
-                      )
-                      const pending = pendingServiceRequests.find(
-                        (item) => item.location_id === selectedLocation?.id && item.service_id === service.id,
-                      )
-                      const latestRequest = serviceRequestHistory.find(
-                        (item) => item.location_id === selectedLocation?.id && item.service_id === service.id,
-                      )
-                      const featureState = assignment
-                        ? 'Active'
-                        : pending
-                          ? 'Pending'
-                          : latestRequest?.status === 'cancelled'
-                            ? 'Cancelled'
-                            : latestRequest?.status === 'denied'
-                              ? 'Inactive · last request denied'
-                              : 'Inactive'
-                      return (
-                        <div key={service.id} className="flex flex-col gap-4 py-5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium">{service.display_name}</p>
-                              <Badge variant="outline">{featureState}</Badge>
-                            </div>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {formatMoney(addOnMonthlyAmount(service, 1))}/month including card surcharge
-                              {service.pricing_model !== 'flat' ? ` per ${service.unit_label}` : ''}
-                            </p>
-                            {assignment ? <p className="mt-1 text-xs text-muted-foreground">Quantity {assignment.quantity} · {assignment.status.replace('_', ' ')}</p> : null}
-                            {pending ? <p className="mt-1 text-xs text-muted-foreground">{pending.request_number} is awaiting DEXA review.</p> : null}
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="rounded-full"
-                            disabled={!selectedLocation || Boolean(assignment) || Boolean(pending)}
-                            onClick={() => {
-                              setSelectedAddOn(service)
-                              setAddOnQuantity('1')
-                              setHasAcceptedAddOnAuthorization(false)
-                            }}
-                          >
-                            {assignment ? 'Active' : pending ? 'Pending review' : 'Request add-on'}
-                          </Button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </PanelSection>
-            </div>
-          ) : null}
-      </Panel>
-
-      <Dialog
-        open={Boolean(contactModalMode)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setHasAcceptedPlanAuthorization(false)
-            setContactModalMode(null)
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {contactModalMode === 'hardware' ? 'Request hardware' : 'Manage plan'}
-            </DialogTitle>
-            <DialogDescription>
-              {contactModalMode === 'hardware'
-                ? 'Send a location-specific device request to DEXA HQ for review.'
-                : 'Review the selected plan before sending it to DEXA Billing for approval.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 rounded-2xl bg-muted/45 p-4 text-sm">
-            <div>
-              <div className="font-medium">Merchant</div>
-              <div className="text-muted-foreground">{merchantName}</div>
-            </div>
-            {contactModalMode === 'hardware' ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="hardware-request-location">Location</Label>
-                  <Select value={selectedLocation?.id || ''} onValueChange={selectLocation}>
-                    <SelectTrigger id="hardware-request-location">
-                      <SelectValue placeholder="Select location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {locations.map((location) => (
-                        <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hardware-request-quantity">Device quantity</Label>
-                  <Input
-                    id="hardware-request-quantity"
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={hardwareRequestQuantity}
-                    onChange={(event) => setHardwareRequestQuantity(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hardware-request-note">Request details (optional)</Label>
-                  <Textarea
-                    id="hardware-request-note"
-                    value={hardwareRequestNote}
-                    maxLength={2000}
-                    onChange={(event) => setHardwareRequestNote(event.target.value)}
-                    placeholder="Device type, intended use, or fulfillment notes"
-                  />
-                </div>
-              </>
-            ) : null}
-            <div>
-              <div className="font-medium">
-                {contactModalMode === 'hardware' ? 'Selected location' : 'Requested plan'}
-              </div>
-              <div className="text-muted-foreground">
-                {contactModalMode === 'hardware'
-                  ? selectedLocation?.name || 'No location selected'
-                  : selectedRequestedPlan
-                    ? `${selectedRequestedPlan.display_name} - ${formatTierPrice(selectedRequestedPlan.monthly_price_cents)}`
-                    : 'No plan selected'}
-              </div>
-            </div>
-            <div>
-              <div className="font-medium">Current plan</div>
-              <div className="text-muted-foreground">{merchantPlanStatus.plan?.name || 'No active plan'}</div>
-            </div>
-            <div>
-              <div className="font-medium">Recommended next step</div>
-              <div className="text-muted-foreground">
-                {contactModalMode === 'hardware'
-                  ? 'DEXA HQ will review this request before inventory is provisioned or assigned.'
-                  : 'Submitting sends a subscription request and a read-only notification to DEXA Billing. It does not open a support ticket.'}
-              </div>
-            </div>
-            {contactModalMode === 'plan' && selectedRequestedPlan ? (
-              <div className="rounded-xl bg-background p-3">
-                <div className="flex items-start gap-3">
+              ) : selectedRequestedPlan &&
+                selectedRequestedPlan.plan_code !== currentPlanCode &&
+                planFitsLocationCount(selectedRequestedPlan, merchantPlanStatus.active_location_count) ? (
+                <div className="flex items-start gap-3 rounded-2xl bg-muted/45 p-4">
                   <Checkbox
                     id="plan-charge-authorization"
                     checked={hasAcceptedPlanAuthorization}
-                    onCheckedChange={(checked) =>
-                      setHasAcceptedPlanAuthorization(checked === true)
-                    }
+                    onCheckedChange={(checked) => setHasAcceptedPlanAuthorization(checked === true)}
                   />
+                  {/* `Label` ships `flex items-center gap-2`; inline spans in a
+                      sentence become flex items and each fragment stacks into
+                      its own column. `block` overrides it via tailwind-merge. */}
                   <Label
                     htmlFor="plan-charge-authorization"
-                    className="cursor-pointer text-sm font-normal leading-5"
+                    className="block min-w-0 flex-1 cursor-pointer text-sm font-normal leading-relaxed"
                   >
                     I authorize DEXA POS to charge{' '}
-                    <span className="font-semibold">
-                      {formatTierPrice(selectedRequestedPlan.monthly_price_cents)}
+                    <span className="font-semibold tabular-nums">
+                      {formatMoney(planDelta?.next ?? 0)}/mo
                     </span>{' '}
-                    on a recurring monthly basis for{' '}
-                    <span className="font-semibold">
-                      {selectedRequestedPlan.display_name}
-                    </span>
-                    . I understand activation requires DEXA HQ approval and
-                    billing continues until cancellation under the applicable
-                    terms.
+                    at my current {merchantPlanStatus.active_location_count} location
+                    {merchantPlanStatus.active_location_count === 1 ? '' : 's'} on a recurring
+                    monthly basis for{' '}
+                    <span className="font-semibold">{selectedRequestedPlan.display_name}</span>. I
+                    understand activation requires DEXA HQ approval and billing continues until
+                    cancellation under the applicable terms.
                   </Label>
                 </div>
-              </div>
-            ) : null}
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <div className="text-xs text-muted-foreground">
-              {contactModalMode === 'hardware'
-                ? 'Submitting creates a read-only request and notifies DEXA HQ.'
-                : 'Plan activation remains controlled by DEXA Billing.'}
+              ) : null}
             </div>
+          )}
+
+          <DialogFooter className="sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Nothing is charged today. The request shows under &ldquo;In progress&rdquo; until DEXA
+              resolves it.
+            </p>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => setContactModalMode(null)}>
-                Close
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => setIsPlanDialogOpen(false)}
+              >
+                Cancel
               </Button>
-              {contactModalMode === 'hardware' ? (
-                <Button
-                  type="button"
-                  className="bg-[#0C4FD1] hover:bg-[#0A45BA]"
-                  disabled={isSubmittingHardwareRequest || !selectedLocation}
-                  onClick={handleRequestHardware}
-                >
-                  {isSubmittingHardwareRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Submit request
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  disabled={
-                    isSubmittingPlanRequest ||
-                    Boolean(pendingTierRequest) ||
-                    !selectedRequestedPlan ||
-                    !hasAcceptedPlanAuthorization ||
-                    selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
-                  }
-                  onClick={handleRequestPlan}
-                >
-                  {isSubmittingPlanRequest ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Submit request
-                </Button>
-              )}
+              <Button
+                type="button"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                disabled={
+                  isSubmittingPlanRequest ||
+                  Boolean(pendingTierRequest) ||
+                  !selectedRequestedPlan ||
+                  !hasAcceptedPlanAuthorization ||
+                  selectedRequestedPlan.plan_code === currentPlanCode ||
+                  !planFitsLocationCount(
+                    selectedRequestedPlan,
+                    merchantPlanStatus.active_location_count,
+                  )
+                }
+                onClick={handleRequestPlan}
+              >
+                {isSubmittingPlanRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Send request
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ----------------------- Request hardware ------------------------- */}
       <Dialog
-        open={Boolean(selectedAddOn)}
+        open={Boolean(hardwareDialogLocationId)}
+        onOpenChange={(open) => {
+          if (!open) setHardwareDialogLocationId(null)
+        }}
+      >
+        <DialogContent className="dashboard-sidebar-theme max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Request hardware</DialogTitle>
+            <DialogDescription>
+              {hardwareDialogLocation
+                ? `Devices for ${hardwareDialogLocation.name}. DEXA HQ reviews this before anything is provisioned.`
+                : 'DEXA HQ reviews this before anything is provisioned.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="hardware-request-quantity">Device quantity</Label>
+              <Input
+                id="hardware-request-quantity"
+                type="number"
+                min={1}
+                max={100}
+                value={hardwareRequestQuantity}
+                onChange={(event) => setHardwareRequestQuantity(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hardware-request-note">Request details (optional)</Label>
+              <Textarea
+                id="hardware-request-note"
+                value={hardwareRequestNote}
+                maxLength={2000}
+                onChange={(event) => setHardwareRequestNote(event.target.value)}
+                placeholder="Device type, intended use, or fulfillment notes"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Creates a request and notifies DEXA HQ. Nothing is charged today.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => setHardwareDialogLocationId(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                disabled={isSubmittingHardwareRequest || !hardwareDialogLocationId}
+                onClick={handleRequestHardware}
+              >
+                {isSubmittingHardwareRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Send request
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ------------------------ Request add-on -------------------------- */}
+      <Dialog
+        open={Boolean(addOnDialog)}
         onOpenChange={(open) => {
           if (!open) {
-            setSelectedAddOn(null)
+            setAddOnDialog(null)
             setHasAcceptedAddOnAuthorization(false)
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="dashboard-sidebar-theme max-w-lg">
           <DialogHeader>
             <DialogTitle>Authorize paid add-on</DialogTitle>
             <DialogDescription>
               Review the recurring location charge before sending it to DEXA HQ.
             </DialogDescription>
           </DialogHeader>
-          {selectedAddOn ? (
+
+          {addOnDialog ? (
             <div className="space-y-4">
-              <div className="grid gap-3 rounded-2xl bg-muted/45 p-4 text-sm sm:grid-cols-2">
-                <div><p className="text-muted-foreground">Feature</p><p className="font-medium">{selectedAddOn.display_name}</p></div>
-                <div><p className="text-muted-foreground">Location</p><p className="font-medium">{selectedLocation?.name}</p></div>
+              <div className="grid gap-3 rounded-2xl bg-muted/45 p-4 sm:grid-cols-2">
+                <Field label="Feature" value={addOnDialog.service.display_name} />
+                <Field label="Location" value={addOnDialogLocation?.name ?? '—'} />
                 <div className="space-y-2">
                   <Label htmlFor="addon-quantity">Quantity</Label>
-                  <Input id="addon-quantity" type="number" min={1} max={1000} value={addOnQuantity} onChange={(event) => setAddOnQuantity(event.target.value)} />
+                  <Input
+                    id="addon-quantity"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={addOnQuantity}
+                    onChange={(event) => setAddOnQuantity(event.target.value)}
+                  />
                 </div>
-                <div><p className="text-muted-foreground">Authorized recurring total</p><p className="text-xl font-semibold">{formatMoney(addOnMonthlyAmount(selectedAddOn, Number(addOnQuantity)))}/month</p></div>
+                <Field
+                  label="Authorized recurring total"
+                  value={
+                    <span className="text-xl font-semibold tabular-nums">
+                      {formatMoney(addOnDialogCharge)}/mo
+                    </span>
+                  }
+                  meta="Includes card surcharge"
+                />
               </div>
-              <div className="flex items-start gap-3 rounded-2xl border p-4">
-                <Checkbox id="addon-charge-authorization" checked={hasAcceptedAddOnAuthorization} onCheckedChange={(checked) => setHasAcceptedAddOnAuthorization(checked === true)} />
-                <Label htmlFor="addon-charge-authorization" className="cursor-pointer text-sm font-normal leading-5">
-                  I authorize DEXA POS to charge <span className="font-semibold">{formatMoney(addOnMonthlyAmount(selectedAddOn, Number(addOnQuantity)))}/month</span> for {selectedAddOn.display_name} at {selectedLocation?.name}. I understand the charge is recurring, requires DEXA HQ approval, and continues until cancellation.
+
+              <div className="flex items-start gap-3 rounded-2xl bg-muted/45 p-4">
+                <Checkbox
+                  id="addon-charge-authorization"
+                  checked={hasAcceptedAddOnAuthorization}
+                  onCheckedChange={(checked) => setHasAcceptedAddOnAuthorization(checked === true)}
+                />
+                <Label
+                  htmlFor="addon-charge-authorization"
+                  className="block min-w-0 flex-1 cursor-pointer text-sm font-normal leading-relaxed"
+                >
+                  I authorize DEXA POS to charge{' '}
+                  <span className="font-semibold tabular-nums">
+                    {formatMoney(addOnDialogCharge)}/month
+                  </span>{' '}
+                  for {addOnDialog.service.display_name} at {addOnDialogLocation?.name ?? 'this location'}.
+                  I understand the charge is recurring, requires DEXA HQ approval, and continues until
+                  cancellation.
                 </Label>
               </div>
             </div>
           ) : null}
+
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setSelectedAddOn(null)}>Cancel</Button>
-            <Button type="button" disabled={!hasAcceptedAddOnAuthorization || isSubmittingAddOnRequest || Number(addOnQuantity) < 1} onClick={handleRequestAddOn}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setAddOnDialog(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              disabled={
+                !hasAcceptedAddOnAuthorization ||
+                isSubmittingAddOnRequest ||
+                Number(addOnQuantity) < 1
+              }
+              onClick={handleRequestAddOn}
+            >
               {isSubmittingAddOnRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Send request
             </Button>
@@ -1579,16 +2112,17 @@ export function MerchantSubscriptionOverviewCard({
         </DialogContent>
       </Dialog>
 
+      {/* ----------------------- Invoice preview -------------------------- */}
       <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="dashboard-sidebar-theme max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Invoice Preview</DialogTitle>
+            <DialogTitle>Invoice preview</DialogTitle>
             <DialogDescription>
-              Preview the customer-facing subscription invoice layout before downloading it.
+              Preview the customer-facing subscription invoice before downloading it.
             </DialogDescription>
           </DialogHeader>
           {invoicePreviewDocument ? (
-            <div className="overflow-hidden rounded-2xl border border-border/60">
+            <div className="overflow-hidden rounded-2xl">
               <iframe
                 title="Subscription invoice preview"
                 srcDoc={invoicePreviewHtml}
@@ -1596,7 +2130,7 @@ export function MerchantSubscriptionOverviewCard({
               />
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No invoice selected.</div>
+            <p className="text-sm text-muted-foreground">No invoice selected.</p>
           )}
         </DialogContent>
       </Dialog>

@@ -1,6 +1,7 @@
 'use client'
 
 import { createElement, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,14 +9,15 @@ import {
   Clock3,
   LifeBuoy,
   MapPin,
+  MessageSquareWarning,
   Monitor,
   Search,
   ShieldAlert,
 } from 'lucide-react'
 
 import { useMerchantDeviceActivity, useMerchantDeviceInventory } from '@/app/dashboard/hooks/useDeviceRegistry'
+import { useDeviceTicketLinks } from '@/app/dashboard/hooks/useSupport'
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -23,6 +25,7 @@ import {
   StatTile,
 } from '@/components/dashboard/shell'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -52,16 +55,33 @@ import {
   deviceWarrantyIsOnWatch,
   deviceWarrantyState,
 } from '@/lib/constants/device-status'
+import type { DeviceWarrantyState } from '@/lib/constants/device-status'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { cn } from '@/lib/utils'
-import { useIsAllLocations, useLocationStore, useSelectedLocation } from '@/stores/location-store'
+import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import type {
   AdminDeviceInventoryRow,
   DeviceActivityItem,
   DeviceLifecycleStatus,
+  DeviceSupportTicketLink,
 } from '@/types/device-registry'
 
 type MerchantStatusFilter = DeviceLifecycleStatus | 'all' | 'attention' | 'warranty'
+
+/** Where "Report an issue" goes: the support form, pre-filled from the device. */
+function reportIssueHref(deviceId: string) {
+  return `/dashboard/support/new?device=${encodeURIComponent(deviceId)}`
+}
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  open: 'Open',
+  in_progress: 'In progress',
+  waiting_on_merchant: 'Waiting on you',
+}
+
+function ticketStatusLabel(status: string) {
+  return TICKET_STATUS_LABELS[status] ?? status.replace(/_/g, ' ')
+}
 
 const STATUS_FILTERS: Array<{ value: MerchantStatusFilter; label: string }> = [
   { value: 'all', label: 'All statuses' },
@@ -98,6 +118,11 @@ function formatDateTime(date: string | null) {
   }).format(new Date(date))
 }
 
+function warrantyDateLabel(state: DeviceWarrantyState, expiresAt: string | null) {
+  if (state === 'unknown' || !expiresAt) return 'No expiry on file'
+  return `${state === 'expired' ? 'Ended' : 'Until'} ${formatDate(expiresAt)}`
+}
+
 function DeviceLifecycleBadge({
   status,
   className,
@@ -121,8 +146,8 @@ function ActivityRow({ item }: { item: DeviceActivityItem }) {
   })
 
   return (
-    <div className="flex gap-3 rounded-2xl bg-muted/30 p-4">
-      <div className="mt-1 rounded-full bg-background/80 p-2 text-muted-foreground">
+    <div className="flex gap-3 rounded-2xl border border-border/50 bg-secondary p-4">
+      <div className="mt-1 rounded-full bg-background p-2 text-muted-foreground">
         {timelineIcon}
       </div>
       <div className="min-w-0 flex-1 space-y-2">
@@ -148,12 +173,44 @@ function ActivityRow({ item }: { item: DeviceActivityItem }) {
   )
 }
 
+/**
+ * The band that shows a device already has a ticket open.
+ *
+ * A merchant who reported a fault yesterday should not be invited to report it
+ * again today — so where there is an open ticket, the conversation becomes the
+ * primary action and reporting steps back.
+ */
+function OpenTicketBand({ ticket }: { ticket: DeviceSupportTicketLink }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-border/50 bg-secondary p-4 sm:flex-row sm:items-center">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-background text-muted-foreground">
+        <MessageSquareWarning className="h-4.5 w-4.5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          Ticket {ticket.ticket_number} · {ticketStatusLabel(ticket.status)}
+        </p>
+        <p className="mt-0.5 truncate text-[0.8125rem] text-muted-foreground">
+          {ticket.subject}
+        </p>
+      </div>
+      <Button asChild size="sm" className="shrink-0 rounded-full">
+        <Link href={`/dashboard/support/${ticket.ticket_id}`}>
+          View conversation
+        </Link>
+      </Button>
+    </div>
+  )
+}
+
 function DeviceHistoryDialog({
   device,
+  ticket,
   open,
   onOpenChange,
 }: {
   device: AdminDeviceInventoryRow | null
+  ticket: DeviceSupportTicketLink | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -183,12 +240,35 @@ function DeviceHistoryDialog({
                   </DialogDescription>
                 </div>
               </div>
+
+              {/* The registry is read-only, so this is the page's one way out:
+                  a merchant looking at a broken device can ask for help here
+                  rather than going hunting for the Support section. */}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button
+                  asChild
+                  variant={ticket ? 'outline' : 'default'}
+                  className="rounded-full"
+                >
+                  <Link href={reportIssueHref(device.id)}>
+                    <MessageSquareWarning className="mr-2 h-4 w-4" />
+                    {ticket ? 'Report another issue' : 'Report an issue'}
+                  </Link>
+                </Button>
+                {!ticket && (
+                  <span className="text-[0.8125rem] text-muted-foreground">
+                    Goes to DexaPOS support with this device attached.
+                  </span>
+                )}
+              </div>
             </DialogHeader>
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-6 p-4 sm:p-6">
+                {ticket && <OpenTicketBand ticket={ticket} />}
+
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl bg-muted/30 p-4">
+                  <div className="rounded-2xl border border-border/50 bg-secondary p-4">
                     <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Device overview</div>
                     <div className="mt-3 space-y-2 text-sm">
                       <div>Category: <span className="font-medium">{formatDeviceCategory(device.device_category)}</span></div>
@@ -198,7 +278,7 @@ function DeviceHistoryDialog({
                     </div>
                   </div>
 
-                  <div className="rounded-2xl bg-muted/30 p-4">
+                  <div className="rounded-2xl border border-border/50 bg-secondary p-4">
                     <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Support metadata</div>
                     <div className="mt-3 space-y-2 text-sm">
                       <div>Firmware: <span className="font-medium">{device.firmware_version ?? 'N/A'}</span></div>
@@ -266,9 +346,11 @@ function DeviceHistoryDialog({
 
 function DeviceRow({
   device,
+  ticket,
   onSelect,
 }: {
   device: AdminDeviceInventoryRow
+  ticket: DeviceSupportTicketLink | null
   onSelect: (device: AdminDeviceInventoryRow) => void
 }) {
   const categoryIcon = createElement(
@@ -278,13 +360,18 @@ function DeviceRow({
   const warranty = deviceWarrantyState(device.warranty_expires_at)
 
   return (
+    // The row is a group, not one control: opening the history and asking for
+    // help are two destinations, and a link nested inside the row button would
+    // be both invalid markup and unreachable by keyboard.
+    <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border/50 bg-secondary transition-colors hover:bg-accent lg:flex-row lg:items-center">
     <button
       type="button"
       onClick={() => onSelect(device)}
-      className="grid w-full min-w-0 gap-4 rounded-2xl bg-muted/25 p-4 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid-cols-[minmax(250px,1.5fr)_minmax(150px,0.9fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_auto] lg:items-center"
+      aria-label={`View support history for ${device.serial_number}`}
+      className="grid min-w-0 flex-1 gap-4 rounded-2xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid-cols-[minmax(210px,1.35fr)_minmax(125px,0.8fr)_minmax(145px,0.95fr)_minmax(155px,0.95fr)_auto] lg:items-center"
     >
       <div className="flex min-w-0 items-start gap-3">
-        <div className="shrink-0 rounded-full bg-background/80 p-2.5 text-muted-foreground">
+        <div className="shrink-0 rounded-full bg-background p-2.5 text-muted-foreground">
           {categoryIcon}
         </div>
         <div className="min-w-0">
@@ -320,6 +407,9 @@ function DeviceRow({
         >
           {warranty.label}
         </Badge>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {warrantyDateLabel(warranty.state, device.warranty_expires_at)}
+        </p>
       </div>
 
       <div>
@@ -327,16 +417,45 @@ function DeviceRow({
           Status
         </p>
         <DeviceLifecycleBadge status={device.status} className="mt-1 lg:mt-0" />
+        {ticket && (
+          <p className="mt-1.5 truncate text-xs text-muted-foreground">
+            Ticket {ticket.ticket_number} · {ticketStatusLabel(ticket.status)}
+          </p>
+        )}
       </div>
 
-      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground lg:justify-end">
-        <span className="flex items-center gap-1.5 lg:hidden">
-          <LifeBuoy className="h-4 w-4" />
-          View support history
-        </span>
-        <ChevronRight className="h-4 w-4" />
-      </div>
+      {/* The chevron belongs to the row, not to the button beside it — so it
+          is labelled and sits inside the row's own control, where it lights up
+          with the row on hover. A bare chevron parked next to "Report issue"
+          read as that button's menu. */}
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground lg:justify-end">
+        <LifeBuoy className="h-4 w-4 shrink-0 lg:hidden" />
+        <span className="lg:hidden">View support history</span>
+        <span className="hidden lg:inline">History</span>
+        <ChevronRight aria-hidden="true" className="hidden h-4 w-4 shrink-0 lg:block" />
+      </span>
     </button>
+
+      <div className="flex shrink-0 items-center px-4 pb-4 lg:border-l lg:border-border/60 lg:py-3 lg:pb-0 lg:pl-4 lg:pr-4">
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="rounded-full text-xs"
+        >
+          <Link
+            href={
+              ticket
+                ? `/dashboard/support/${ticket.ticket_id}`
+                : reportIssueHref(device.id)
+            }
+          >
+            <MessageSquareWarning className="mr-1.5 h-3.5 w-3.5" />
+            {ticket ? 'View ticket' : 'Report issue'}
+          </Link>
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -347,29 +466,30 @@ export default function MerchantDevicesPage() {
 
   const debouncedSearch = useDebounce(search, 250)
   const devicesQuery = useMerchantDeviceInventory()
-  const selectedLocation = useSelectedLocation()
+  const ticketLinksQuery = useDeviceTicketLinks()
+  const ticketLinks = ticketLinksQuery.data ?? {}
   const isAllLocations = useIsAllLocations()
   const { selectedLocationId } = useLocationStore()
 
   const devices = useMemo(() => devicesQuery.data ?? [], [devicesQuery.data])
 
-  const filteredDevices = useMemo(() => {
+  /**
+   * Everything the location and the search term allow, before the status
+   * filter. The tiles count these: a tile is the control that applies the
+   * status filter, so counting post-filter would zero out every tile but the
+   * one just pressed.
+   */
+  const scopedDevices = useMemo(() => {
     const locationScoped =
       isAllLocations || !selectedLocationId || selectedLocationId === 'all'
         ? devices
         : devices.filter((device) => device.location_id === selectedLocationId)
 
-    return locationScoped.filter((device) => {
-      if (status === 'attention' && !deviceNeedsAttention(device.status)) return false
-      if (status === 'warranty' && !deviceWarrantyIsOnWatch(device.warranty_expires_at)) return false
-      if (status !== 'all' && status !== 'attention' && status !== 'warranty' && device.status !== status) {
-        return false
-      }
+    if (!debouncedSearch.trim()) return locationScoped
 
-      if (!debouncedSearch.trim()) return true
-
-      const term = debouncedSearch.trim().toLowerCase()
-      return [
+    const term = debouncedSearch.trim().toLowerCase()
+    return locationScoped.filter((device) =>
+      [
         device.serial_number,
         device.manufacturer,
         device.model_name,
@@ -378,17 +498,34 @@ export default function MerchantDevicesPage() {
       ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(term))
+    )
+  }, [debouncedSearch, devices, isAllLocations, selectedLocationId])
+
+  const filteredDevices = useMemo(() => {
+    return scopedDevices.filter((device) => {
+      if (status === 'attention' && !deviceNeedsAttention(device.status)) return false
+      if (status === 'warranty' && !deviceWarrantyIsOnWatch(device.warranty_expires_at)) return false
+      if (status !== 'all' && status !== 'attention' && status !== 'warranty' && device.status !== status) {
+        return false
+      }
+      return true
     })
-  }, [debouncedSearch, devices, isAllLocations, selectedLocationId, status])
+  }, [scopedDevices, status])
 
   const summary = useMemo(
     () => ({
-      total: filteredDevices.length,
-      deployed: filteredDevices.filter((device) => device.status === 'deployed').length,
-      attention: filteredDevices.filter((device) => deviceNeedsAttention(device.status)).length,
-      warranty: filteredDevices.filter((device) => deviceWarrantyIsOnWatch(device.warranty_expires_at)).length,
+      total: scopedDevices.length,
+      deployed: scopedDevices.filter((device) => device.status === 'deployed').length,
+      attention: scopedDevices.filter((device) => deviceNeedsAttention(device.status)).length,
+      warranty: scopedDevices.filter((device) => deviceWarrantyIsOnWatch(device.warranty_expires_at)).length,
     }),
-    [filteredDevices]
+    [scopedDevices]
+  )
+
+  // Devices in repair, lost or at RMA, named in the band above the list.
+  const attentionDevices = useMemo(
+    () => scopedDevices.filter((device) => deviceNeedsAttention(device.status)),
+    [scopedDevices]
   )
 
   const hasFilters = Boolean(search.trim()) || status !== 'all'
@@ -397,28 +534,26 @@ export default function MerchantDevicesPage() {
     <PageShell>
       <PageHeader
         title="Devices"
-        subtitle="Review the hardware assigned to your business and its support history."
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
+        subtitle="The hardware assigned to your business, and how to get help with it."
         actions={
           <Badge variant="secondary" className="h-8 rounded-full px-3 font-normal">
-            Read-only registry
+            Managed by DexaPOS
           </Badge>
         }
       />
 
       <Panel padded>
+        {/* Each figure states a count, so it doubles as the control that shows
+            the rows behind it. Pressing an applied tile clears back to all. */}
         <StatRow columns={4}>
           <StatTile
-            label="Visible devices"
+            label="All devices"
             value={summary.total}
-            meta="Registry rows in this view"
+            meta="Every device in this view"
             icon={<Monitor />}
             isLoading={devicesQuery.isLoading}
+            isActive={status === 'all'}
+            onClick={() => setStatus('all')}
           />
           <StatTile
             label="Deployed"
@@ -426,6 +561,8 @@ export default function MerchantDevicesPage() {
             meta="Active production hardware"
             icon={<CheckCircle2 />}
             isLoading={devicesQuery.isLoading}
+            isActive={status === 'deployed'}
+            onClick={() => setStatus(status === 'deployed' ? 'all' : 'deployed')}
           />
           <StatTile
             label="Needs attention"
@@ -433,6 +570,8 @@ export default function MerchantDevicesPage() {
             meta="Repair, loss, or RMA"
             icon={<AlertTriangle />}
             isLoading={devicesQuery.isLoading}
+            isActive={status === 'attention'}
+            onClick={() => setStatus(status === 'attention' ? 'all' : 'attention')}
           />
           <StatTile
             label="Warranty watch"
@@ -440,9 +579,59 @@ export default function MerchantDevicesPage() {
             meta="Expired or within 60 days"
             icon={<ShieldAlert />}
             isLoading={devicesQuery.isLoading}
+            isActive={status === 'warranty'}
+            onClick={() => setStatus(status === 'warranty' ? 'all' : 'warranty')}
           />
         </StatRow>
       </Panel>
+
+      {/* Urgency is carried by the band, never by colouring a status pill
+          (DS-CTL-09). It names the device so the merchant does not have to
+          hunt the list for which one broke. */}
+      {attentionDevices.length > 0 && (
+        <Panel padded>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+              <AlertTriangle className="h-4.5 w-4.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">
+                {attentionDevices.length === 1
+                  ? 'One device needs attention'
+                  : `${attentionDevices.length} devices need attention`}
+              </p>
+              <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
+                {attentionDevices.length === 1
+                  ? `${attentionDevices[0].serial_number} (${formatDeviceCategory(
+                      attentionDevices[0].device_category
+                    )}) is ${deviceLifecycleStatusLabel(
+                      attentionDevices[0].status
+                    ).toLowerCase()}.`
+                  : 'These are in repair, lost, or at RMA.'}
+              </p>
+            </div>
+            {attentionDevices.length === 1 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-full"
+                onClick={() => setSelectedDevice(attentionDevices[0])}
+              >
+                View device
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-full"
+                onClick={() => setStatus('attention')}
+              >
+                Show them
+              </Button>
+            )}
+          </div>
+        </Panel>
+      )}
 
       <Panel className="overflow-hidden">
         <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
@@ -504,17 +693,25 @@ export default function MerchantDevicesPage() {
             />
           ) : (
             <div className="space-y-2">
-              <div className="hidden grid-cols-[minmax(250px,1.5fr)_minmax(150px,0.9fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_auto] gap-4 px-4 pb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground lg:grid">
-                <span>Device</span>
-                <span>Location</span>
-                <span>Warranty</span>
-                <span>Status</span>
-                <span className="sr-only">Actions</span>
+              {/* Mirrors the row's two zones so the labels stay over their
+                  columns: the row's own grid, then the action column's width. */}
+              <div className="hidden items-center pb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground lg:flex">
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(210px,1.35fr)_minmax(125px,0.8fr)_minmax(145px,0.95fr)_minmax(155px,0.95fr)_auto] gap-4 px-4">
+                  <span>Device</span>
+                  <span>Location</span>
+                  <span>Warranty</span>
+                  <span>Status</span>
+                  <span className="sr-only">Details</span>
+                </div>
+                <div className="w-39 shrink-0 pl-4">
+                  <span className="sr-only">Actions</span>
+                </div>
               </div>
               {filteredDevices.map((device) => (
                 <DeviceRow
                   key={device.id}
                   device={device}
+                  ticket={ticketLinks[device.id] ?? null}
                   onSelect={setSelectedDevice}
                 />
               ))}
@@ -525,6 +722,7 @@ export default function MerchantDevicesPage() {
 
       <DeviceHistoryDialog
         device={selectedDevice}
+        ticket={selectedDevice ? ticketLinks[selectedDevice.id] ?? null : null}
         open={Boolean(selectedDevice)}
         onOpenChange={(open) => {
           if (!open) {

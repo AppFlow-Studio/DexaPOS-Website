@@ -11,7 +11,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PageShell,
   PageHeader,
-  LocationIndicator,
   Panel,
   StatRow,
   StatTile,
@@ -21,7 +20,7 @@ import { useOrders } from "../hooks/useOrder";
 import { FinancialHeroChart } from "./components/FinancialHeroChart";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrderResponse } from "@/types/order-management";
-import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
+import { useSelectedLocation } from "@/stores/location-store";
 import {
   DatePreset,
   DateRangePicker,
@@ -59,7 +58,6 @@ export default function TransactionsPage() {
     null
   );
   const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const queryDateRange = useReportingQueryRange(dateRange);
 
   // Keep the active tab pill visible in the rail on narrow screens (§13.2):
@@ -203,16 +201,6 @@ export default function TransactionsPage() {
       <PageHeader
         title="Financial Information"
         subtitle="Revenue, transactions, and payment activity"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={
-              selectedLocation?.id && !Array.isArray(selectedLocation)
-                ? selectedLocation.name
-                : undefined
-            }
-          />
-        }
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

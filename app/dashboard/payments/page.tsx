@@ -1,10 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  useIsAllLocations,
-  useSelectedLocation,
-} from "@/stores/location-store";
+
 import { usePayments } from "../hooks/usePayments";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -27,7 +24,6 @@ import {
   PageHeader,
   Panel,
   PanelSection,
-  LocationIndicator,
 } from "@/components/dashboard/shell";
 import {
   DateRangePicker,
@@ -160,8 +156,6 @@ export function computePaymentSummary(
 }
 
 export default function PaymentsPage() {
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
 
   // Date range state — default to last 30 days
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
@@ -209,12 +203,6 @@ export default function PaymentsPage() {
       <PageHeader
         title="Payments"
         subtitle="View and manage all payment transactions"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <DateRangePicker
             dateFrom={dateFrom}
