@@ -7,7 +7,6 @@ import {
   PanelSection,
   StatRow,
   StatTile,
-  LocationIndicator
 } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
