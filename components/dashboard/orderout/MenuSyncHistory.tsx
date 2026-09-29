@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Empty } from "@/components/ui/empty";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import {
   CheckCircle2,
   ChevronDown,
@@ -49,6 +51,7 @@ export function MenuSyncHistoryTable({
   syncHistory: SyncHistoryEntry[];
 }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const { pageRows, pagination, setPage } = useClientPagination(syncHistory, 10);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => {
@@ -69,6 +72,7 @@ export function MenuSyncHistoryTable({
             description="This menu hasn't been synced to OrderOut yet."
           />
         ) : (
+          <>
           <Table variant="data" className="min-w-[720px]">
             <TableHeader>
               <TableRow>
@@ -81,7 +85,7 @@ export function MenuSyncHistoryTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {syncHistory.map((sync) => (
+              {pageRows.map((sync) => (
                 <React.Fragment key={sync.id}>
                   <TableRow
                     className={sync.errorDetails ? "cursor-pointer" : ""}
@@ -156,6 +160,12 @@ export function MenuSyncHistoryTable({
               ))}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="syncs"
+          />
+          </>
         )}
       </PanelSection>
     </Panel>

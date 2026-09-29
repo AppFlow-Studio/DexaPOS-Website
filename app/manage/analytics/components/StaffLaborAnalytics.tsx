@@ -357,7 +357,6 @@ export function StaffLaborAnalytics() {
                                 </TableBody>
                             </Table>
                             <PaginationBar
-                                className="border-t-0 pt-0"
                                 pagination={merchantPage.pagination}
                                 onPageChange={merchantPage.setPage}
                                 itemLabel="merchants"

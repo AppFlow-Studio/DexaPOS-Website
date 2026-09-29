@@ -51,6 +51,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** Item name always stays; rank and the secondary figures are optional on mobile. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -169,6 +171,18 @@ export default function SalesByItemsPage() {
 
   const maxNet = processed.reduce((m, r) => Math.max(m, r.net_sales), 0);
   const maxQty = processed.reduce((m, r) => Math.max(m, r.quantity_sold), 0);
+
+  // Page the sorted/filtered rows; KPIs, bar scales and exports use every row.
+  const { pageRows, pagination, setPage } = useClientPagination(processed, 10);
+  const rankOffset = (pagination.page - 1) * pagination.pageSize;
+
+  // A new search, filter, sort or date range starts from the first page.
+  const filterSig = `${search}|${categoryFilter}|${sortKey}|${sortDir}|${queryDateRange.from.getTime()}|${queryDateRange.to.getTime()}`;
+  const [prevFilterSig, setPrevFilterSig] = useState(filterSig);
+  if (prevFilterSig !== filterSig) {
+    setPrevFilterSig(filterSig);
+    setPage(1);
+  }
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -478,19 +492,19 @@ export default function SalesByItemsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                processed.map((item, index) => {
+                pageRows.map((item, index) => {
                   const qtyPct = maxQty > 0 ? (item.quantity_sold / maxQty) * 100 : 0;
                   const netPct = maxNet > 0 ? (item.net_sales / maxNet) * 100 : 0;
                   return (
                     <TableRow
-                      key={index}
+                      key={rankOffset + index}
                       className="group border-0 bg-card/70 transition-colors hover:bg-muted/40"
                     >
                       {/* Rank */}
                       {isColVisible("rank") && (
                         <TableCell className="py-3.5 text-center">
                           <span className="text-xs font-bold text-muted-foreground/50">
-                            {index + 1}
+                            {rankOffset + index + 1}
                           </span>
                         </TableCell>
                       )}
@@ -567,6 +581,12 @@ export default function SalesByItemsPage() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="items"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
     </PageShell>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +22,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { StatRow, StatTile } from "@/components/dashboard/shell";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 import {
   useTransfers,
@@ -74,6 +76,13 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
     () => transfers.filter((t) => t.status === "in_transit").length,
     [transfers],
   );
+
+  const { pageRows, pagination, setPage } = useClientPagination(transfers, 10);
+
+  // A location switch starts the list from the top.
+  useEffect(() => {
+    setPage(1);
+  }, [selectedLocationId, setPage]);
 
   if (isAllLocations) {
     return (
@@ -170,7 +179,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transfers.map((t) => {
+              {pageRows.map((t) => {
                 const isDestination = t.to_location_id === selectedLocationId;
                 const isSource = t.from_location_id === selectedLocationId;
                 return (
@@ -246,7 +255,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
 
           {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-            {transfers.map((t) => {
+            {pageRows.map((t) => {
               const isDestination = t.to_location_id === selectedLocationId;
               const isSource = t.from_location_id === selectedLocationId;
               return (
@@ -326,6 +335,12 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
               );
             })}
           </div>
+
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="transfers"
+          />
         </>
       )}
 

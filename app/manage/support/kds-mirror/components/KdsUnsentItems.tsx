@@ -4,24 +4,14 @@ import * as React from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
-  ChevronDown,
   ChevronRight,
   Clock,
   PackageX,
-  Send,
   UtensilsCrossed,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -30,12 +20,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { StatRow, StatTile } from "@/components/dashboard/shell";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import {
   type KdsUnsentItem,
   type KdsUnsentOrder,
 } from "@/app/manage/actions/kds-mirror";
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  LoadError,
+  RecordCard,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from "@/app/manage/transactions/components/ledger-primitives";
 import { useKdsUnsentItems } from "../hooks/useKdsMirror";
-import { TablePagination } from "./TablePagination";
+import { KdsNotice, NoticeLead, Pill, WindowSelect } from "./kds-primitives";
 
 export const UNSENT_WINDOWS = [
   { key: "24h", label: "Last 24 hours", ms: 24 * 60 * 60 * 1000 },
@@ -46,8 +48,11 @@ export const UNSENT_WINDOWS = [
 
 export type UnsentWindowKey = (typeof UNSENT_WINDOWS)[number]["key"];
 
-/** Fixed page size for the unsent-items table; the window itself is fetched whole. */
-const UNSENT_PAGE_SIZE = 100;
+/** Page size for the unsent table and its card grid (UI-DESIGN-SYSTEM §5.7). */
+const UNSENT_PAGE_SIZE = 10;
+
+/** The table's column count, for the full-width loading and empty cells. */
+const UNSENT_COLUMNS = 7;
 
 function windowMsForKey(key: UnsentWindowKey): number {
   return (
@@ -75,114 +80,127 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   accepted: "Accepted",
 };
 
-function OrderStatusBadge({ status }: { status: string | null }) {
-  if (!status) {
-    return <Badge variant="outline">—</Badge>;
+function orderStatusLabel(status: string | null): string {
+  if (!status) return "—";
+  return ORDER_STATUS_LABEL[status] ?? status;
+}
+
+function orderLabel(order: KdsUnsentOrder): string {
+  return order.order_number
+    ? `#${order.order_number}`
+    : order.order_id.slice(0, 8);
+}
+
+/**
+ * Whether some items on the order fired and these did not. A partial fire is
+ * an HQ-2 send failure (UI-DESIGN-SYSTEM §14.3): its glyph is red. "Nothing
+ * sent" may just be a draft nobody fired, so it stays neutral.
+ */
+function Coverage({
+  order,
+  plain = false,
+}: {
+  order: KdsUnsentOrder;
+  plain?: boolean;
+}) {
+  const partial = order.sent_item_count > 0;
+  const icon = partial ? (
+    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" />
+  ) : (
+    <PackageX className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+  );
+  const label = partial ? "Partial fire" : "Nothing sent";
+  const title = partial
+    ? "Some items fired to the kitchen; these did not."
+    : "Nothing on this order ever fired to the kitchen.";
+
+  if (plain) {
+    return (
+      <span
+        title={title}
+        className="inline-flex items-center gap-1 text-sm font-medium"
+      >
+        {icon}
+        {label}
+      </span>
+    );
   }
+
   return (
-    <Badge
-      variant="outline"
-      className={cn(
-        status === "draft" &&
-          "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-300",
-        status === "completed" &&
-          "border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300"
-      )}
-    >
-      {ORDER_STATUS_LABEL[status] ?? status}
-    </Badge>
+    <Pill icon={icon} title={title}>
+      {label}
+    </Pill>
   );
 }
 
 function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
   const [expanded, setExpanded] = React.useState(false);
-  const partial = order.sent_item_count > 0;
+  const toggle = () => setExpanded((v) => !v);
 
   return (
     <React.Fragment>
       <TableRow
-        className={cn(
-          "cursor-pointer",
-          !partial &&
-            "bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30"
-        )}
-        onClick={() => setExpanded((v) => !v)}
+        className="cursor-pointer"
+        data-state={expanded ? "selected" : undefined}
+        onClick={toggle}
       >
-        <TableCell className="w-8 pr-0">
-          {expanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
+        <TableCell className="w-10 pr-0">
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "Hide" : "Show"} unsent items for ${orderLabel(order)}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              toggle();
+            }}
+            className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                "h-4 w-4 transition-transform",
+                expanded && "rotate-90"
+              )}
+            />
+          </button>
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-2">
-            <span className="font-medium">
-              {order.order_number
-                ? `#${order.order_number}`
-                : order.order_id.slice(0, 8)}
-            </span>
-            {order.order_type && (
-              <Badge variant="secondary" className="text-[11px]">
-                {order.order_type}
-              </Badge>
-            )}
+            <span className="font-medium tabular-nums">{orderLabel(order)}</span>
+            {order.order_type && <Pill>{order.order_type}</Pill>}
           </div>
         </TableCell>
         <TableCell>
-          <OrderStatusBadge status={order.order_status} />
+          <Pill>{orderStatusLabel(order.order_status)}</Pill>
         </TableCell>
         <TableCell className="whitespace-nowrap">
-          <span className="text-sm" title={order.order_created_at}>
+          <p className="text-sm tabular-nums" title={order.order_created_at}>
             {format(new Date(order.order_created_at), "MMM d, h:mm a")}
-          </span>
-          <span className="ml-2 text-xs text-muted-foreground">
+          </p>
+          <p className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(order.order_created_at), {
               addSuffix: true,
             })}
-          </span>
+          </p>
         </TableCell>
-        <TableCell>
-          <span
-            className={cn(
-              "font-mono text-sm font-semibold",
-              !partial
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-red-600 dark:text-red-400"
-            )}
-          >
+        <TableCell className="whitespace-nowrap">
+          <span className="font-mono text-sm font-medium tabular-nums">
             {order.unsent_item_count}
           </span>
           <span className="ml-1.5 text-xs text-muted-foreground">
-            unsent of {order.total_item_count}
+            unsent of{" "}
+            <span className="tabular-nums">{order.total_item_count}</span>
           </span>
         </TableCell>
-        <TableCell className="font-mono text-sm text-muted-foreground">
+        <TableCell className="font-mono text-sm tabular-nums text-muted-foreground">
           {order.sent_item_count}
         </TableCell>
         <TableCell>
-          {partial ? (
-            <Badge
-              variant="destructive"
-              className="gap-1 text-[11px]"
-              title="Some items fired to the kitchen; these did not."
-            >
-              <AlertTriangle className="h-3 w-3" /> Partial fire
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="gap-1 border-amber-300 text-amber-700 text-[11px] dark:border-amber-800 dark:text-amber-300"
-              title="Nothing on this order ever fired to the kitchen."
-            >
-              <PackageX className="h-3 w-3" /> Nothing sent
-            </Badge>
-          )}
+          <Coverage order={order} />
         </TableCell>
       </TableRow>
       {expanded && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={7} className="bg-muted/30 px-8 py-3">
+          <TableCell colSpan={UNSENT_COLUMNS} className="bg-muted/30 px-6 py-3">
             <UnsentItemList items={order.items} />
           </TableCell>
         </TableRow>
@@ -191,6 +209,75 @@ function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
   );
 }
 
+/** The same order as a record card, below the table's fit breakpoint (§5.3). */
+function UnsentOrderCard({ order }: { order: KdsUnsentOrder }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <RecordCard selected={expanded}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-medium tabular-nums">
+            {orderLabel(order)}
+            {order.order_type && (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                · {order.order_type}
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground" title={order.order_created_at}>
+            {format(new Date(order.order_created_at), "MMM d, h:mm a")} ·{" "}
+            {formatDistanceToNow(new Date(order.order_created_at), {
+              addSuffix: true,
+            })}
+          </p>
+        </div>
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">
+          {orderStatusLabel(order.order_status)}
+        </span>
+      </div>
+
+      <CardFields>
+        <CardField
+          label="Unsent"
+          value={`${order.unsent_item_count} of ${order.total_item_count}`}
+        />
+        <CardField label="Sent" value={order.sent_item_count} />
+      </CardFields>
+
+      <div className="mt-3">
+        <Coverage order={order} plain />
+      </div>
+
+      <div className="mt-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 px-3"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <ChevronRight
+            className={cn("h-4 w-4 transition-transform", expanded && "rotate-90")}
+          />
+          {expanded ? "Hide items" : "Show items"}
+        </Button>
+      </div>
+
+      {expanded && (
+        <div className="mt-3">
+          <UnsentItemList items={order.items} />
+        </div>
+      )}
+    </RecordCard>
+  );
+}
+
+/**
+ * The unsent items on one order. The table's expanded row and the record card
+ * render this same component, so the two views cannot drift.
+ */
 function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
   if (items.length === 0) {
     return (
@@ -201,16 +288,16 @@ function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
   }
 
   return (
-    <div className="divide-y divide-border/60 rounded-md border bg-background">
+    <ul className="space-y-1.5">
       {items.map((item) => (
-        <div
+        <li
           key={item.order_item_id}
-          className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-background/70 px-3 py-2"
         >
-          <span className="min-w-45 flex-1 text-sm font-medium">
+          <span className="min-w-0 flex-1 basis-40 text-sm font-medium">
             {item.item_name}
             {item.quantity > 1 && (
-              <span className="ml-1.5 text-xs text-muted-foreground">
+              <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
                 ×{item.quantity}
               </span>
             )}
@@ -220,25 +307,21 @@ function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
               {item.kitchen_status}
             </span>
           )}
-          {item.category_name && (
-            <Badge variant="secondary" className="text-[11px]">
-              {item.category_name}
-            </Badge>
-          )}
+          {item.category_name && <Pill>{item.category_name}</Pill>}
           {item.prep_station && (
-            <Badge variant="outline" className="gap-1 text-[11px]">
-              <UtensilsCrossed className="h-3 w-3" />
+            <Pill icon={<UtensilsCrossed className="text-muted-foreground" />}>
               {item.prep_station}
-            </Badge>
+            </Pill>
           )}
           <span className="text-xs text-muted-foreground">
-            added {formatDistanceToNow(new Date(item.created_at), {
+            added{" "}
+            {formatDistanceToNow(new Date(item.created_at), {
               addSuffix: true,
             })}
           </span>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -255,6 +338,8 @@ function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
  *
  * No refresh button here: the page's shared Refresh drives this view through
  * the imperative handle, so the screen never shows two Refresh buttons.
+ *
+ * Renders no outer chrome: the page supplies the `Panel > PanelSection`.
  */
 export const KdsUnsentItems = React.forwardRef<
   KdsUnsentItemsHandle,
@@ -272,7 +357,6 @@ export const KdsUnsentItems = React.forwardRef<
   const [windowStart, setWindowStart] = React.useState(
     () => Date.now() - 30 * 24 * 60 * 60 * 1000
   );
-  const [page, setPage] = React.useState(0);
 
   // Same imperative refresh model as the send ledger: re-anchor the window to
   // now (changes the query key -> fresh fetch), never a plain refetch of the
@@ -285,26 +369,23 @@ export const KdsUnsentItems = React.forwardRef<
     },
   }));
 
-  const handleWindowChange = (key: UnsentWindowKey) => {
-    setWindowKey(key);
-    setPage(0);
-    const end = Date.now();
-    setWindowEnd(end);
-    setWindowStart(end - windowMsForKey(key));
-  };
-
   const toIso = new Date(windowEnd).toISOString();
   const fromIso = new Date(windowStart).toISOString();
 
   const unsent = useKdsUnsentItems(locationId, fromIso, toIso, orderId);
   const orders = unsent.data ?? [];
-
-  const totalPages = Math.max(1, Math.ceil(orders.length / UNSENT_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageOrders = orders.slice(
-    safePage * UNSENT_PAGE_SIZE,
-    (safePage + 1) * UNSENT_PAGE_SIZE
+  const { pageRows, pagination, setPage } = useClientPagination(
+    orders,
+    UNSENT_PAGE_SIZE
   );
+
+  const handleWindowChange = (key: UnsentWindowKey) => {
+    setWindowKey(key);
+    setPage(1);
+    const end = Date.now();
+    setWindowEnd(end);
+    setWindowStart(end - windowMsForKey(key));
+  };
 
   const unsentItemCount = orders.reduce(
     (sum, order) => sum + order.unsent_item_count,
@@ -315,98 +396,108 @@ export const KdsUnsentItems = React.forwardRef<
     (o) => !o.fully_unsent && o.unsent_item_count > 0
   ).length;
 
+  const failedWithoutData = unsent.isError && !unsent.data;
+  const figure = (value: number, alarm = false) =>
+    failedWithoutData ? (
+      "—"
+    ) : alarm && value > 0 ? (
+      <span className="text-red-600 dark:text-red-400">{value}</span>
+    ) : (
+      value
+    );
+
+  const emptyTitle = "No unsent items in this window";
+  const emptyHint =
+    "Every non-voided item on every open order created in this window has fired to the kitchen. Widen the window if you are chasing an older order.";
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="min-w-0 space-y-6">
       {/* Same no-silent-filter rule as the ledger: a ?order= deep link pins
           this view to one order; make it visible and dismissible. */}
       {orderId && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
-          <span className="font-medium">
-            Showing unsent items for one order.
-          </span>
-          {onClearOrder ? (
-            <button
-              type="button"
-              className="font-semibold underline underline-offset-2 hover:opacity-80"
-              onClick={onClearOrder}
-            >
-              Show all orders
-            </button>
-          ) : (
-            <span className="text-muted-foreground">
-              Pick the order from the board to clear.
-            </span>
-          )}
-        </div>
+        <KdsNotice>
+          <p>
+            <NoticeLead>Showing unsent items for one order.</NoticeLead>{" "}
+            {onClearOrder ? (
+              <button
+                type="button"
+                className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                onClick={onClearOrder}
+              >
+                Show all orders
+              </button>
+            ) : (
+              "Pick the order from the board to clear."
+            )}
+          </p>
+        </KdsNotice>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <WindowSelect
           value={windowKey}
-          onValueChange={(v) => handleWindowChange(v as UnsentWindowKey)}
-        >
-          <SelectTrigger className="h-8 w-37.5 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {UNSENT_WINDOWS.map((w) => (
-              <SelectItem key={w.key} value={w.key}>
-                {w.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground">
+          onValueChange={handleWindowChange}
+          options={UNSENT_WINDOWS}
+        />
+        <span className="text-[0.8125rem] text-muted-foreground">
           by order created date
         </span>
       </div>
 
-      {/* Summary counts */}
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <SummaryCard label="Orders w/ unsent items" value={orders.length} tone="default" />
-        <SummaryCard label="Unsent items" value={unsentItemCount} tone="warn" />
-        <SummaryCard label="Fully unsent orders" value={fullyUnsent} tone="warn" />
-        <SummaryCard label="Partial fires" value={partial} tone="danger" />
-      </div>
+      <StatRow columns={4}>
+        <StatTile
+          label="Orders with unsent items"
+          value={figure(orders.length)}
+          isLoading={unsent.isLoading}
+        />
+        <StatTile
+          label="Unsent items"
+          value={figure(unsentItemCount)}
+          isLoading={unsent.isLoading}
+        />
+        <StatTile
+          label="Fully unsent orders"
+          value={figure(fullyUnsent)}
+          isLoading={unsent.isLoading}
+        />
+        <StatTile
+          label="Partial fires"
+          value={figure(partial, true)}
+          isLoading={unsent.isLoading}
+        />
+      </StatRow>
 
-      {/* How to read this */}
-      <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
-        <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+      <KdsNotice icon={Clock}>
         <p>
-          <span className="font-semibold">What &quot;unsent&quot; means.</span>{" "}
-          An item is unsent when the kitchen never received it.
-          <span className="font-semibold"> Nothing sent</span> = the whole
-          order never fired (a draft nobody sent, or the send never reached
-          the server). <span className="font-semibold">Partial fire</span> =
-          some items made it to the kitchen but these did not.
+          <NoticeLead>What &ldquo;unsent&rdquo; means.</NoticeLead> An item is
+          unsent when the kitchen never received it.{" "}
+          <NoticeLead>Nothing sent</NoticeLead> = the whole order never fired (a
+          draft nobody sent, or the send never reached the server).{" "}
+          <NoticeLead>Partial fire</NoticeLead> = some items made it to the
+          kitchen but these did not.
         </p>
-      </div>
+      </KdsNotice>
 
       {unsent.isError && (
-        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-          Could not load unsent items:{" "}
-          {unsent.error instanceof Error ? unsent.error.message : "unknown"}
-        </p>
+        <LoadError
+          title="We couldn't load unsent items"
+          detail={unsent.error instanceof Error ? unsent.error.message : undefined}
+          onRetry={() => void unsent.refetch()}
+        />
       )}
 
-      {unsent.isLoading ? (
-        <Skeleton className="h-48 w-full" />
-      ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-10 text-center">
-          <Send className="mb-2 h-6 w-6 text-muted-foreground" />
-          <p className="text-sm font-medium">No unsent items in this window</p>
-          <p className="mt-1 max-w-md text-xs text-muted-foreground">
-            Every non-voided item on every open order created in this window
-            has fired to the kitchen. Widen the window if you are chasing an
-            older order.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
+      {!failedWithoutData && (
+        <div className="min-w-0">
+          <Table
+            variant="data"
+            containerClassName="hidden xl:block"
+            className="min-w-[820px]"
+          >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-8" />
+                <TableHead className="w-10">
+                  <span className="sr-only">Expand</span>
+                </TableHead>
                 <TableHead>Order</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
@@ -416,47 +507,55 @@ export const KdsUnsentItems = React.forwardRef<
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageOrders.map((order) => (
-                <UnsentOrderRow key={order.order_id} order={order} />
-              ))}
+              {unsent.isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={UNSENT_COLUMNS}
+                    className="h-24 text-center text-sm text-muted-foreground"
+                  >
+                    Loading unsent items…
+                  </TableCell>
+                </TableRow>
+              ) : pageRows.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={UNSENT_COLUMNS}
+                  title={emptyTitle}
+                  hint={emptyHint}
+                />
+              ) : (
+                pageRows.map((order) => (
+                  <UnsentOrderRow key={order.order_id} order={order} />
+                ))
+              )}
             </TableBody>
           </Table>
-        </div>
-      )}
 
-      {!unsent.isLoading && orders.length > 0 && (
-        <TablePagination
-          page={safePage}
-          pageSize={UNSENT_PAGE_SIZE}
-          totalCount={orders.length}
-          onPageChange={setPage}
-        />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+            {unsent.isLoading ? (
+              <RecordCardSkeletons count={4} />
+            ) : pageRows.length === 0 ? (
+              <CardGridEmpty title={emptyTitle} hint={emptyHint} />
+            ) : (
+              pageRows.map((order) => (
+                <UnsentOrderCard key={order.order_id} order={order} />
+              ))
+            )}
+          </div>
+
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="orders"
+          />
+          {!unsent.isLoading &&
+            orders.length > 0 &&
+            orders.length <= UNSENT_PAGE_SIZE && (
+              <p className="mt-3 text-xs text-muted-foreground tabular-nums sm:text-sm">
+                {orders.length} {orders.length === 1 ? "order" : "orders"}
+              </p>
+            )}
+        </div>
       )}
     </div>
   );
 });
-
-function SummaryCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "default" | "danger" | "warn";
-}) {
-  return (
-    <div className="rounded-lg border bg-card px-3 py-2">
-      <div
-        className={cn(
-          "text-xl font-semibold tabular-nums",
-          tone === "danger" && "text-red-600 dark:text-red-400",
-          tone === "warn" && "text-amber-600 dark:text-amber-400"
-        )}
-      >
-        {value}
-      </div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-    </div>
-  );
-}

@@ -17,6 +17,7 @@ export function BillingTab({ merchantId, merchantName, canEdit, locations }: Bil
             context="admin"
             canEdit={canEdit}
             locations={locations}
+            embedded
         />
     )
 }

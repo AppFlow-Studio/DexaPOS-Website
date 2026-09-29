@@ -1,94 +1,109 @@
+import { Panel } from '@/components/dashboard/shell'
 import { Skeleton } from '@/components/ui/skeleton'
 
 /**
- * `/manage/support`: header, a 2-up KPI grid that goes 4-up at `xl`, the
- * status tab strip, the filter row, then the ticket list.
+ * `/manage/support`: header, the KPI panel, then one panel holding the status
+ * rail, the filter toolbar and the ticket table (cards below `lg`).
  *
- * Hand-rolled rather than `DataPageSkeleton`: this page is built from raw
- * cards and a bordered tab strip rather than the dashboard shell primitives,
- * so a shared variant would promise panel chrome that never arrives. The
- * breakpoints below mirror the real page exactly — `grid-cols-2
- * xl:grid-cols-4` for the tiles, and the same `w-40`/`w-36` filter widths.
+ * Hand-rolled rather than `DataPageSkeleton variant="table"`: that variant
+ * has no status rail and reserves an avatar slot in each row, so the page
+ * would shift on arrival (§14.4, §5.4). The breakpoints below mirror the page
+ * exactly — `hidden lg:block` table, `lg:hidden` cards, `grid-cols-2
+ * sm:flex` filters.
  */
 export default function RouteLoading() {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-      className="min-w-0 space-y-6 overflow-x-hidden"
-    >
+    <div role="status" aria-live="polite" aria-busy="true" className="min-w-0 space-y-6">
       <span className="sr-only">Loading the support inbox</span>
 
-      {/* Header — title/subtitle over the Refresh + New Ticket pair. */}
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <Skeleton className="h-8 w-52 max-w-[70vw]" />
-          <Skeleton className="h-4 w-72 max-w-[80vw]" />
-        </div>
-        <div className="flex min-w-0 flex-wrap gap-2">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-8 w-44" />
-        </div>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="min-w-0 overflow-hidden rounded-xl border bg-card p-4 shadow-sm"
-          >
-            <Skeleton className="mb-3 h-8 w-8 rounded-lg" />
-            <Skeleton className="h-7 w-16 max-w-full" />
-            <Skeleton className="mt-1.5 h-3 w-24 max-w-full" />
+      {/* Header — title, subtitle (hidden below `sm`, as on the page), actions. */}
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <Skeleton className="h-9 w-52 max-w-[70vw]" />
+          <div className="flex min-w-0 flex-wrap gap-2">
+            <Skeleton className="h-11 w-28 rounded-full sm:h-9" />
+            <Skeleton className="h-11 w-52 rounded-full sm:h-9" />
           </div>
-        ))}
-      </div>
-
-      {/* Status tabs — scrolls rather than clips, like the real strip. */}
-      <div className="flex min-w-0 gap-6 overflow-x-auto border-b pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {['w-12', 'w-20', 'w-16', 'w-20', 'w-8'].map((w, i) => (
-          <Skeleton key={i} className={`h-4 shrink-0 ${w}`} />
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Skeleton className="h-9 w-full min-w-0 max-w-sm flex-1" />
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-9 w-36" />
-        <Skeleton className="h-9 w-40" />
-      </div>
-
-      {/* Ticket list — a count bar over the rows, matching the real card. */}
-      <div className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div className="border-b bg-muted/30 px-4 py-2.5">
-          <Skeleton className="h-3 w-20" />
         </div>
-        <div className="divide-y divide-border/50">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex min-w-0 items-center gap-3 px-4 py-3.5">
-              <div className="min-w-0 flex-1 space-y-2">
-                {/* The badge row: ticket number, status, priority, scope. */}
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-5 w-14 rounded-full" />
-                </div>
-                <Skeleton className="h-4 w-64 max-w-full" />
-                <Skeleton className="h-3 w-48 max-w-full" />
-              </div>
-              <div className="hidden shrink-0 space-y-1.5 text-right sm:block">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-              <Skeleton className="h-4 w-4 shrink-0" />
+        <Skeleton className="mt-2 h-4 w-80 max-w-[80vw] max-sm:hidden" />
+      </div>
+
+      {/* KPI panel — StatRow columns={4}: two-up on phones, four at `lg`. */}
+      <Panel>
+        <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 px-4 py-6 sm:gap-x-10 sm:px-6 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="min-w-0">
+              <Skeleton className="h-4 w-24 max-w-full" />
+              <Skeleton className="mt-2 h-8 w-16 max-w-full" />
             </div>
           ))}
         </div>
-      </div>
+      </Panel>
+
+      <Panel padded>
+        {/* Status rail — scrolls rather than clips, like the real one. */}
+        <div className="w-full min-w-0 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="inline-flex w-max gap-0.5 rounded-full bg-muted/70 p-1">
+            {['w-16', 'w-24', 'w-20', 'w-20', 'w-12'].map((w, i) => (
+              <Skeleton key={i} className={`h-8 shrink-0 rounded-full ${w}`} />
+            ))}
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="mt-4 flex min-w-0 flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+          <Skeleton className="h-9 w-full rounded-full lg:w-72" />
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <Skeleton className="h-9 w-full rounded-full sm:w-40" />
+            <Skeleton className="h-9 w-full rounded-full sm:w-44" />
+            <Skeleton className="h-9 w-full rounded-full sm:w-36" />
+            <Skeleton className="h-9 w-full rounded-full sm:w-40" />
+          </div>
+        </div>
+
+        <div className="mt-5 min-w-0">
+          {/* Table well, `lg` and up. */}
+          <div className="hidden space-y-1 overflow-hidden rounded-2xl bg-muted/20 lg:block">
+            <div className="flex gap-6 bg-muted/50 px-3 py-3">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="ml-auto h-3 w-16" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex min-w-0 items-center gap-6 bg-card/70 px-3 py-3">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-64 max-w-full" />
+                  <Skeleton className="h-3 w-48 max-w-full" />
+                </div>
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-14 rounded-full" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+
+          {/* Record cards below `lg`. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="min-w-0 rounded-2xl bg-muted/45 p-4">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+                <Skeleton className="mt-2 h-3 w-1/2" />
+                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Panel>
     </div>
   )
 }

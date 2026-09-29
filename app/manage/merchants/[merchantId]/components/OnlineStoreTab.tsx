@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -98,19 +97,6 @@ function getRequestStatusDescription(status: LocationOnlineStoreOverview['setupR
     }
 }
 
-function getRequestStatusBadgeVariant(status: LocationOnlineStoreOverview['setupRequestStatus']) {
-    switch (status) {
-        case 'rejected':
-            return 'destructive' as const
-        case 'approved':
-            return 'outline' as const
-        case 'setup_completed':
-            return 'default' as const
-        default:
-            return 'secondary' as const
-    }
-}
-
 function maskSensitiveValue(value?: string | null, keep = 4) {
     if (!value) return 'Missing'
     const visible = value.slice(-keep)
@@ -193,6 +179,36 @@ export function OnlineStoreTab({
     const w9UploadInputRef = useRef<HTMLInputElement>(null)
     const [missingFormOpen, setMissingFormOpen] = useState(false)
     const [hoursModalOpen, setHoursModalOpen] = useState(false)
+    const [settingsTab, setSettingsTab] = useState('store')
+    // Each location opens on its first settings tab, as the uncontrolled rail did.
+    useEffect(() => {
+        setSettingsTab('store')
+    }, [selectedLocationId])
+
+    // §13.2 (D-24): keep the active settings pill in view by scrolling the rail
+    // itself, clamped, re-measured once the rail has a width.
+    const settingsRailRef = useRef<HTMLDivElement>(null)
+    const settingsRailPositioned = useRef(false)
+    useEffect(() => {
+        const rail = settingsRailRef.current
+        if (!rail) return
+        let done = false
+        const align = () => {
+            const max = rail.scrollWidth - rail.clientWidth
+            const tab = rail.querySelector<HTMLElement>('[data-state="active"]')
+            if (done || !tab || max <= 0) return
+            const left = tab.offsetLeft - (rail.clientWidth - tab.offsetWidth) / 2
+            const smooth =
+                settingsRailPositioned.current &&
+                !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            rail.scrollTo({ left: Math.max(0, Math.min(left, max)), behavior: smooth ? 'smooth' : 'auto' })
+            settingsRailPositioned.current = done = true
+        }
+        align()
+        const observer = new ResizeObserver(align)
+        observer.observe(rail)
+        return () => observer.disconnect()
+    }, [settingsTab])
 
     // Mutations
     const saveMutation = useAdminSaveOnlineOrderingSettings()
@@ -349,19 +365,22 @@ export function OnlineStoreTab({
                         label="Online Store Settings"
                         caption="Configure online ordering for each merchant location. Select a location to manage its storefront settings."
                     >
-                        <div className="mt-4">
+                        <div>
                         {locationsLoading || overviewLoading ? (
                             <div className="space-y-3">
                                 {[...Array(3)].map((_, i) => (
-                                    <Skeleton key={i} className="h-20 w-full" />
+                                    <Skeleton key={i} className="h-20 w-full rounded-2xl" />
                                 ))}
                             </div>
                         ) : locations.length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                No locations found for this merchant
+                            <div className="rounded-2xl bg-muted/30 px-4 py-10 text-center">
+                                <p className="text-sm font-medium">No locations yet</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Online store settings appear here once this merchant has a location.
+                                </p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 {locations.map((location) => {
                                     const storeInfo = overview.find(
                                         (o: LocationOnlineStoreOverview) => o.locationId === location.id
@@ -377,21 +396,12 @@ export function OnlineStoreTab({
                                     return (
                                         <div
                                             key={location.id}
-                                            className="flex flex-col gap-3 p-4 border rounded-lg sm:flex-row sm:items-center sm:justify-between"
+                                            className="flex min-w-0 flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
                                         >
                                             <div className="flex items-center gap-4 min-w-0">
-                                                <div
-                                                    className={cn(
-                                                        'h-12 w-12 shrink-0 rounded-lg flex items-center justify-center',
-                                                        requestStatus === 'setup_completed' && isEnabled
-                                                            ? 'bg-green-100 text-green-600 dark:bg-green-900/30'
-                                                            : requestStatus === 'pending_review' || requestStatus === 'approved'
-                                                              ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30'
-                                                              : requestStatus === 'rejected'
-                                                                ? 'bg-red-100 text-red-600 dark:bg-red-900/30'
-                                                            : 'bg-muted text-muted-foreground'
-                                                    )}
-                                                >
+                                                {/* Structural plate, neutral; the status word
+                                                    carries the state (§3.5). Drops on phones (§13.4). */}
+                                                <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
                                                     <Globe className="h-6 w-6" />
                                                 </div>
                                                 <div className="min-w-0">
@@ -415,22 +425,13 @@ export function OnlineStoreTab({
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3 flex-wrap shrink-0">
-                                                <Badge
-                                                    variant={getRequestStatusBadgeVariant(requestStatus)}
-                                                    className={
-                                                        requestStatus === 'setup_completed' && isEnabled
-                                                            ? 'bg-green-600'
-                                                            : ''
-                                                    }
-                                                >
+                                                <Badge variant="outline">
                                                     {getRequestStatusLabel(requestStatus)}
                                                 </Badge>
                                                 {requestStatus === 'setup_completed' && hasStore ? (
-                                                    <>
-                                                        <Badge variant={isEnabled ? 'default' : 'secondary'} className={isEnabled ? 'bg-green-600' : ''}>
-                                                            {isEnabled ? 'Live' : 'Disabled'}
-                                                        </Badge>
-                                                    </>
+                                                    <Badge variant="outline">
+                                                        {isEnabled ? 'Live' : 'Disabled'}
+                                                    </Badge>
                                                 ) : null}
                                                 <Button
                                                     variant={hasStore ? 'outline' : 'default'}
@@ -495,82 +496,94 @@ export function OnlineStoreTab({
     return (
         <div className="space-y-6">
             <Dialog open={Boolean(w9ViewerUrl)} onOpenChange={(open) => !open && setW9ViewerUrl(null)}>
-                <DialogContent className="max-w-5xl">
-                    <DialogHeader>
+                {/* §12/§13.1: a document viewer, full-screen below `sm`. The
+                    content clips; the frame fills the body. */}
+                <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[90vh] sm:w-full sm:max-w-5xl sm:rounded-3xl">
+                    <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
                         <DialogTitle>Signed W-9</DialogTitle>
                     </DialogHeader>
-                    {w9ViewerUrl ? (
-                        <iframe
-                            title="Signed W-9 PDF"
-                            src={w9ViewerUrl}
-                            className="h-[75vh] w-full rounded-md border"
-                        />
-                    ) : null}
+                    <div className="min-h-0 flex-1 px-6 pb-6 pt-2">
+                        {w9ViewerUrl ? (
+                            <iframe
+                                title="Signed W-9 PDF"
+                                src={w9ViewerUrl}
+                                className="h-full w-full rounded-2xl border sm:h-[75vh]"
+                            />
+                        ) : null}
+                    </div>
                 </DialogContent>
             </Dialog>
 
-            {/* Header */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:gap-4">
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedLocationId(null)} className="shrink-0 self-start">
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back to Locations
-                    </Button>
-                    <Separator orientation="vertical" className="hidden h-6 shrink-0 sm:block" />
-                    <div className="min-w-0">
-                        <h3 className="font-semibold truncate">{selectedLocation?.name || 'Location'}</h3>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm text-muted-foreground">Online Store Configuration</p>
-                            <Badge variant={getRequestStatusBadgeVariant(requestStatus)}>
-                                {getRequestStatusLabel(requestStatus)}
-                            </Badge>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap shrink-0">
-                    {isDirty && canEditStoreSetup && (
-                        <>
-                            <Button variant="ghost" size="sm" onClick={handleDiscard} disabled={saveMutation.isPending}>
-                                <X className="h-4 w-4 mr-2" />
-                                Discard
-                            </Button>
-                            <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
-                                {saveMutation.isPending ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Check className="h-4 w-4 mr-2" />
+            <Button variant="ghost" size="sm" onClick={() => setSelectedLocationId(null)} className="-ml-2 self-start">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Locations
+            </Button>
+
+            {/* A tab's title is a PanelSection label, never another heading
+                level of its own (§14.6.4). */}
+            <Panel>
+                <PanelSection
+                    showCaptionOnMobile
+                    label={selectedLocation?.name || 'Location'}
+                    caption={
+                        <span className="flex flex-wrap items-center gap-2">
+                            <span>Online Store Configuration</span>
+                            <Badge variant="outline">{getRequestStatusLabel(requestStatus)}</Badge>
+                        </span>
+                    }
+                    action={
+                            <div className="flex items-center gap-3 flex-wrap">
+                                {isDirty && canEditStoreSetup && (
+                                    <>
+                                        <Button variant="ghost" size="sm" onClick={handleDiscard} disabled={saveMutation.isPending}>
+                                            <X className="h-4 w-4 mr-2" />
+                                            Discard
+                                        </Button>
+                                        <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
+                                            {saveMutation.isPending ? (
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            ) : (
+                                                <Check className="h-4 w-4 mr-2" />
+                                            )}
+                                            Save Changes
+                                        </Button>
+                                    </>
                                 )}
-                                Save Changes
-                            </Button>
-                        </>
-                    )}
-                    {localSettings?.enabled && localSettings?.storeSlug && requestStatus === 'setup_completed' && (
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={storeUrl} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="h-4 w-4 mr-2" />
-                                Preview Store
-                            </a>
-                        </Button>
-                    )}
-                </div>
-            </div>
+                                {localSettings?.enabled && localSettings?.storeSlug && requestStatus === 'setup_completed' && (
+                                    <Button variant="outline" size="sm" asChild>
+                                        <a href={storeUrl} target="_blank" rel="noopener noreferrer">
+                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                            Preview Store
+                                        </a>
+                                    </Button>
+                                )}
+                            </div>
+                    }
+                />
+            </Panel>
 
             {settingsLoading ? (
-                <div className="space-y-4">
-                    <Skeleton className="h-32 w-full" />
-                    <Skeleton className="h-64 w-full" />
+                <div className="space-y-6">
+                    <Skeleton className="h-32 w-full rounded-3xl" />
+                    <Skeleton className="h-64 w-full rounded-3xl" />
                 </div>
             ) : !localSettings ? (
                 <Panel padded>
-                    <div className="py-12 text-center">
-                        <p className="text-muted-foreground">Failed to load settings</p>
+                    <div className="rounded-2xl bg-muted/30 px-4 py-10 text-center">
+                        <p className="text-sm font-medium">We couldn&apos;t load this location&apos;s store settings</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Try again, or go back and reopen the location.
+                        </p>
+                        <Button variant="outline" size="sm" className="mt-4" onClick={() => refetchSettings()}>
+                            Retry
+                        </Button>
                     </div>
                 </Panel>
             ) : (
                 <>
                     {requestStatus === 'not_requested' && (
                         <Panel>
-                            <PanelSection
+                            <PanelSection showCaptionOnMobile
                                 label="Awaiting Merchant Request"
                                 caption="This location does not have an online-store setup request yet. Review details below, but branch setup should start from the merchant request flow."
                             >
@@ -584,7 +597,7 @@ export function OnlineStoreTab({
                                 label="Review Request"
                                 caption="Inspect the merchant and location packet below. Approve to unlock HQ setup, or reject and provide a reason that will be emailed to the merchant owner/admin."
                             >
-                                <div className="mt-4 flex gap-3">
+                                <div className="flex flex-wrap gap-3">
                                 <Button onClick={handleApproveRequest} disabled={approveMutation.isPending || rejectMutation.isPending}>
                                     {approveMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
                                     Approve
@@ -603,8 +616,8 @@ export function OnlineStoreTab({
                     )}
 
                     {requestStatus === 'approved' && (
-                        <Panel className="border-yellow-300/60">
-                            <PanelSection
+                        <Panel>
+                            <PanelSection showCaptionOnMobile
                                 label="Request Approved"
                                 caption="HQ can now complete storefront setup. The first successful save from this screen marks the request as setup completed."
                             />
@@ -612,25 +625,25 @@ export function OnlineStoreTab({
                     )}
 
                     {requestStatus === 'rejected' && (
-                        <Panel className="border-destructive/40">
-                            <PanelSection
+                        <Panel>
+                            <PanelSection showCaptionOnMobile
                                 label="Request Rejected"
                                 caption="The merchant must resubmit the request after addressing the rejection reason below."
                             >
-                                <div className="mt-4 text-sm text-muted-foreground">
+                                <div className="text-sm text-muted-foreground">
                                     {localSettings.setupRejectionReason || 'No rejection reason recorded.'}
                                 </div>
                             </PanelSection>
                         </Panel>
                     )}
 
-                    <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="grid min-w-0 items-start gap-6 xl:grid-cols-2">
                         <Panel>
                             <PanelSection
                                 label="Merchant Review Packet"
                                 caption="Compliance fields collected during merchant onboarding."
                             >
-                                <div className="mt-4 space-y-3 text-sm">
+                                <div className="space-y-3 text-sm">
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Legal Business Name</span>
                                     <span>{localSettings.merchantReviewPacket?.legalBusinessName || 'Missing'}</span>
@@ -658,7 +671,7 @@ export function OnlineStoreTab({
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Signed W-9</span>
                                     {localSettings.merchantReviewPacket?.w9FormUrl ? (
-                                        <a className="text-primary underline" href={localSettings.merchantReviewPacket.w9FormUrl} target="_blank" rel="noreferrer">
+                                        <a className="text-foreground underline underline-offset-4"href={localSettings.merchantReviewPacket.w9FormUrl} target="_blank" rel="noreferrer">
                                             View PDF
                                         </a>
                                     ) : (
@@ -668,7 +681,7 @@ export function OnlineStoreTab({
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Government ID</span>
                                     {localSettings.merchantReviewPacket?.ownerGovernmentIdUrl ? (
-                                        <a className="text-primary underline" href={localSettings.merchantReviewPacket.ownerGovernmentIdUrl} target="_blank" rel="noreferrer">
+                                        <a className="text-foreground underline underline-offset-4"href={localSettings.merchantReviewPacket.ownerGovernmentIdUrl} target="_blank" rel="noreferrer">
                                             View Document
                                         </a>
                                     ) : (
@@ -684,7 +697,7 @@ export function OnlineStoreTab({
                                 label="Location Review Packet"
                                 caption="Banking and support documents collected for this branch."
                             >
-                                <div className="mt-4 space-y-3 text-sm">
+                                <div className="space-y-3 text-sm">
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Bank Name</span>
                                     <span>{localSettings.locationReviewPacket?.bankName || 'Missing'}</span>
@@ -704,7 +717,7 @@ export function OnlineStoreTab({
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Bank Letter / Voided Check</span>
                                     {localSettings.locationReviewPacket?.bankSupportDocumentUrl ? (
-                                        <a className="text-primary underline" href={localSettings.locationReviewPacket.bankSupportDocumentUrl} target="_blank" rel="noreferrer">
+                                        <a className="text-foreground underline underline-offset-4"href={localSettings.locationReviewPacket.bankSupportDocumentUrl} target="_blank" rel="noreferrer">
                                             View Document
                                         </a>
                                     ) : (
@@ -721,7 +734,7 @@ export function OnlineStoreTab({
                             label="Review Checklist"
                             caption="Required packet items before HQ should approve setup."
                         >
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             {([
                                 ['Legal Business Name', localSettings.reviewChecklist?.legalBusinessName],
                                 ['DBA Name', localSettings.reviewChecklist?.dbaName],
@@ -732,11 +745,17 @@ export function OnlineStoreTab({
                                 ['Banking Info', localSettings.reviewChecklist?.bankingInfo],
                                 ['Bank Support Doc', localSettings.reviewChecklist?.bankSupportDocument],
                             ] as Array<[string, boolean | undefined]>).map(([label, complete]) => (
-                                <div key={label} className="flex items-center justify-between rounded-md border p-3">
-                                    <span className="text-sm">{label}</span>
-                                    <Badge variant={complete ? 'default' : 'secondary'}>
-                                        {complete ? 'Ready' : 'Missing'}
-                                    </Badge>
+                                // Muted card: the state is plain text, and a missing item
+                                // is marked by weight rather than colour (§3.5).
+                                <div
+                                    key={label}
+                                    className={cn(
+                                        'flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-muted/45 p-3 text-sm',
+                                        complete ? 'text-muted-foreground' : 'font-medium text-foreground'
+                                    )}
+                                >
+                                    <span className="min-w-0">{label}</span>
+                                    <span className="shrink-0">{complete ? 'Ready' : 'Missing'}</span>
                                 </div>
                             ))}
                             </div>
@@ -745,13 +764,13 @@ export function OnlineStoreTab({
 
                     {requirementsData?.success && !requirementsData.complete ? (
                         <Panel>
-                            <PanelSection
+                            <PanelSection showCaptionOnMobile
                                 label="Missing Packet Items"
                                 caption="These fields are required before approval. Use the editor to fill only the missing items."
                             >
-                                <div className="mt-4 flex items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center justify-between gap-4">
                                 <div className="text-sm text-muted-foreground">
-                                    {Object.values(requirementsData.missing).filter(Boolean).length} missing fields detected.
+                                    <span className="tabular-nums">{Object.values(requirementsData.missing).filter(Boolean).length}</span> missing fields detected.
                                 </div>
                                 <Button onClick={() => setMissingFormOpen(true)} variant="outline">
                                     Edit Missing Fields
@@ -792,38 +811,29 @@ export function OnlineStoreTab({
                     {canEditStoreSetup ? (
                         <>
                     {/* Enable/Disable Toggle */}
-                    <Panel padded>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div
-                                        className={cn(
-                                            'flex h-12 w-12 items-center justify-center rounded-full transition-colors',
-                                            localSettings.enabled
-                                                ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
-                                                : 'bg-muted text-muted-foreground'
-                                        )}
-                                    >
-                                        <Globe className="h-6 w-6" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold">Online Ordering</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            {localSettings.enabled
-                                                ? 'Store is live and accepting online orders'
-                                                : 'Enable to start accepting online orders'}
-                                        </p>
-                                        {localSettings.enabled && storeUrl && (
-                                            <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                                {storeUrl}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                                <Switch className="shrink-0"
+                    <Panel>
+                        {/* The caption is the store's state, so it stays on phones (§13.4). */}
+                        <PanelSection
+                            icon={Globe}
+                            label="Online Ordering"
+                            showCaptionOnMobile
+                            caption={
+                                localSettings.enabled
+                                    ? 'Store is live and accepting online orders'
+                                    : 'Enable to start accepting online orders'
+                            }
+                            action={
+                                <Switch
+                                    aria-label="Online ordering"
                                     checked={localSettings.enabled}
                                     onCheckedChange={(enabled) => updateSettings({ enabled })}
                                 />
-                            </div>
+                            }
+                        >
+                            {localSettings.enabled && storeUrl ? (
+                                <p className="break-all font-mono text-xs text-muted-foreground">{storeUrl}</p>
+                            ) : null}
+                        </PanelSection>
                     </Panel>
 
                     <Panel>
@@ -831,20 +841,20 @@ export function OnlineStoreTab({
                             label="Online Card Payments"
                             caption="This location&apos;s storefront takes card payments through Valor. Board the location, then set it live to accept cards online."
                         >
-                            <div className="mt-4 space-y-4">
-                            <div className="flex items-center justify-between rounded-md border p-3">
-                                <div>
+                            <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border p-3">
+                                <div className="min-w-0">
                                     <p className="text-sm font-medium">Store Status</p>
                                     <p className="text-xs text-muted-foreground">
                                         {localSettings.enabled ? 'Store is enabled in admin' : 'Store is disabled in admin'}
                                     </p>
                                 </div>
-                                <Badge variant={localSettings.enabled ? 'default' : 'secondary'}>
+                                <Badge variant="outline" className="shrink-0">
                                     {localSettings.enabled ? 'Enabled' : 'Disabled'}
                                 </Badge>
                             </div>
 
-                            <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border p-3">
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
                                     <p className="text-xs text-muted-foreground">
@@ -855,27 +865,24 @@ export function OnlineStoreTab({
                                                 : 'This location is not boarded on Valor yet. Board it to enable online card payments.'}
                                     </p>
                                 </div>
-                                <Badge
-                                    variant={valorReady ? 'default' : valorBoarded ? 'secondary' : 'destructive'}
-                                    className={cn('shrink-0', valorReady && 'bg-green-600')}
-                                >
+                                <Badge variant="outline" className="shrink-0">
                                     {valorReady ? 'Ready' : valorBoarded ? 'Not live' : 'Not boarded'}
                                 </Badge>
                             </div>
 
                             {valorBoarded ? (
-                                <div className="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm sm:grid-cols-4">
+                                <div className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/60 p-3 text-sm sm:grid-cols-4">
                                     <div className="min-w-0">
                                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor Merchant</p>
-                                        <p className="truncate font-mono text-xs">{valorRow?.valorMerchantId ?? '-'}</p>
+                                        <p className="truncate font-mono text-xs">{valorRow?.valorMerchantId ?? '—'}</p>
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Store</p>
-                                        <p className="truncate font-mono text-xs">{valorRow?.valorStoreId ?? '-'}</p>
+                                        <p className="truncate font-mono text-xs">{valorRow?.valorStoreId ?? '—'}</p>
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">EPI</p>
-                                        <p className="truncate font-mono text-xs">{valorRow?.valorEpi ?? '-'}</p>
+                                        <p className="truncate font-mono text-xs">{valorRow?.valorEpi ?? '—'}</p>
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">API Keys</p>
@@ -913,29 +920,32 @@ export function OnlineStoreTab({
                     </Panel>
 
                     {/* Settings Tabs */}
-                    <Tabs defaultValue="store" className="space-y-6">
-                        <TabsList className="w-full justify-start overflow-x-auto">
-                            <TabsTrigger value="store" className="gap-2">
-                                <Store className="h-4 w-4" />
-                                Store Info
-                            </TabsTrigger>
-                            <TabsTrigger value="branding" className="gap-2">
-                                <Palette className="h-4 w-4" />
-                                Branding
-                            </TabsTrigger>
-                            <TabsTrigger value="ordering" className="gap-2">
-                                <Truck className="h-4 w-4" />
-                                Ordering
-                            </TabsTrigger>
-                            <TabsTrigger value="payment" className="gap-2">
-                                <CreditCard className="h-4 w-4" />
-                                Payment & Tips
-                            </TabsTrigger>
-                            <TabsTrigger value="orderout" className="gap-2">
-                                <Plug className="h-4 w-4" />
-                                OrderOut
-                            </TabsTrigger>
-                        </TabsList>
+                    <Tabs value={settingsTab} onValueChange={setSettingsTab} className="space-y-6">
+                        {/* DS-CTL-05 pill rail; classes literal (C7). */}
+                        <div ref={settingsRailRef} className="thin-scrollbar relative w-full min-w-0 overflow-x-auto pb-1">
+                            <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                                <TabsTrigger value="store" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                                    <Store className="h-4 w-4" />
+                                    Store Info
+                                </TabsTrigger>
+                                <TabsTrigger value="branding" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                                    <Palette className="h-4 w-4" />
+                                    Branding
+                                </TabsTrigger>
+                                <TabsTrigger value="ordering" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                                    <Truck className="h-4 w-4" />
+                                    Ordering
+                                </TabsTrigger>
+                                <TabsTrigger value="payment" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                                    <CreditCard className="h-4 w-4" />
+                                    Payment & Tips
+                                </TabsTrigger>
+                                <TabsTrigger value="orderout" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                                    <Plug className="h-4 w-4" />
+                                    OrderOut
+                                </TabsTrigger>
+                            </TabsList>
+                        </div>
 
                         {/* Store Info */}
                         <TabsContent value="store" className="space-y-6">
@@ -944,7 +954,7 @@ export function OnlineStoreTab({
                                     label="Store Information"
                                     caption="Basic information about the online store"
                                 >
-                                    <div className="mt-4 space-y-6">
+                                    <div className="space-y-6">
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="storeName">Store Name</Label>
@@ -958,7 +968,9 @@ export function OnlineStoreTab({
                                         <div className="space-y-2">
                                             <Label htmlFor="storeSlug">Store URL Slug</Label>
                                             <div className="flex">
-                                                <span className="inline-flex items-center rounded-l-full border border-r-0 border-input bg-muted pl-4 pr-3 text-sm text-muted-foreground">
+                                                {/* Affix pairing: `rounded-l-full` here, `rounded-l-none` on the
+                                                    input (§4 "Base control radius"). Borderless, like the field. */}
+                                                <span className="inline-flex items-center rounded-l-full bg-muted pl-4 pr-3 text-sm text-muted-foreground">
                                                     /sites/
                                                 </span>
                                                 <Input
@@ -1028,7 +1040,7 @@ export function OnlineStoreTab({
                                         </div>
                                     </div>
 
-                                    <div className="rounded-lg border p-4">
+                                    <div className="rounded-2xl bg-muted/60 p-4">
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                             <div className="min-w-0">
                                                 <p className="font-medium">Operating Hours</p>
@@ -1059,34 +1071,42 @@ export function OnlineStoreTab({
                                     label="Brand Colors"
                                     caption="Customize the store's color scheme"
                                 >
-                                    <div className="mt-4 space-y-6">
+                                    <div className="space-y-6">
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-3">
                                             <Label>Template</Label>
-                                            <select
+                                            <Select
                                                 value={(localSettings.templateId as any) || 'classic'}
-                                                onChange={(e) => updateSettings({ templateId: e.target.value as any })}
-                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                                onValueChange={(value) => updateSettings({ templateId: value as any })}
                                             >
-                                                <option value="classic">Classic</option>
-                                                <option value="hero">Hero</option>
-                                                <option value="market">Market</option>
-                                                <option value="boutique">Boutique</option>
-                                            </select>
+                                                <SelectTrigger className="h-10 w-full min-w-0" aria-label="Template">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="classic">Classic</SelectItem>
+                                                    <SelectItem value="hero">Hero</SelectItem>
+                                                    <SelectItem value="market">Market</SelectItem>
+                                                    <SelectItem value="boutique">Boutique</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Font</Label>
-                                            <select
+                                            <Select
                                                 value={(localSettings.fontFamily as any) || 'DM Sans'}
-                                                onChange={(e) => updateSettings({ fontFamily: e.target.value })}
-                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                                onValueChange={(value) => updateSettings({ fontFamily: value })}
                                             >
-                                                {Object.keys(FONT_GOOGLE_URLS).map((font) => (
-                                                    <option key={font} value={font}>
-                                                        {font}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                <SelectTrigger className="h-10 w-full min-w-0" aria-label="Font">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                                                        <SelectItem key={font} value={font}>
+                                                            {font}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                             <p className="text-xs text-muted-foreground">
                                                 Font options are sourced from storefront supported Google Fonts.
                                             </p>
@@ -1096,27 +1116,35 @@ export function OnlineStoreTab({
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-3">
                                             <Label>Header Style</Label>
-                                            <select
+                                            <Select
                                                 value={(localSettings.headerStyle as any) || 'filled'}
-                                                onChange={(e) => updateSettings({ headerStyle: e.target.value as any })}
-                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                                onValueChange={(value) => updateSettings({ headerStyle: value as any })}
                                             >
-                                                <option value="filled">Filled</option>
-                                                <option value="transparent">Transparent</option>
-                                                <option value="outlined">Outlined</option>
-                                            </select>
+                                                <SelectTrigger className="h-10 w-full min-w-0" aria-label="Header style">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="filled">Filled</SelectItem>
+                                                    <SelectItem value="transparent">Transparent</SelectItem>
+                                                    <SelectItem value="outlined">Outlined</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Menu Layout</Label>
-                                            <select
+                                            <Select
                                                 value={(localSettings.menuLayout as any) || 'cards'}
-                                                onChange={(e) => updateSettings({ menuLayout: e.target.value as any })}
-                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                                onValueChange={(value) => updateSettings({ menuLayout: value as any })}
                                             >
-                                                <option value="cards">Cards</option>
-                                                <option value="sidebyside">Side-by-side</option>
-                                                <option value="no-images">No images</option>
-                                            </select>
+                                                <SelectTrigger className="h-10 w-full min-w-0" aria-label="Menu layout">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="cards">Cards</SelectItem>
+                                                    <SelectItem value="sidebyside">Side-by-side</SelectItem>
+                                                    <SelectItem value="no-images">No images</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     </div>
 
@@ -1128,7 +1156,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={localSettings.primaryColor || '#3b82f6'}
                                                     onChange={(e) => updateSettings({ primaryColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={localSettings.primaryColor || '#3b82f6'}
@@ -1144,7 +1172,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={localSettings.secondaryColor || '#10b981'}
                                                     onChange={(e) => updateSettings({ secondaryColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={localSettings.secondaryColor || '#10b981'}
@@ -1163,7 +1191,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={(localSettings.accentColor as any) || localSettings.primaryColor || '#3b82f6'}
                                                     onChange={(e) => updateSettings({ accentColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={(localSettings.accentColor as any) || ''}
@@ -1180,7 +1208,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={(localSettings.backgroundColor as any) || '#FFFFFF'}
                                                     onChange={(e) => updateSettings({ backgroundColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={(localSettings.backgroundColor as any) || '#FFFFFF'}
@@ -1196,7 +1224,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={(localSettings.textColor as any) || '#111827'}
                                                     onChange={(e) => updateSettings({ textColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={(localSettings.textColor as any) || '#111827'}
@@ -1215,7 +1243,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={(localSettings.borderColor as any) || '#E5E7EB'}
                                                     onChange={(e) => updateSettings({ borderColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={(localSettings.borderColor as any) || ''}
@@ -1232,7 +1260,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={(localSettings.cardColor as any) || '#FFFFFF'}
                                                     onChange={(e) => updateSettings({ cardColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={(localSettings.cardColor as any) || ''}
@@ -1249,7 +1277,7 @@ export function OnlineStoreTab({
                                                     type="color"
                                                     value={(localSettings.headerTextColor as any) || (localSettings.textColor as any) || '#111827'}
                                                     onChange={(e) => updateSettings({ headerTextColor: e.target.value })}
-                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                    className="h-10 w-16 shrink-0 cursor-pointer rounded-full border-0 bg-muted/60 p-1"
                                                 />
                                                 <Input
                                                     value={(localSettings.headerTextColor as any) || ''}
@@ -1260,8 +1288,6 @@ export function OnlineStoreTab({
                                             </div>
                                         </div>
                                     </div>
-
-                                    <Separator />
 
                                     <div className="space-y-3">
                                         <Label htmlFor="bannerText">Banner Promotional Text</Label>
@@ -1291,7 +1317,7 @@ export function OnlineStoreTab({
 
                         {/* Pickup & Delivery */}
                         <TabsContent value="ordering" className="space-y-6">
-                            <div className="grid gap-6 xl:grid-cols-2">
+                            <div className="grid min-w-0 items-start gap-6 xl:grid-cols-2">
                                 <Panel>
                                     <PanelSection
                                         icon={Store}
@@ -1299,6 +1325,7 @@ export function OnlineStoreTab({
                                         caption="Allow customers to pick up orders"
                                         action={
                                             <Switch
+                                                aria-label="Pickup orders"
                                                 checked={localSettings.pickupEnabled ?? true}
                                                 onCheckedChange={(pickupEnabled) => updateSettings({ pickupEnabled })}
                                             />
@@ -1313,13 +1340,14 @@ export function OnlineStoreTab({
                                         caption="Offer delivery to customers"
                                         action={
                                             <Switch
+                                                aria-label="Delivery orders"
                                                 checked={localSettings.deliveryEnabled ?? false}
                                                 onCheckedChange={(deliveryEnabled) => updateSettings({ deliveryEnabled })}
                                             />
                                         }
                                     >
                                     {localSettings.deliveryEnabled && (
-                                        <div className="mt-4 space-y-4">
+                                        <div className="space-y-4">
                                             <div className="grid gap-4 sm:grid-cols-2">
                                                 <div className="space-y-2">
                                                     <Label>Base Delivery Fee</Label>
@@ -1371,7 +1399,7 @@ export function OnlineStoreTab({
                                     label="Order Settings"
                                     caption="Configure order timing and requirements"
                                 >
-                                    <div className="mt-4 space-y-6">
+                                    <div className="space-y-6">
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label>Preparation Lead Time (minutes)</Label>
@@ -1429,10 +1457,10 @@ export function OnlineStoreTab({
                                     label="Order Automation"
                                     caption="Automate order handling to match the merchant dashboard flow"
                                 >
-                                    <div className="mt-4 space-y-4">
+                                    <div className="space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <Zap className="h-5 w-5 text-yellow-500 shrink-0" />
+                                            <Zap className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Automatically Accept All Orders</Label>
                                                 <p className="text-sm text-muted-foreground">
@@ -1445,10 +1473,9 @@ export function OnlineStoreTab({
                                             onCheckedChange={(autoAcceptOrders) => updateSettings({ autoAcceptOrders })}
                                         />
                                     </div>
-                                    <Separator />
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <Check className="h-5 w-5 text-green-500 shrink-0" />
+                                            <Check className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Auto-Close Paid Orders</Label>
                                                 <p className="text-sm text-muted-foreground">
@@ -1472,7 +1499,7 @@ export function OnlineStoreTab({
                                     label="Notifications"
                                     caption="Get notified about new orders"
                                 >
-                                    <div className="mt-4 space-y-4">
+                                    <div className="space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <Bell className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1513,7 +1540,7 @@ export function OnlineStoreTab({
                                     label="Payment Methods"
                                     caption="Choose which payment methods to accept"
                                 >
-                                    <div className="mt-4 space-y-4">
+                                    <div className="space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1531,7 +1558,6 @@ export function OnlineStoreTab({
                                             }
                                         />
                                     </div>
-                                    <Separator />
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <DollarSign className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1559,13 +1585,14 @@ export function OnlineStoreTab({
                                     caption="Configure tipping options for customers"
                                     action={
                                         <Switch
+                                            aria-label="Tipping"
                                             checked={localSettings.tippingEnabled ?? true}
                                             onCheckedChange={(tippingEnabled) => updateSettings({ tippingEnabled })}
                                         />
                                     }
                                 >
                                 {localSettings.tippingEnabled && (
-                                    <div className="mt-4 space-y-6">
+                                    <div className="space-y-6">
                                         <div className="space-y-3">
                                             <Label>Preset Tip Percentages</Label>
                                             <div className="flex gap-2 flex-wrap">
@@ -1615,6 +1642,7 @@ export function OnlineStoreTab({
                                     caption="Add a fee for online ordering"
                                     action={
                                         <Switch
+                                            aria-label="Convenience fee"
                                             checked={localSettings.convenienceFeeEnabled ?? false}
                                             onCheckedChange={(convenienceFeeEnabled) =>
                                                 updateSettings({ convenienceFeeEnabled })
@@ -1623,7 +1651,7 @@ export function OnlineStoreTab({
                                     }
                                 >
                                 {localSettings.convenienceFeeEnabled && (
-                                    <div className="mt-4">
+                                    <div>
                                         <div className="grid gap-4 sm:grid-cols-2">
                                             <div className="space-y-2">
                                                 <Label>Percentage Fee</Label>
@@ -1672,9 +1700,9 @@ export function OnlineStoreTab({
                                     icon={Plug}
                                     label="OrderOut Delivery Integration"
                                     caption="Connect this location to UberEats, DoorDash, Grubhub, and other delivery marketplaces."
-                                    action={<Badge variant="outline">$79.99/mo</Badge>}
+                                    action={<Badge variant="outline" className="tabular-nums">$79.99/mo</Badge>}
                                 >
-                                <div className="mt-4">
+                                <div>
                                     {(() => {
                                         const locOO = orderOutStatus?.restaurants.find(
                                             (restaurant) => restaurant.locationId === selectedLocationId

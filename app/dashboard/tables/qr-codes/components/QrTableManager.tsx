@@ -106,7 +106,7 @@ type StatusFilter = "all" | QrTableManagerRow["qrStatus"];
  * real location with 233 tables put 634 buttons and 233 dropdowns in the DOM,
  * inside a 512px box holding 20,000px of scroll. This caps both.
  */
-const ROWS_PER_PAGE = 25;
+const ROWS_PER_PAGE = 10;
 
 type SortKey =
   | "tableLabel"
@@ -1206,7 +1206,7 @@ export function QrTableManager({
   return (
     <>
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={QrCode}
         label="QR code manager"
         caption={

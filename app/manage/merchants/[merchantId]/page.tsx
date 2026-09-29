@@ -1,12 +1,10 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
-import { PageShell } from '@/components/dashboard/shell/PageShell'
-import { Panel } from '@/components/dashboard/shell/Panel'
-import { Badge } from '@/components/ui/badge'
+import { PageShell } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import {
     AlertTriangle,
@@ -35,7 +33,6 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
@@ -78,69 +75,48 @@ type SectionKey =
     | 'devices'
     | 'locations'
 
-const VALID_SECTIONS: SectionKey[] = [
-    'overview',
-    'business-info',
-    'notes',
-    'audit',
-    'mids',
-    'valor-boarding',
-    'settlements',
-    'disputes',
-    'billing',
-    'platform-billing',
-    'subscriptions',
-    'online-store',
-    'support',
-    'devices',
-    'locations',
+type SectionGroup = 'Account' | 'Processing' | 'Operations'
+
+interface SectionDef {
+    value: SectionKey
+    group: SectionGroup
+    icon: LucideIcon
+    label: string
+    /** Shorter label for the phone rail, where width is scarce. */
+    shortLabel?: string
+    /** Gate on an HQ permission; hidden sections are never navigable. */
+    requires?: 'billing' | 'devices'
+}
+
+/** One table drives both the desktop nav and the phone rail, so they cannot drift. */
+const SECTIONS: SectionDef[] = [
+    { value: 'overview', group: 'Account', icon: LayoutDashboard, label: 'Overview' },
+    { value: 'business-info', group: 'Account', icon: Building2, label: 'Business' },
+    { value: 'notes', group: 'Account', icon: StickyNote, label: 'Notes' },
+    { value: 'audit', group: 'Account', icon: History, label: 'Audit' },
+    { value: 'mids', group: 'Processing', icon: CreditCard, label: 'MIDs' },
+    { value: 'valor-boarding', group: 'Processing', icon: CreditCard, label: 'Valor Boarding', shortLabel: 'Valor' },
+    { value: 'settlements', group: 'Processing', icon: Banknote, label: 'Settlements' },
+    { value: 'disputes', group: 'Processing', icon: ShieldCheck, label: 'Disputes' },
+    { value: 'billing', group: 'Processing', icon: Receipt, label: 'Billing' },
+    { value: 'platform-billing', group: 'Processing', icon: FileText, label: 'Platform Billing' },
+    { value: 'subscriptions', group: 'Processing', icon: CircleDollarSign, label: 'Subscriptions', requires: 'billing' },
+    { value: 'online-store', group: 'Operations', icon: Globe, label: 'Online Store' },
+    { value: 'support', group: 'Operations', icon: LifeBuoy, label: 'Support' },
+    { value: 'devices', group: 'Operations', icon: Monitor, label: 'Devices', requires: 'devices' },
+    { value: 'locations', group: 'Operations', icon: MapPin, label: 'Locations' },
 ]
 
-function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div className="space-y-0.5">
-            <p className="px-3 pb-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
-                {label}
-            </p>
-            {children}
-        </div>
-    )
-}
+const GROUPS: SectionGroup[] = ['Account', 'Processing', 'Operations']
 
-function NavItem({
-    value,
-    icon: Icon,
-    active,
-    onClick,
-    children,
-}: {
-    value: SectionKey
-    icon: LucideIcon
-    active: boolean
-    onClick: (v: SectionKey) => void
-    children: React.ReactNode
-}) {
-    return (
-        <button
-            onClick={() => onClick(value)}
-            className={cn(
-                'flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-[12.5px] transition-colors',
-                active
-                    ? 'bg-primary/10 font-medium text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-        >
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            {children}
-        </button>
-    )
-}
+const VALID_SECTIONS = SECTIONS.map((s) => s.value)
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
     const searchParams = useSearchParams()
     const { hasPermission } = useAdminPermissions()
-    const { data: merchantDetails, isLoading, isError } = useAdminMerchantDetails(merchantId as string)
+    const { data: merchantDetails, isLoading, isError, refetch, isRefetching } =
+        useAdminMerchantDetails(merchantId as string)
 
     const canManageDevices = hasPermission('users.manage')
     const canManageMerchantStatus = hasPermission('hq.merchant.update')
@@ -167,6 +143,39 @@ export default function MerchantDetailsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [requestedTab, canManageBilling])
 
+    const sections = SECTIONS.filter(
+        (s) =>
+            !s.requires ||
+            (s.requires === 'billing' && canManageBilling) ||
+            (s.requires === 'devices' && canManageDevices)
+    )
+
+    // Phone rail: keep the active pill centred (§13.2, D-24). Scroll the rail
+    // itself rather than `scrollIntoView`, which walks every scrollable
+    // ancestor. `isLoading` is a dep because the rail is not mounted while the
+    // skeleton renders.
+    const railRef = useRef<HTMLDivElement>(null)
+    const railPositioned = useRef(false)
+    useEffect(() => {
+        const rail = railRef.current
+        if (!rail) return
+        let done = false
+        const align = () => {
+            const max = rail.scrollWidth - rail.clientWidth
+            const tab = rail.querySelector<HTMLElement>('[data-state="active"]')
+            if (done || !tab || max <= 0) return
+            const left = tab.offsetLeft - (rail.clientWidth - tab.offsetWidth) / 2
+            const smooth =
+                railPositioned.current && !matchMedia('(prefers-reduced-motion: reduce)').matches
+            rail.scrollTo({ left: Math.max(0, Math.min(left, max)), behavior: smooth ? 'smooth' : 'auto' })
+            railPositioned.current = done = true
+        }
+        align()
+        const observer = new ResizeObserver(align)
+        observer.observe(rail)
+        return () => observer.disconnect()
+    }, [activeTab, isLoading])
+
     if (isLoading)
         return (
             <DataPageSkeleton
@@ -176,52 +185,62 @@ export default function MerchantDetailsPage() {
             />
         )
 
+    // A failure is a sentence in a neutral well with a way forward (§4.9),
+    // not red text.
     if (isError || !merchantDetails) {
         return (
-            <div className="flex flex-col items-center justify-center py-20">
-                <AlertTriangle className="mb-2 h-8 w-8 text-destructive" />
-                <div className="mb-1 font-semibold text-destructive">Unable to load merchant</div>
-                <Button variant="outline" asChild className="mt-4">
-                    <Link href="/manage/merchants">Back to Merchants</Link>
-                </Button>
-            </div>
+            <PageShell as="div">
+                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-muted/30 px-4 py-20 text-center">
+                    <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+                    <div className="space-y-1">
+                        <h2 className="text-lg font-semibold">We hit a snag loading this merchant</h2>
+                        <p className="text-sm text-muted-foreground">
+                            {isError
+                                ? 'Try again, or head back to the merchant list.'
+                                : 'This merchant may have been removed, or you may not have access to it.'}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                        {isError && (
+                            <Button onClick={() => refetch()} disabled={isRefetching}>
+                                Retry
+                            </Button>
+                        )}
+                        <Button variant="outline" asChild>
+                            <Link href="/manage/merchants">Back to Merchants</Link>
+                        </Button>
+                    </div>
+                </div>
+            </PageShell>
         )
     }
 
     return (
         <PageShell as="div">
-            <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-                <Link href="/manage/merchants" className="hover:underline">
-                    Merchants
-                </Link>
-                <span>/</span>
-                <span className="text-foreground">{merchantDetails.name}</span>
-            </div>
-
-            <MerchantHeaderBar merchant={merchantDetails} />
+            <MerchantHeaderBar
+                merchant={merchantDetails}
+                actions={
+                    canImportMenu && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm">
+                                    <Download className="h-3.5 w-3.5" />
+                                    Import Menu
+                                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>Import menu from…</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => setCloverImportOpen(true)}>
+                                    <FileSpreadsheet className="mr-2 h-3.5 w-3.5" />
+                                    From Clover (.xlsx)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )
+                }
+            />
             <RiskStrip merchant={merchantDetails} />
-
-            {canImportMenu && (
-                <div className="flex justify-end">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
-                                <Download className="h-3.5 w-3.5 mr-1.5" />
-                                Import Menu
-                                <ChevronDown className="h-3.5 w-3.5 ml-1.5 opacity-60" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel>Import menu from…</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setCloverImportOpen(true)}>
-                                <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
-                                From Clover (.xlsx)
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            )}
 
             <CloverImportDialog
                 merchantId={merchantDetails.id}
@@ -229,182 +248,149 @@ export default function MerchantDetailsPage() {
                 onOpenChange={setCloverImportOpen}
             />
 
-            <Panel className="px-4 py-6 sm:px-6">
-                {/* Mobile: horizontal scrollable tab strip */}
-                <div className="md:hidden mb-4 -mx-1 overflow-x-auto">
-                    <div className="flex gap-1 px-1 min-w-max">
-                        {([
-                            { value: 'overview', icon: LayoutDashboard, label: 'Overview' },
-                            { value: 'business-info', icon: Building2, label: 'Business' },
-                            { value: 'notes', icon: StickyNote, label: 'Notes' },
-                            { value: 'audit', icon: History, label: 'Audit' },
-                            { value: 'mids', icon: CreditCard, label: 'MIDs' },
-                            { value: 'valor-boarding', icon: CreditCard, label: 'Valor' },
-                            { value: 'settlements', icon: Banknote, label: 'Settlements' },
-                            { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
-                            { value: 'billing', icon: Receipt, label: 'Billing' },
-                            { value: 'platform-billing', icon: FileText, label: 'Platform Billing' },
-                            ...(canManageBilling ? [{ value: 'subscriptions', icon: CircleDollarSign, label: 'Subscriptions' }] : []),
-                            { value: 'online-store', icon: Globe, label: 'Online Store' },
-                            { value: 'support', icon: LifeBuoy, label: 'Support' },
-                            ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
-                            { value: 'locations', icon: MapPin, label: 'Locations' },
-                        ] as Array<{ value: SectionKey; icon: React.ElementType; label: string }>).map(({ value, icon: Icon, label }) => (
+            {/* Phone: the standard pill rail (§4.5), scrolled so the active
+                section is always in view (§13.2). */}
+            <div ref={railRef} className="no-scrollbar relative -mx-1 overflow-x-auto px-1 md:hidden">
+                <nav
+                    aria-label="Merchant sections"
+                    className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1"
+                >
+                    {sections.map(({ value, label, shortLabel }) => {
+                        const active = activeTab === value
+                        return (
                             <button
                                 key={value}
+                                type="button"
+                                aria-current={active ? 'page' : undefined}
+                                data-state={active ? 'active' : 'inactive'}
                                 onClick={() => setActiveTab(value)}
                                 className={cn(
-                                    'flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
-                                    activeTab === value
-                                        ? 'bg-primary/10 font-medium text-primary'
-                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    'shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors',
+                                    active
+                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                                        : 'text-muted-foreground hover:text-foreground'
                                 )}
                             >
-                                <Icon className="h-3.5 w-3.5 shrink-0" />
-                                {label}
+                                {shortLabel ?? label}
                             </button>
-                        ))}
-                    </div>
+                        )
+                    })}
+                </nav>
+            </div>
+
+            <div className="flex gap-8">
+                {/* Desktop: vertical section nav on the canvas. Each section
+                    below owns its own panels, so there is no outer panel here —
+                    that made every tab a panel inside a panel (§3.1). */}
+                <nav
+                    aria-label="Merchant sections"
+                    className="sticky top-7 hidden w-[200px] shrink-0 space-y-5 self-start md:block"
+                >
+                    {GROUPS.map((group) => (
+                        <div key={group} className="space-y-0.5">
+                            <p className="px-3 pb-1 text-xs font-medium text-muted-foreground">{group}</p>
+                            {sections
+                                .filter((s) => s.group === group)
+                                .map(({ value, icon: Icon, label }) => {
+                                    const active = activeTab === value
+                                    return (
+                                        <button
+                                            key={value}
+                                            type="button"
+                                            aria-current={active ? 'page' : undefined}
+                                            onClick={() => setActiveTab(value)}
+                                            className={cn(
+                                                'flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-[0.8125rem] transition-colors',
+                                                // Neutral active state (§4.5) — never brand text or fill.
+                                                active
+                                                    ? 'bg-background font-medium text-foreground shadow-sm ring-1 ring-border'
+                                                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                                            )}
+                                        >
+                                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                                            {label}
+                                        </button>
+                                    )
+                                })}
+                        </div>
+                    ))}
+                </nav>
+
+                <div className="min-w-0 flex-1">
+                    {activeTab === 'overview' && (
+                        <div className="space-y-6">
+                            <OnboardingStatusCard merchant={merchantDetails} />
+                            <OverviewTab merchantInfo={merchantDetails} />
+                        </div>
+                    )}
+
+                    {activeTab === 'business-info' && (
+                        <BusinessInfoTab merchantInfo={merchantDetails} />
+                    )}
+
+                    {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
+
+                    {activeTab === 'audit' && (
+                        <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                    )}
+
+                    {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
+
+                    {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
+
+                    {activeTab === 'settlements' && (
+                        <SettlementsSection merchantId={merchantDetails.id} />
+                    )}
+
+                    {activeTab === 'disputes' && (
+                        <DisputesSection merchantId={merchantDetails.id} />
+                    )}
+
+                    {activeTab === 'billing' && (
+                        <BillingTab
+                            merchantId={merchantDetails.id}
+                            merchantName={merchantDetails.name}
+                            canEdit={canManageMerchantStatus}
+                            locations={merchantDetails.locations}
+                        />
+                    )}
+
+                    {activeTab === 'platform-billing' && (
+                        <PlatformBillingTab
+                            merchantId={merchantDetails.id}
+                            locations={merchantDetails.locations}
+                        />
+                    )}
+
+                    {activeTab === 'subscriptions' && canManageBilling && (
+                        <HqSubscriptionsWorkspace
+                            merchant={merchantDetails}
+                            canManageBilling={canManageBilling}
+                        />
+                    )}
+
+                    {activeTab === 'online-store' && (
+                        <OnlineStoreTab
+                            merchantId={merchantDetails.id}
+                            merchantName={merchantDetails.name}
+                            locations={merchantDetails.locations}
+                            locationsLoading={false}
+                        />
+                    )}
+
+                    {activeTab === 'support' && (
+                        <SupportTicketsSection merchantId={merchantDetails.id} />
+                    )}
+
+                    {canManageDevices && activeTab === 'devices' && (
+                        <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                    )}
+
+                    {activeTab === 'locations' && (
+                        <LocationsSection locations={merchantDetails.locations} />
+                    )}
                 </div>
-
-                <div className="flex gap-6">
-                    {/* Desktop: vertical sidebar nav */}
-                    <nav className="hidden md:block w-[200px] shrink-0 space-y-5 sticky top-7 self-start">
-                        <NavGroup label="Account">
-                            <NavItem value="overview" icon={LayoutDashboard} active={activeTab === 'overview'} onClick={setActiveTab}>
-                                Overview
-                            </NavItem>
-                            <NavItem value="business-info" icon={Building2} active={activeTab === 'business-info'} onClick={setActiveTab}>
-                                Business
-                            </NavItem>
-                            <NavItem value="notes" icon={StickyNote} active={activeTab === 'notes'} onClick={setActiveTab}>
-                                Notes
-                            </NavItem>
-                            <NavItem value="audit" icon={History} active={activeTab === 'audit'} onClick={setActiveTab}>
-                                Audit
-                            </NavItem>
-                        </NavGroup>
-
-                        <NavGroup label="Processing">
-                            <NavItem value="mids" icon={CreditCard} active={activeTab === 'mids'} onClick={setActiveTab}>
-                                MIDs
-                            </NavItem>
-                            <NavItem value="valor-boarding" icon={CreditCard} active={activeTab === 'valor-boarding'} onClick={setActiveTab}>
-                                Valor Boarding
-                            </NavItem>
-                            <NavItem value="settlements" icon={Banknote} active={activeTab === 'settlements'} onClick={setActiveTab}>
-                                Settlements
-                            </NavItem>
-                            <NavItem value="disputes" icon={ShieldCheck} active={activeTab === 'disputes'} onClick={setActiveTab}>
-                                Disputes
-                            </NavItem>
-                            <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>
-                                Billing
-                            </NavItem>
-                            <NavItem value="platform-billing" icon={FileText} active={activeTab === 'platform-billing'} onClick={setActiveTab}>
-                                Platform Billing
-                            </NavItem>
-                            {canManageBilling && (
-                                <NavItem value="subscriptions" icon={CircleDollarSign} active={activeTab === 'subscriptions'} onClick={setActiveTab}>
-                                    Subscriptions
-                                </NavItem>
-                            )}
-                        </NavGroup>
-
-                        <NavGroup label="Operations">
-                            <NavItem value="online-store" icon={Globe} active={activeTab === 'online-store'} onClick={setActiveTab}>
-                                Online Store
-                            </NavItem>
-                            <NavItem value="support" icon={LifeBuoy} active={activeTab === 'support'} onClick={setActiveTab}>
-                                Support
-                            </NavItem>
-                            {canManageDevices && (
-                                <NavItem value="devices" icon={Monitor} active={activeTab === 'devices'} onClick={setActiveTab}>
-                                    Devices
-                                </NavItem>
-                            )}
-                            <NavItem value="locations" icon={MapPin} active={activeTab === 'locations'} onClick={setActiveTab}>
-                                Locations
-                            </NavItem>
-                        </NavGroup>
-                    </nav>
-
-                    <div className="min-w-0 flex-1 md:border-l md:pl-6">
-                        {activeTab === 'overview' && (
-                            <div className="space-y-6">
-                                <OnboardingStatusCard merchant={merchantDetails} />
-                                <OverviewTab merchantInfo={merchantDetails} />
-                            </div>
-                        )}
-
-                        {activeTab === 'business-info' && (
-                            <BusinessInfoTab merchantInfo={merchantDetails} />
-                        )}
-
-                        {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
-
-                        {activeTab === 'audit' && (
-                            <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                        )}
-
-                        {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
-
-                        {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
-
-                        {activeTab === 'settlements' && (
-                            <SettlementsSection merchantId={merchantDetails.id} />
-                        )}
-
-                        {activeTab === 'disputes' && (
-                            <DisputesSection merchantId={merchantDetails.id} />
-                        )}
-
-                        {activeTab === 'billing' && (
-                            <BillingTab
-                                merchantId={merchantDetails.id}
-                                merchantName={merchantDetails.name}
-                                canEdit={canManageMerchantStatus}
-                                locations={merchantDetails.locations}
-                            />
-                        )}
-
-                        {activeTab === 'platform-billing' && (
-                            <PlatformBillingTab
-                                merchantId={merchantDetails.id}
-                                locations={merchantDetails.locations}
-                            />
-                        )}
-
-                        {activeTab === 'subscriptions' && canManageBilling && (
-                            <HqSubscriptionsWorkspace
-                                merchant={merchantDetails}
-                                canManageBilling={canManageBilling}
-                            />
-                        )}
-
-                        {activeTab === 'online-store' && (
-                            <OnlineStoreTab
-                                merchantId={merchantDetails.id}
-                                merchantName={merchantDetails.name}
-                                locations={merchantDetails.locations}
-                                locationsLoading={false}
-                            />
-                        )}
-
-                        {activeTab === 'support' && (
-                            <SupportTicketsSection merchantId={merchantDetails.id} />
-                        )}
-
-                        {canManageDevices && activeTab === 'devices' && (
-                            <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
-                        )}
-
-                        {activeTab === 'locations' && (
-                            <LocationsSection locations={merchantDetails.locations} />
-                        )}
-                    </div>
-                </div>
-            </Panel>
+            </div>
         </PageShell>
     )
 }

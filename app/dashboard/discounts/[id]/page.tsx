@@ -138,7 +138,7 @@ export default function DiscountDetailPage() {
   if (!discountId || !discount) {
     return (
       <PageShell>
-        <PageHeader
+        <PageHeader showSubtitleOnMobile
           title="Discount not found"
           subtitle="This discount may have been deleted, or you may not have access to it."
           backHref="/dashboard/discounts"

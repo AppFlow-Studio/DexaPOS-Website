@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useMultiLocationComparison } from '@/lib/queries/use-platform-analytics'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,6 +17,8 @@ import {
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -98,13 +99,9 @@ function MiniSparkline({ data }: { data: SparklinePoint[] }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-/** How many rows the "All locations" table shows before "Show all". */
-const TABLE_PREVIEW_ROWS = 10
-
 /** `days` comes from the Revenue & Risk tab's shared period picker. */
 export function MultiLocationComparison({ days }: { days: number }) {
   const [search, setSearch] = useState('')
-  const [showAllRows, setShowAllRows] = useState(false)
   const [selectedMerchantId, setSelectedMerchantId] = useState<string>('all')
   const isMobile = useIsMobile()
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
@@ -147,6 +144,10 @@ export function MultiLocationComparison({ days }: { days: number }) {
       l.merchantName.toLowerCase().includes(q)
     )
   }, [data?.locations, selectedMerchantId, search])
+  const locationPage = useClientPagination(filteredLocations, 10)
+  const setLocationPage = locationPage.setPage
+  // A new period is a new ranking — start it from the top.
+  useEffect(() => { setLocationPage(1) }, [days, setLocationPage])
 
   if (isLoading) {
     return (
@@ -201,7 +202,7 @@ export function MultiLocationComparison({ days }: { days: number }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Select
                     value={selectedMerchantId}
-                    onValueChange={v => { setSelectedMerchantId(v); setSearch('') }}
+                    onValueChange={v => { setSelectedMerchantId(v); setSearch(''); setLocationPage(1) }}
                   >
                     <SelectTrigger className="h-9 w-52 rounded-full border-0 bg-muted/60 px-3 shadow-none">
                       <SelectValue placeholder="Select merchant…" />
@@ -302,7 +303,7 @@ export function MultiLocationComparison({ days }: { days: number }) {
                 <Input
                   placeholder="Filter location or merchant…"
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => { setSearch(e.target.value); setLocationPage(1) }}
                   className="h-9 w-full rounded-full pl-9"
                 />
               </div>
@@ -310,7 +311,7 @@ export function MultiLocationComparison({ days }: { days: number }) {
           }
         >
           {/* No inner vertical scroll: a scroll box inside a scrolling page
-              traps the wheel. The table previews its top rows instead. */}
+              traps the wheel. The table pages at 10 rows instead (§5.7). */}
           <div className="overflow-x-auto">
             {/* The min-width is what forces horizontal scrolling, so it has to
                 lift on mobile — otherwise hiding columns just widens the gaps
@@ -344,7 +345,7 @@ export function MultiLocationComparison({ days }: { days: number }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(showAllRows ? filteredLocations : filteredLocations.slice(0, TABLE_PREVIEW_ROWS)).map((loc: LocationMetrics) => {
+                {locationPage.pageRows.map((loc: LocationMetrics) => {
                   const diff = loc.totalGPV - data.avgGPVPerLocation
                   const vsAvgPct = data.avgGPVPerLocation > 0
                     ? Math.round((diff / data.avgGPVPerLocation) * 100)
@@ -427,18 +428,11 @@ export function MultiLocationComparison({ days }: { days: number }) {
               </TableBody>
             </Table>
           </div>
-          {filteredLocations.length > TABLE_PREVIEW_ROWS && (
-            <div className="mt-3 text-center">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full"
-                onClick={() => setShowAllRows(v => !v)}
-              >
-                {showAllRows ? `Show top ${TABLE_PREVIEW_ROWS}` : `Show all ${filteredLocations.length} locations`}
-              </Button>
-            </div>
-          )}
+          <PaginationBar
+            pagination={locationPage.pagination}
+            onPageChange={locationPage.setPage}
+            itemLabel="locations"
+          />
         </PanelSection>
       </Panel>
     </div>

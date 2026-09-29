@@ -54,6 +54,8 @@ import {
 } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getLocalDateKey } from "@/lib/dates/local-date-key";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 // ─── Preview Calculator (pure client-side) ─────────────────────────────────
 
@@ -270,6 +272,8 @@ function PreviewPanel({
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
   const totalNet = Object.values(simulation).reduce((sum, s) => sum + s.net, 0);
+  // Totals above read every role; only the table/card rows are paged.
+  const simulationPage = useClientPagination(Object.entries(simulation), 10);
 
   return (
     <Panel>
@@ -397,7 +401,7 @@ function PreviewPanel({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.entries(simulation).map(([code, s]) => (
+                      {simulationPage.pageRows.map(([code, s]) => (
                         <TableRow key={code}>
                           <TableCell className="text-sm font-medium">{code}</TableCell>
                           <TableCell className="text-right text-sm tabular-nums">{fmt(s.own)}</TableCell>
@@ -427,7 +431,7 @@ function PreviewPanel({
                   </Table>
 
                   <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-                    {Object.entries(simulation).map(([code, s]) => (
+                    {simulationPage.pageRows.map(([code, s]) => (
                       <article key={code} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
                         <div className="flex min-w-0 items-start justify-between gap-3">
                           <p className="min-w-0 truncate text-sm font-semibold">{code}</p>
@@ -455,6 +459,12 @@ function PreviewPanel({
                       </article>
                     ))}
                   </div>
+
+                  <PaginationBar
+                    pagination={simulationPage.pagination}
+                    onPageChange={simulationPage.setPage}
+                    itemLabel="roles"
+                  />
 
                   {hasClipping && (
                     <p className="mt-3 text-[0.8125rem] text-muted-foreground">

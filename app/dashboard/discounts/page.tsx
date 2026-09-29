@@ -46,7 +46,7 @@ export default function DiscountsPage() {
     const page = Number.isFinite(requestedPage)
         ? Math.max(1, Math.floor(requestedPage))
         : 1;
-    const pageSize = 25;
+    const pageSize = 10;
 
     const {
         data,
@@ -155,7 +155,7 @@ export default function DiscountsPage() {
             <Panel>
                 <div className="px-6 py-6">
                     <StatRow columns={4}>
-                        <StatTile
+                        <StatTile showMetaOnMobile
                             label="Total discounts"
                             value={stats.total}
                             meta={

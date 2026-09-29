@@ -21,7 +21,7 @@ import { TaxBreakdownTable } from "@/app/dashboard/reports/tax/components/TaxBre
 import { TaxCategoryChart } from "@/app/dashboard/reports/tax/components/TaxCategoryChart";
 import { TaxLocationTable } from "@/app/dashboard/reports/tax/components/TaxLocationTable";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10; // every table pages at 10 (UI-DESIGN-SYSTEM §5.7)
 
 export function TaxReportTab({ merchantId }: { merchantId: string }) {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({

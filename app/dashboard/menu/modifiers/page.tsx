@@ -1179,7 +1179,7 @@ const sensors = useSensors(
           Library's two long buttons. With a single action here it only pushed
           "Create Group" onto its own full-width row, costing ~60px of a 740px
           phone viewport before any content. */}
-      <PageHeader
+      <PageHeader showSubtitleOnMobile={!isSingleLocation && !isAllLocations}
         title="Modifiers"
         subtitle={
           isSingleLocation

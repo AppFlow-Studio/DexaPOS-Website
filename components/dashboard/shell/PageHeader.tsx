@@ -11,10 +11,13 @@ interface PageHeaderProps {
   title: string
   subtitle?: string
   /**
-   * Extra classes for the subtitle. Mainly a responsive escape hatch: a page
-   * whose subtitle is redundant on a phone can drop it with `hidden sm:block`
-   * without the caller branching on viewport width in JS.
+   * The subtitle is hidden below `sm` by default (UI-DESIGN-SYSTEM §13.4): on a
+   * phone a descriptive line costs a screen-row and changes nothing the user
+   * does next. Pass this when the subtitle carries scope instead — a location
+   * name, a date range, a record id — so the page still says what it shows.
    */
+  showSubtitleOnMobile?: boolean
+  /** Extra classes for the subtitle. */
   subtitleClassName?: string
   /** Renders a ghost "Back to X" pill above the title (D-04). */
   backHref?: string
@@ -49,6 +52,7 @@ interface PageHeaderProps {
 export function PageHeader({
   title,
   subtitle,
+  showSubtitleOnMobile = false,
   subtitleClassName,
   backHref,
   backLabel = 'Back',
@@ -101,7 +105,15 @@ export function PageHeader({
       </div>
 
       {subtitle && (
-        <p className={cn('mt-1 text-sm text-muted-foreground', subtitleClassName)}>
+        <p
+          className={cn(
+            'mt-1 text-sm text-muted-foreground',
+            // `max-sm:hidden`, not `hidden sm:block`: it sets no display from
+            // `sm` up, so a caller's own `max-md:hidden` still holds.
+            !showSubtitleOnMobile && 'max-sm:hidden',
+            subtitleClassName
+          )}
+        >
           {subtitle}
         </p>
       )}

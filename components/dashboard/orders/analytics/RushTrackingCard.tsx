@@ -88,7 +88,7 @@ export function RushTrackingCard({
               label="Normal Avg Time"
               value={formatTime(data.avg_normal_time_minutes ?? 0)}
             />
-            <StatTile
+            <StatTile showMetaOnMobile
               label="Rush Impact"
               value={`${difference > 0 ? '+' : ''}${formatTime(Math.abs(difference))}`}
               meta={`${differencePercent}% slower`}

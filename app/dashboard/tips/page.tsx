@@ -150,7 +150,7 @@ export default function TipsPage() {
 
   return (
     <PageShell>
-      <PageHeader
+      <PageHeader showSubtitleOnMobile
         title="Tip Distribution"
         subtitle={isAllLocations ? undefined : `Manage tip distribution for ${locationName}`}
       />

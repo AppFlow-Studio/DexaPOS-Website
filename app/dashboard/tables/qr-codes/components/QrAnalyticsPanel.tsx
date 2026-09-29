@@ -122,7 +122,7 @@ export function QrAnalyticsPanel({
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={BarChart3}
         label="QR analytics"
         caption={`Table QR funnel and dine-in order performance for the last ${rangeDays} days. Marketing QR scans are counted on the Marketing QR tab, not here.`}
@@ -188,7 +188,7 @@ export function QrAnalyticsPanel({
                 value={formatCurrency(data?.qrRevenue ?? 0)}
                 meta={`QR AOV ${formatCurrency(data?.qrAov ?? 0)}`}
               />
-              <StatTile
+              <StatTile showMetaOnMobile
                 label="Funnel conversion"
                 icon={<ArrowRight />}
                 value={formatPercent(data?.conversionRate ?? 0)}
@@ -200,7 +200,7 @@ export function QrAnalyticsPanel({
                 value={formatPercent(data?.abandonmentRate ?? 0)}
                 meta={`${data?.stages.abandoned ?? 0} expired QR sessions`}
               />
-              <StatTile
+              <StatTile showMetaOnMobile
                 label="Repeat guests"
                 icon={<Repeat2 />}
                 value={formatPercent(data?.repeatPhoneRate ?? 0)}

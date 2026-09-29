@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { ChevronDown, ChevronUp, RefreshCcwDot, ShieldCheck } from 'lucide-react'
+import { RefreshCcwDot } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -18,6 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import type { PaginationMeta } from '@/types/pagination'
+import { cn } from '@/lib/utils'
 import {
   getPlatformMerchants,
   PlatformMerchant,
@@ -28,11 +29,35 @@ import {
   type PlatformPaymentAuditActionType,
 } from '@/app/manage/actions/hq-platform/transactions-shared'
 import { usePlatformPaymentAuditLogs } from '@/lib/queries/use-platform-analytics'
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  FilterDate,
+  FilterSelect,
+  LoadError,
+  RecordCard,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from './ledger-primitives'
 
 const PAGE_SIZE = 25
 
+/** Columns in the wide table — the loading and empty rows span all of them. */
+const COLUMN_COUNT = 10
+
+const ACTION_OPTIONS = PLATFORM_PAYMENT_AUDIT_ACTIONS.map((actionValue) => ({
+  value: actionValue,
+  label: formatActionLabel(actionValue),
+}))
+
+const OUTCOME_OPTIONS = [
+  { value: 'success', label: 'Success' },
+  { value: 'failed', label: 'Failed' },
+]
+
 function formatDateTime(value?: string): string {
-  if (!value) return '-'
+  if (!value) return '—'
   return format(new Date(value), 'MMM d, yyyy h:mm:ss a')
 }
 
@@ -43,24 +68,7 @@ function formatActionLabel(value: string): string {
     .join(' ')
 }
 
-function getOutcomeBadge(success: boolean) {
-  if (success) {
-    return (
-      <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
-        Success
-      </Badge>
-    )
-  }
-
-  return (
-    <Badge variant="outline" className="border-red-300 bg-red-100 text-red-800">
-      Failed
-    </Badge>
-  )
-}
-
 export function AuditLogSection() {
-  const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [userFilter, setUserFilter] = useState('')
   const [actionFilter, setActionFilter] = useState<'all' | PlatformPaymentAuditActionType>('all')
@@ -121,8 +129,6 @@ export function AuditLogSection() {
   const rows = auditResult?.data || []
   const total = auditResult?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
-  const showingTo = total === 0 ? 0 : Math.min((page - 1) * PAGE_SIZE + rows.length, total)
   const errorCode = auditResult?.errorCode
 
   useEffect(() => {
@@ -130,6 +136,29 @@ export function AuditLogSection() {
       setPage(totalPages)
     }
   }, [page, totalPages])
+
+  const pagination: PaginationMeta = {
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+  }
+
+  const merchantOptions = useMemo(
+    () => merchants.map((merchant) => ({ value: merchant.id, label: merchant.name })),
+    [merchants]
+  )
+
+  const hasActiveFilters =
+    search !== '' ||
+    userFilter !== '' ||
+    actionFilter !== 'all' ||
+    merchantId !== 'all' ||
+    outcome !== 'all' ||
+    dateFrom !== '' ||
+    dateTo !== ''
 
   const clearFilters = () => {
     setSearch('')
@@ -142,248 +171,213 @@ export function AuditLogSection() {
     setPage(1)
   }
 
+  const showSkeleton = isLoading || isFetching
+  const emptyTitle = hasActiveFilters
+    ? 'No payment audit events match these filters'
+    : 'No payment audit events yet'
+  const emptyHint = hasActiveFilters
+    ? 'Clear the filters to widen the results.'
+    : 'Events appear here when an admin lists, opens, exports or searches payment data.'
+
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                Payment Audit Log
-                <InfoIcon tip="Immutable record of every time an admin accessed, searched, exported, or viewed payment data. Used to demonstrate compliance with data privacy requirements and to investigate unauthorized access." />
-              </CardTitle>
-              <CardDescription>
-                Track admin access to sensitive payment data (list, detail, export, and card-last-four search).
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1">
-                <Badge variant="outline">{total.toLocaleString()} events</Badge>
-                <InfoIcon tip="Total number of admin audit events logged matching current filters." side="left" />
-              </span>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm">
-                  {open ? (
-                    <>
-                      Hide
-                      <ChevronUp className="ml-2 h-4 w-4" />
-                    </>
-                  ) : (
-                    <>
-                      Show
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </>
+    <div className="min-w-0 space-y-4">
+      <div className="flex items-center gap-1">
+        <p className="text-sm text-muted-foreground tabular-nums">{total.toLocaleString()} events</p>
+        <InfoIcon tip="Total number of admin audit events logged matching current filters." side="right" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search email or resource ID"
+          aria-label="Search by email or resource ID"
+          className="h-9 w-full text-[0.8125rem] sm:w-64"
+        />
+        <Input
+          value={userFilter}
+          onChange={(event) => setUserFilter(event.target.value)}
+          placeholder="User email"
+          aria-label="Filter by user email"
+          className="h-9 w-full text-[0.8125rem] sm:w-48"
+        />
+        <FilterSelect
+          value={actionFilter}
+          onValueChange={(value) => setActionFilter(value as 'all' | PlatformPaymentAuditActionType)}
+          options={ACTION_OPTIONS}
+          allLabel="All actions"
+          ariaLabel="Action"
+        />
+        <FilterSelect
+          value={merchantId}
+          onValueChange={setMerchantId}
+          options={merchantOptions}
+          allLabel="All merchants"
+          ariaLabel="Merchant"
+          disabled={loadingMerchants}
+        />
+        <FilterSelect
+          value={outcome}
+          onValueChange={(value) => setOutcome(value as 'all' | 'success' | 'failed')}
+          options={OUTCOME_OPTIONS}
+          allLabel="All outcomes"
+          ariaLabel="Outcome"
+        />
+        <FilterDate value={dateFrom} onChange={setDateFrom} placeholder="From date" />
+        <FilterDate value={dateTo} onChange={setDateTo} placeholder="To date" />
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" className="h-9 px-4" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 px-4 sm:ml-auto"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+        >
+          <RefreshCcwDot className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {errorCode && (
+        <LoadError
+          title="Payment audit log is unavailable"
+          detail={`Migration 029_adm_019_admin_payment_audit_logging.sql has not been applied. Error ${errorCode}`}
+        />
+      )}
+
+      <Table variant="data" containerClassName="hidden 2xl:block" className="min-w-[1150px]">
+        <TableHeader>
+          <TableRow>
+            <TableHead>
+              <span className="inline-flex items-center gap-1">Timestamp <InfoIcon tip="Exact UTC date and time the admin action was performed." side="bottom" /></span>
+            </TableHead>
+            <TableHead>
+              <span className="inline-flex items-center gap-1">User <InfoIcon tip="The admin's email address. Each access is attributed to a specific user for accountability." side="bottom" /></span>
+            </TableHead>
+            <TableHead>
+              <span className="inline-flex items-center gap-1">Role <InfoIcon tip="The user's permission level at the time of the action (e.g. admin, viewer, owner)." side="bottom" /></span>
+            </TableHead>
+            <TableHead>
+              <span className="inline-flex items-center gap-1">Action <InfoIcon tip="What the user did — list (viewed a list), detail (opened a specific record), export (downloaded data), or search (queried by card number or ID)." side="bottom" /></span>
+            </TableHead>
+            <TableHead>Resource type</TableHead>
+            <TableHead>Resource ID</TableHead>
+            <TableHead>
+              <span className="inline-flex items-center gap-1">Outcome <InfoIcon tip="Whether the action completed successfully. Failed actions may indicate permission errors or system issues." side="bottom" /></span>
+            </TableHead>
+            <TableHead>IP address</TableHead>
+            <TableHead>Merchant</TableHead>
+            <TableHead>
+              <span className="inline-flex items-center gap-1">Fields accessed <InfoIcon tip="Specific data fields the user viewed or exported. Used to demonstrate the minimum necessary data access for compliance audits." side="bottom" /></span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+
+        <TableBody>
+          {showSkeleton ? (
+            Array.from({ length: 6 }).map((_, rowIndex) => (
+              <TableRow key={`payment-audit-loading-${rowIndex}`}>
+                {Array.from({ length: COLUMN_COUNT }).map((__, cellIndex) => (
+                  <TableCell key={`payment-audit-loading-${rowIndex}-${cellIndex}`}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : rows.length === 0 ? (
+            <TableEmptyRow colSpan={COLUMN_COUNT} title={emptyTitle} hint={emptyHint} />
+          ) : (
+            rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                  {formatDateTime(row.event_timestamp)}
+                </TableCell>
+                <TableCell className="text-sm">{row.user_email || '—'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{row.user_role || '—'}</TableCell>
+                {/* A failed event is marked by weight, not a red row (§3.5). */}
+                <TableCell
+                  className={cn(
+                    'text-sm',
+                    row.success ? 'text-muted-foreground' : 'font-medium text-foreground'
                   )}
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CollapsibleContent>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-7">
-              <label className="flex flex-col gap-1 text-sm md:col-span-2">
-                <span className="text-muted-foreground">Search (email or resource id)</span>
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="john@company.com or payment UUID"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">User</span>
-                <Input
-                  value={userFilter}
-                  onChange={(event) => setUserFilter(event.target.value)}
-                  placeholder="Filter by user email"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Action</span>
-                <select
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={actionFilter}
-                  onChange={(event) => setActionFilter(event.target.value as 'all' | PlatformPaymentAuditActionType)}
                 >
-                  <option value="all">All actions</option>
-                  {PLATFORM_PAYMENT_AUDIT_ACTIONS.map((actionValue) => (
-                    <option key={actionValue} value={actionValue}>
-                      {formatActionLabel(actionValue)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Merchant</span>
-                <select
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={merchantId}
-                  onChange={(event) => setMerchantId(event.target.value)}
-                  disabled={loadingMerchants}
-                >
-                  <option value="all">All merchants</option>
-                  {merchants.map((merchant) => (
-                    <option key={merchant.id} value={merchant.id}>
-                      {merchant.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Outcome</span>
-                <select
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={outcome}
-                  onChange={(event) => setOutcome(event.target.value as 'all' | 'success' | 'failed')}
-                >
-                  <option value="all">All</option>
-                  <option value="success">Success</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </label>
-
-              <div className="flex items-end">
-                <Button variant="ghost" className="w-full" onClick={clearFilters}>
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-4">
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Date From</span>
-                <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-              </label>
-
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Date To</span>
-                <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-              </label>
-
-              <div className="md:col-span-2 flex items-end justify-end">
-                <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
-                  <RefreshCcwDot className="mr-2 h-4 w-4" />
-                  Refresh
-                </Button>
-              </div>
-            </div>
-
-            {errorCode && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                Payment audit logs unavailable (migration `029_adm_019_admin_payment_audit_logging.sql` pending approval/apply).{` Error: ${errorCode}`}
-              </div>
-            )}
-
-            <Table containerClassName="max-h-[44vh] overflow-auto rounded-md border">
-              <TableHeader className="sticky top-0 z-20 bg-card">
-                <TableRow>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Timestamp <InfoIcon tip="Exact UTC date and time the admin action was performed." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">User <InfoIcon tip="The admin's email address. Each access is attributed to a specific user for accountability." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Role <InfoIcon tip="The user's permission level at the time of the action (e.g. admin, viewer, owner)." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Action <InfoIcon tip="What the user did — list (viewed a list), detail (opened a specific record), export (downloaded data), or search (queried by card number or ID)." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>Resource Type</TableHead>
-                  <TableHead>Resource ID</TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Outcome <InfoIcon tip="Whether the action completed successfully. Failed actions may indicate permission errors or system issues." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Fields Accessed <InfoIcon tip="Specific data fields the user viewed or exported. Used to demonstrate the minimum necessary data access for compliance audits." side="bottom" /></span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {isLoading || isFetching ? (
-                  Array.from({ length: 6 }).map((_, rowIndex) => (
-                    <TableRow key={`payment-audit-loading-${rowIndex}`}>
-                      {Array.from({ length: 10 }).map((__, cellIndex) => (
-                        <TableCell key={`payment-audit-loading-${rowIndex}-${cellIndex}`}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableCell>
+                  {formatActionLabel(row.action)}
+                </TableCell>
+                <TableCell className="text-sm">{row.resource_type}</TableCell>
+                <TableCell className="font-mono text-xs">{row.resource_id || '—'}</TableCell>
+                <TableCell>
+                  <Badge variant="outline">{row.success ? 'Success' : 'Failed'}</Badge>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{row.ip_address || '—'}</TableCell>
+                <TableCell className="text-sm">
+                  {row.merchant_name || row.merchant_id || '—'}
+                </TableCell>
+                <TableCell>
+                  {row.fields_accessed.length === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {row.fields_accessed.map((field) => (
+                        <Badge key={`${row.id}-${field}`} variant="outline" className="font-mono text-[10px]">
+                          {field}
+                        </Badge>
                       ))}
-                    </TableRow>
-                  ))
-                ) : rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
-                      No payment audit events found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row) => (
-                    <TableRow key={row.id} className={!row.success ? 'bg-red-50/60 hover:bg-red-50/80' : undefined}>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDateTime(row.event_timestamp)}
-                      </TableCell>
-                      <TableCell className="text-sm">{row.user_email || '-'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{row.user_role || '-'}</TableCell>
-                      <TableCell className="text-sm font-medium">{formatActionLabel(row.action)}</TableCell>
-                      <TableCell className="text-sm">{row.resource_type}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.resource_id || '-'}</TableCell>
-                      <TableCell>{getOutcomeBadge(row.success)}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{row.ip_address || '-'}</TableCell>
-                      <TableCell className="text-sm">
-                        {row.merchant_name || (row.merchant_id ? row.merchant_id : '-')}
-                      </TableCell>
-                      <TableCell>
-                        {row.fields_accessed.length === 0 ? (
-                          <span className="text-muted-foreground">-</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {row.fields_accessed.map((field) => (
-                              <Badge key={`${row.id}-${field}`} variant="secondary" className="font-mono text-[10px]">
-                                {field}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-              <span>
-                Showing {showingFrom.toLocaleString()}-{showingTo.toLocaleString()} of {total.toLocaleString()}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
-                  Previous
-                </Button>
-                <span>
-                  Page {page.toLocaleString()} of {totalPages.toLocaleString()}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                >
-                  Next
-                </Button>
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+        {showSkeleton ? (
+          <RecordCardSkeletons count={4} />
+        ) : rows.length === 0 ? (
+          <CardGridEmpty title={emptyTitle} hint={emptyHint} />
+        ) : (
+          rows.map((row) => (
+            <RecordCard key={row.id}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="truncate font-medium">{formatActionLabel(row.action)}</p>
+                <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {formatDateTime(row.event_timestamp)}
+                </p>
               </div>
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+              <CardFields>
+                <CardField label="User" value={row.user_email || '—'} />
+                <CardField label="Role" value={row.user_role || '—'} />
+                <CardField label="Resource" value={row.resource_type || '—'} />
+                <CardField label="Resource ID" mono value={row.resource_id || '—'} />
+                <CardField label="Outcome" value={row.success ? 'Success' : 'Failed'} />
+                <CardField label="Merchant" value={row.merchant_name || row.merchant_id || '—'} />
+                <CardField label="IP address" mono value={row.ip_address || '—'} />
+                <CardField
+                  label="Fields accessed"
+                  value={row.fields_accessed.length === 0 ? '—' : row.fields_accessed.join(', ')}
+                />
+              </CardFields>
+            </RecordCard>
+          ))
+        )}
+      </div>
+
+      <PaginationBar
+        pagination={pagination}
+        onPageChange={setPage}
+        itemLabel="events"
+        isLoading={isFetching}
+      />
+      {total > 0 && total <= PAGE_SIZE && (
+        <p className="mt-3 text-xs text-muted-foreground sm:text-sm tabular-nums">
+          {total.toLocaleString()} events
+        </p>
+      )}
+    </div>
   )
 }

@@ -23,8 +23,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import type {
   CloverFlag,
   CommitOptions,
@@ -149,6 +163,9 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
     return true;
   })();
 
+  const flagIUnresolved = flagIEntries.some((f) => !flagIResolutions[`${f.entity_type}::${f.name}`]);
+  const stepIndex = STEPS.findIndex((s) => s.key === step);
+
   return (
     <Dialog
       open={open}
@@ -157,30 +174,60 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
         if (!o) reset();
       }}
     >
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+      {/* §12/§13.1: a wizard, so full-screen below `sm`. The content clips and
+          the body scrolls; header and footer carry no rule (§5.5). */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-3xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0 space-y-3 px-6 pb-2 pr-14 pt-6 text-left">
           <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5" />
+            <FileSpreadsheet className="h-5 w-5 shrink-0 text-muted-foreground max-sm:hidden" />
             Import menu from Clover
           </DialogTitle>
           <DialogDescription>
             Upload a Clover .xlsx export. Items, categories, and modifier groups will be staged for review before commit.
           </DialogDescription>
+
+          {/* Neutral step pills (§14.6.4 wizard): complete is `bg-muted`,
+              active is `ring-1 ring-border`. */}
+          <ol className="flex gap-1">
+            {STEPS.map((s, index) => {
+              const isActive = index === stepIndex;
+              const isComplete = index < stepIndex;
+              return (
+                <li
+                  key={s.key}
+                  title={`${index + 1}. ${s.label}`}
+                  aria-current={isActive ? "step" : undefined}
+                  className={cn(
+                    "min-w-0 shrink-0 rounded-full px-2.5 py-1.5 text-xs sm:flex-1 sm:shrink sm:truncate",
+                    isActive && "bg-background font-medium text-foreground ring-1 ring-border",
+                    isComplete && "bg-muted font-medium text-foreground",
+                    !isActive && !isComplete && "bg-muted/50 text-muted-foreground",
+                  )}
+                >
+                  <span className="sm:hidden">{index + 1}</span>
+                  <span className="hidden sm:inline">
+                    {index + 1}. {s.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
         </DialogHeader>
 
-        {step === "upload" && (
-          <div className="space-y-4">
-            <div
-              className="border-2 border-dashed rounded-lg px-6 py-10 flex flex-col items-center gap-2 cursor-pointer hover:bg-muted/40 transition-colors"
+        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          {step === "upload" && (
+            <button
+              type="button"
+              className="flex w-full flex-col items-center gap-2 rounded-2xl bg-muted/60 px-6 py-10 text-center transition-colors hover:bg-muted"
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="h-6 w-6 text-muted-foreground" />
-              <p className="text-sm">
+              <span className="text-sm">
                 {file ? file.name : "Click to select a Clover .xlsx export"}
-              </p>
-              <p className="text-xs text-muted-foreground">
+              </span>
+              <span className="text-xs text-muted-foreground">
                 Must include the standard 5 Clover sheets: Items, Modifier Groups, Categories, Tax Rates, Instructions.
-              </p>
+              </span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -192,44 +239,20 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
                   e.target.value = "";
                 }}
               />
-            </div>
+            </button>
+          )}
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={!file || previewMut.isPending}
-                onClick={() => file && previewMut.mutate(file)}
-              >
-                {previewMut.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing…
-                  </>
-                ) : (
-                  "Preview"
-                )}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
-
-        {step === "preview" && preview && (
-          <ScrollArea className="max-h-[60vh] pr-3">
-            <div className="space-y-4">
+          {step === "preview" && preview && (
+            <div className="space-y-6">
               <DiffSummaryGrid diff={preview.diff} />
 
-              {preview.flags.length > 0 && (
-                <FlagsList
-                  flags={preview.flags}
-                  flagIResolutions={flagIResolutions}
-                  onFlagIChange={(key, res) =>
-                    setFlagIResolutions((prev) => ({ ...prev, [key]: res }))
-                  }
-                />
-              )}
-
-              <Separator />
+              <FlagsList
+                flags={preview.flags}
+                flagIResolutions={flagIResolutions}
+                onFlagIChange={(key, res) =>
+                  setFlagIResolutions((prev) => ({ ...prev, [key]: res }))
+                }
+              />
 
               <div className="space-y-3">
                 <Label>Target menu</Label>
@@ -260,22 +283,20 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
                     />
                   </div>
                 ) : (
-                  <select
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                    value={existingMenuId}
-                    onChange={(e) => setExistingMenuId(e.target.value)}
-                  >
-                    <option value="">Select a menu…</option>
-                    {preview.available_menus.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={existingMenuId} onValueChange={setExistingMenuId}>
+                    <SelectTrigger className="w-full min-w-0" aria-label="Existing menu">
+                      <SelectValue placeholder="Select a menu…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {preview.available_menus.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </div>
-
-              <Separator />
 
               <div className="space-y-2">
                 <Label>Field update policy</Label>
@@ -311,13 +332,13 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
               </div>
 
               {preview.requires_merge_confirm && (
-                <div className="rounded-md bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-2 rounded-2xl bg-muted/60 px-4 py-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="flex-1 space-y-2">
-                    <p className="text-sm font-medium text-amber-900">
+                    <p className="text-sm font-medium">
                       This merchant already has menu items.
                     </p>
-                    <p className="text-xs text-amber-800">
+                    <p className="text-xs text-muted-foreground">
                       Re-import will merge into the existing menu domain based on Clover IDs. Confirm to proceed.
                     </p>
                     <div className="flex items-center gap-2">
@@ -326,7 +347,7 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
                         checked={mergeConfirmed}
                         onCheckedChange={(c) => setMergeConfirmed(c === true)}
                       />
-                      <Label htmlFor="merge-confirm" className="text-sm font-normal text-amber-900">
+                      <Label htmlFor="merge-confirm" className="text-sm font-normal">
                         I understand — merge anyway
                       </Label>
                     </div>
@@ -334,23 +355,53 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
                 </div>
               )}
 
-              {flagIEntries.length > 0 && flagIEntries.some((f) => !flagIResolutions[`${f.entity_type}::${f.name}`]) && (
-                <p className="text-xs text-destructive">
+              {flagIUnresolved && (
+                <p className="text-xs text-muted-foreground">
                   Resolve all FLAG-I name collisions above before committing.
                 </p>
               )}
             </div>
+          )}
 
-            <DialogFooter className="mt-4">
+          {step === "result" && commitResult && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <p className="font-medium">Import complete</p>
+              </div>
+              <ResultGrid result={commitResult} />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0 gap-2 px-6 pb-6 pt-4 sm:gap-2">
+          {step === "upload" && (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={!file || previewMut.isPending}
+                onClick={() => file && previewMut.mutate(file)}
+              >
+                {previewMut.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing…
+                  </>
+                ) : (
+                  "Preview"
+                )}
+              </Button>
+            </>
+          )}
+
+          {step === "preview" && preview && (
+            <>
               <Button variant="outline" onClick={() => setStep("upload")}>
                 Back
               </Button>
               <Button
-                disabled={
-                  !canCommit ||
-                  commitMut.isPending ||
-                  flagIEntries.some((f) => !flagIResolutions[`${f.entity_type}::${f.name}`])
-                }
+                disabled={!canCommit || commitMut.isPending || flagIUnresolved}
                 onClick={() => commitMut.mutate()}
               >
                 {commitMut.isPending ? (
@@ -361,26 +412,23 @@ export function CloverImportDialog({ merchantId, open, onOpenChange }: CloverImp
                   "Commit import"
                 )}
               </Button>
-            </DialogFooter>
-          </ScrollArea>
-        )}
+            </>
+          )}
 
-        {step === "result" && commitResult && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-green-700">
-              <CheckCircle2 className="h-5 w-5" />
-              <p className="font-medium">Import complete</p>
-            </div>
-            <ResultGrid result={commitResult} />
-            <DialogFooter>
-              <Button onClick={() => onOpenChange(false)}>Done</Button>
-            </DialogFooter>
-          </div>
-        )}
+          {step === "result" && commitResult && (
+            <Button onClick={() => onOpenChange(false)}>Done</Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+const STEPS: Array<{ key: Step; label: string }> = [
+  { key: "upload", label: "Upload file" },
+  { key: "preview", label: "Review changes" },
+  { key: "result", label: "Done" },
+];
 
 function DiffSummaryGrid({ diff }: { diff: PreviewResponse["diff"] }) {
   const rows: Array<{ label: string; create: number; update: number; skip: number }> = [
@@ -400,29 +448,29 @@ function DiffSummaryGrid({ diff }: { diff: PreviewResponse["diff"] }) {
     },
   ];
 
+  // Four fixed rows and no `min-w`, so it fits a phone and needs no pager.
+  // `bounded={false}`: the dialog body already owns the scroll (§5.7).
   return (
-    <div className="rounded-md border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-xs text-muted-foreground">
-          <tr>
-            <th className="text-left px-3 py-2 font-medium">Entity</th>
-            <th className="text-right px-3 py-2 font-medium">Will create</th>
-            <th className="text-right px-3 py-2 font-medium">Will update</th>
-            <th className="text-right px-3 py-2 font-medium">Will skip</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label} className="border-t">
-              <td className="px-3 py-2">{r.label}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-green-700">{r.create}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-blue-700">{r.update}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.skip}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table variant="data" bounded={false}>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Entity</TableHead>
+          <TableHead className="text-right">Will create</TableHead>
+          <TableHead className="text-right">Will update</TableHead>
+          <TableHead className="text-right">Will skip</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.label}>
+            <TableCell>{r.label}</TableCell>
+            <TableCell className="text-right tabular-nums">{r.create}</TableCell>
+            <TableCell className="text-right tabular-nums">{r.update}</TableCell>
+            <TableCell className="text-right tabular-nums text-muted-foreground">{r.skip}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -435,23 +483,31 @@ function FlagsList({
   flagIResolutions: Record<string, FlagIResolution["resolution"]>;
   onFlagIChange: (key: string, resolution: FlagIResolution["resolution"]) => void;
 }) {
+  if (flags.length === 0) {
+    return (
+      <p className="rounded-2xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+        All clear — no flags raised for this file.
+      </p>
+    );
+  }
+
   return (
-    <div className="rounded-md border bg-amber-50/40">
-      <div className="px-3 py-2 text-xs font-medium text-amber-900 border-b bg-amber-50">
-        Flags raised ({flags.length})
-      </div>
-      <ul className="divide-y">
+    <div className="space-y-2 rounded-2xl bg-muted/60 p-3">
+      <p className="px-1 text-xs font-medium text-muted-foreground">
+        Flags raised (<span className="tabular-nums">{flags.length}</span>)
+      </p>
+      <ul className="space-y-1">
         {flags.map((f, i) => {
           const key = `${f.entity_type}::${f.name ?? f.clover_id ?? i}`;
           return (
-            <li key={`${f.code}-${i}`} className="px-3 py-2 text-xs space-y-1">
+            <li key={`${f.code}-${i}`} className="space-y-1 rounded-2xl bg-card/70 px-3 py-2 text-xs">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px]">FLAG-{f.code}</Badge>
-                <span className="text-muted-foreground">{f.message}</span>
+                <Badge variant="outline" className="shrink-0 text-[10px]">FLAG-{f.code}</Badge>
+                <span className="min-w-0 text-muted-foreground">{f.message}</span>
               </div>
 
               {f.code === "I" && (f.entity_type === "category" || f.entity_type === "modifier_group") && f.name && (
-                <div className="pl-1 flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 pl-1">
                   <Label className="text-[11px] text-muted-foreground">Resolution:</Label>
                   <RadioGroup
                     value={flagIResolutions[key] ?? ""}
@@ -491,20 +547,22 @@ function ResultGrid({ result }: { result: CommitResponse }) {
   ];
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 text-sm">
+      <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
         {rows.map((r) => (
-          <div key={r.label} className="flex justify-between rounded-md border px-3 py-1.5">
-            <span className="text-muted-foreground">{r.label}</span>
-            <span className="tabular-nums font-medium">{r.v}</span>
+          <div key={r.label} className="flex min-w-0 justify-between gap-3 rounded-2xl bg-muted/45 px-4 py-2">
+            <span className="min-w-0 text-muted-foreground">{r.label}</span>
+            <span className="shrink-0 font-medium tabular-nums">{r.v}</span>
           </div>
         ))}
       </div>
       {orphans > 0 && (
-        <div className="rounded-md bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-          <div className="text-xs text-amber-900">
-            <p className="font-medium">{orphans} item{orphans === 1 ? "" : "s"} attached to "Unsorted (Clover)".</p>
-            <p className="mt-0.5 text-amber-800">
+        <div className="flex items-start gap-2 rounded-2xl bg-muted/60 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="text-xs">
+            <p className="font-medium">
+              <span className="tabular-nums">{orphans}</span> item{orphans === 1 ? "" : "s"} attached to "Unsorted (Clover)".
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
               These items had no category in the Clover file (or referenced an unknown category). They are visible
               under a safety-net category so you can reassign them — no items were silently dropped.
             </p>

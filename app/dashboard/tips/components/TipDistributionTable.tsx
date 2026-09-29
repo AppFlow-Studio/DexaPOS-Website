@@ -17,6 +17,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import type { TipDetailWithStaff } from "@/app/dashboard/actions/tips";
 
 interface TipDistributionTableProps {
@@ -53,6 +55,7 @@ export function TipDistributionTable({
   );
 
   const isColumnVisible = (columnId: string) => !isMobile || !hiddenCols.has(columnId);
+  const { pageRows, pagination, setPage } = useClientPagination(details, 10);
 
   const formatMoney = (amount: number) => {
     return `$${amount.toFixed(2)}`;
@@ -123,7 +126,7 @@ export function TipDistributionTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {details.map((detail) => (
+          {pageRows.map((detail) => (
             <TableRow key={detail.id} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
               {[
                 { id: "employee", render: () => (
@@ -194,6 +197,12 @@ export function TipDistributionTable({
           ))}
         </TableBody>
       </Table>
+
+      <PaginationBar
+        pagination={pagination}
+        onPageChange={setPage}
+        itemLabel="employees"
+      />
     </div>
   );
 }

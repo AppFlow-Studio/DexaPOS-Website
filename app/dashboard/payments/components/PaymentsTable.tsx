@@ -999,7 +999,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
     onExpandedChange: setExpanded,
     getRowCanExpand: () => !isMobile,
     initialState: {
-      pagination: { pageSize: 50 },
+      pagination: { pageSize: 10 },
     },
     state: {
       sorting,

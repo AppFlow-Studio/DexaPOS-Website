@@ -6,7 +6,6 @@ import {
   Boxes,
   HardDrive,
   Link2,
-  ShieldAlert,
   Truck,
   Warehouse,
 } from 'lucide-react'
@@ -16,390 +15,343 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 
 import { useAdminDeviceOverview } from '@/app/manage/hooks/useDeviceRegistry'
-import { DeviceRegistryMetricCard } from '@/app/manage/devices/components/DeviceRegistryMetricCard'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart'
-import { Empty } from '@/components/ui/empty'
+  AnalyticsPanel,
+  AnalyticsTooltip,
+  CATEGORY_AXIS_WIDTH,
+  CategoryTick,
+  valueAxisWidthMobile,
+} from '@/app/manage/components/analytics-primitives'
+import {
+  CHART_CURSOR_FILL,
+  CHART_GRID,
+  CHART_TICK,
+  ChartEmpty,
+  PageShell,
+  Panel,
+  StatRow,
+  StatTile,
+  isEmptySeries,
+} from '@/components/dashboard/shell'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useIsMobile } from '@/hooks/use-mobile'
 import {
   formatDeviceCategory,
   formatDeviceStatus,
 } from '@/lib/device-registry/presentation'
 import type { DeviceCategory, DeviceLifecycleStatus } from '@/types/device-registry'
 
-const STATUS_COLORS: Record<string, string> = {
-  in_warehouse: '#3B82F6',
-  allocated: '#8B5CF6',
-  shipped: '#6366F1',
-  provisioning: '#14B8A6',
-  deployed: '#22C55E',
-  in_repair: '#F59E0B',
-  decommissioned: '#6B7280',
-  lost: '#EF4444',
-  rma: '#F97316',
+const BAR_CHART_HEIGHT = 300
+const TREND_CHART_HEIGHT = 260
+
+function formatCount(value: number) {
+  return value.toLocaleString('en-US')
 }
 
-const CATEGORY_COLORS = ['#0F766E', '#2563EB', '#7C3AED', '#EA580C', '#0891B2', '#BE185D', '#4F46E5']
-
-function buildStatusChartConfig(data: Array<{ key: string; label: string }>) {
-  return Object.fromEntries(
-    data.map((item) => [
-      item.key,
-      {
-        label: formatDeviceStatus(item.key as DeviceLifecycleStatus),
-        color: STATUS_COLORS[item.key] ?? '#64748B',
-      },
-    ])
-  )
-}
-
-function buildCategoryChartConfig(data: Array<{ key: string; label: string }>) {
-  return Object.fromEntries(
-    data.map((item, index) => [
-      item.key,
-      {
-        label: formatDeviceCategory(item.key as DeviceCategory),
-        color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
-      },
-    ])
-  )
+function unitsLabel(value: number) {
+  return `${formatCount(value)} ${value === 1 ? 'unit' : 'units'}`
 }
 
 export default function DeviceRegistryOverviewPage() {
   const overviewQuery = useAdminDeviceOverview()
   const overview = overviewQuery.data
+  const isMobile = useIsMobile()
+  const categoryAxisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : CATEGORY_AXIS_WIDTH.desktop
 
-  const statusChartData =
-    overview?.statusBreakdown.map((item) => ({
-      ...item,
-      name: item.key,
+  // Single-series charts: every bar is the same measure, so one colour
+  // (`var(--brand)`, §6.1). A hue per status or per category encoded nothing.
+  const statusChartData = (overview?.statusBreakdown ?? [])
+    .filter((item) => item.value > 0)
+    .map((item) => ({
       label: formatDeviceStatus(item.key as DeviceLifecycleStatus),
-      fill: STATUS_COLORS[item.key] ?? '#64748B',
-    })) ?? []
+      value: item.value,
+    }))
 
-  const categoryChartData =
-    overview?.categoryBreakdown.map((item, index) => ({
-      ...item,
-      name: item.key,
+  const categoryChartData = (overview?.categoryBreakdown ?? [])
+    .filter((item) => item.value > 0)
+    .map((item) => ({
       label: formatDeviceCategory(item.key as DeviceCategory),
-      fill: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
-    })) ?? []
+      value: item.value,
+    }))
 
-  const merchantChartData =
-    overview?.merchantBreakdown.map((item, index) => ({
-      ...item,
-      fill: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
-    })) ?? []
+  const merchantChartData = (overview?.merchantBreakdown ?? []).map((item) => ({
+    label: item.merchantName,
+    value: item.value,
+  }))
 
-  const statusChartConfig = buildStatusChartConfig(overview?.statusBreakdown ?? [])
-  const categoryChartConfig = buildCategoryChartConfig(overview?.categoryBreakdown ?? [])
+  const registrationTrend = overview?.registrationTrend ?? []
+  const trendMax = Math.max(0, ...registrationTrend.map((row) => row.value))
 
   return (
-    <div className="min-w-0 space-y-6 overflow-x-hidden">
+    <PageShell as="div">
       <DeviceRegistryPageHeader
         title="Fleet overview"
         description="HQ summary of current fleet posture, warranty exposure, ownership distribution, and recent intake."
         actions={
           <>
-          <Button asChild>
-            <Link href="/manage/devices">Open inventory</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/manage/device-catalog">Open catalog</Link>
-          </Button>
+            <Button asChild>
+              <Link href="/manage/devices">Open inventory</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/manage/device-catalog">Open catalog</Link>
+            </Button>
           </>
         }
       />
 
       {overviewQuery.isLoading ? (
-        <div className="space-y-4">
-          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <DeviceRegistryMetricCard
-                key={index}
-                label="Loading"
-                value="-"
-                detail="Loading metric"
-                icon={Boxes}
-                loading
-              />
-            ))}
-          </div>
-          <div className="grid min-w-0 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
-            <Skeleton className="h-[360px] w-full" />
-            <Skeleton className="h-[360px] w-full" />
-          </div>
-          <div className="grid min-w-0 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
-            <Skeleton className="h-[320px] w-full" />
-            <Skeleton className="h-[320px] w-full" />
-          </div>
-        </div>
+        <OverviewSkeleton />
       ) : overviewQuery.isError || !overview ? (
-        <Empty
-          icon={ShieldAlert}
-          title="Overview unavailable"
-          description={overviewQuery.error?.message ?? 'The device overview could not be loaded.'}
-        />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-muted/30 px-4 py-20 text-center">
+          <p className="text-sm font-medium">We hit a snag loading the fleet overview</p>
+          <p className="max-w-md text-xs text-muted-foreground">
+            {overviewQuery.error?.message ?? 'The device overview could not be loaded.'}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void overviewQuery.refetch()}>
+            Retry
+          </Button>
+        </div>
       ) : (
         <>
-          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
-            <DeviceRegistryMetricCard
-              label="Total fleet"
-              value={overview.kpis.total}
-              detail="All inventory rows currently tracked."
-              icon={Boxes}
-            />
-            <DeviceRegistryMetricCard
-              label="Deployed"
-              value={overview.kpis.deployed}
-              detail="Active production units tied to merchant operations."
-              icon={HardDrive}
-            />
-            <DeviceRegistryMetricCard
-              label="Warehouse"
-              value={overview.kpis.warehouse}
-              detail="Available stock sitting in DEXA inventory."
-              icon={Warehouse}
-            />
-            <DeviceRegistryMetricCard
-              label="Transit / provisioning"
-              value={overview.kpis.inTransit}
-              detail="Units in allocation, shipping, or provisioning states."
-              icon={Truck}
-            />
-            <DeviceRegistryMetricCard
-              label="Needs attention"
-              value={overview.kpis.needsAttention}
-              detail="Repair, loss, or RMA states requiring follow-up."
-              icon={AlertTriangle}
-            />
-            <DeviceRegistryMetricCard
-              label="Unlinked units"
-              value={overview.kpis.unlinked}
-              detail="Inventory rows with no station, terminal, or printer link yet."
-              icon={Link2}
-            />
-          </div>
+          <Panel padded>
+            <StatRow columns={3}>
+              <StatTile
+                label="Total fleet"
+                icon={<Boxes />}
+                value={formatCount(overview.kpis.total)}
+                meta="All inventory rows currently tracked"
+              />
+              <StatTile
+                label="Deployed"
+                icon={<HardDrive />}
+                value={formatCount(overview.kpis.deployed)}
+                meta="Active units tied to merchant operations"
+              />
+              <StatTile
+                label="Warehouse"
+                icon={<Warehouse />}
+                value={formatCount(overview.kpis.warehouse)}
+                meta="Available stock in DEXA inventory"
+              />
+              <StatTile
+                label="Transit / provisioning"
+                icon={<Truck />}
+                value={formatCount(overview.kpis.inTransit)}
+                meta="Allocated, shipping, or provisioning"
+              />
+              <StatTile
+                label="Needs attention"
+                icon={<AlertTriangle />}
+                value={formatCount(overview.kpis.needsAttention)}
+                meta="Repair, loss, or RMA"
+              />
+              <StatTile
+                label="Unlinked units"
+                icon={<Link2 />}
+                value={formatCount(overview.kpis.unlinked)}
+                meta="No station, terminal, or printer link yet"
+              />
+            </StatRow>
+          </Panel>
 
           {overview.kpis.total === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <Empty
-                  icon={Boxes}
-                  title="No registry inventory yet"
-                  description="The overview is ready, but it needs device_inventory rows before charts and watchlists can render meaningful data."
-                  action={
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      <Button asChild>
-                        <Link href="/manage/devices">Open inventory</Link>
-                      </Button>
-                      <Button asChild variant="outline">
-                        <Link href="/manage/device-catalog">Open catalog</Link>
-                      </Button>
-                    </div>
-                  }
-                />
-              </CardContent>
-            </Card>
+            <Panel>
+              <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+                <p className="text-sm font-medium">No devices in the registry yet</p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  Charts and the warranty watchlist will fill in once hardware is added to inventory.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/manage/devices">Open inventory</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/manage/device-catalog">Open catalog</Link>
+                  </Button>
+                </div>
+              </div>
+            </Panel>
           ) : (
             <>
-              <div className="grid min-w-0 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
-                <Card className="min-w-0 overflow-hidden">
-                  <CardHeader>
-                    <CardTitle>Status breakdown</CardTitle>
-                    <CardDescription>
-                      Current lifecycle distribution across the fleet.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="min-w-0 px-2 sm:px-6">
-                    <ChartContainer
-                      config={statusChartConfig}
-                      className="h-[320px] w-full"
-                    >
-                      <PieChart>
-                        <ChartTooltip
-                          cursor={false}
-                          content={<ChartTooltipContent hideLabel nameKey="name" />}
-                        />
-                        <Pie
-                          data={statusChartData}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius="38%"
-                          outerRadius="62%"
-                          strokeWidth={4}
-                        >
-                          {statusChartData.map((entry) => (
-                            <Cell key={entry.key} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <ChartLegend
-                          content={<ChartLegendContent nameKey="name" className="flex-wrap" />}
-                        />
-                      </PieChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
-
-                <Card className="min-w-0 overflow-hidden">
-                  <CardHeader>
-                    <CardTitle>Category mix</CardTitle>
-                    <CardDescription>
-                      Fleet volume by hardware class.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="min-w-0 px-2 sm:px-6">
-                    <ChartContainer
-                      config={categoryChartConfig}
-                      className="h-[320px] w-full"
-                    >
-                      <BarChart data={categoryChartData} layout="vertical" margin={{ left: 0, right: 8 }}>
-                        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                        <XAxis type="number" allowDecimals={false} />
+              <div className="grid min-w-0 items-start gap-6 md:grid-cols-2">
+                <AnalyticsPanel title="Status breakdown" caption="Current lifecycle distribution across the fleet.">
+                  {isEmptySeries(statusChartData, (row) => row.value) ? (
+                    <ChartEmpty
+                      height={BAR_CHART_HEIGHT}
+                      title="No lifecycle data yet"
+                      hint="Statuses will appear here once units are tracked."
+                    />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
+                      <BarChart data={statusChartData} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
+                        <CartesianGrid {...CHART_GRID} horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
                         <YAxis
                           dataKey="label"
                           type="category"
-                          width={104}
+                          width={categoryAxisWidth}
                           tickLine={false}
                           axisLine={false}
-                          tickFormatter={(value: string) => value.length > 16 ? `${value.slice(0, 15)}…` : value}
+                          interval={0}
+                          tick={<CategoryTick width={categoryAxisWidth} />}
                         />
-                        <ChartTooltip
-                          cursor={false}
-                          content={<ChartTooltipContent hideLabel />}
+                        <Tooltip
+                          cursor={{ fill: CHART_CURSOR_FILL }}
+                          content={<AnalyticsTooltip formatter={unitsLabel} />}
                         />
-                        <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                          {categoryChartData.map((entry) => (
-                            <Cell key={entry.key} fill={entry.fill} />
-                          ))}
-                        </Bar>
+                        <Bar dataKey="value" name="Devices" fill="var(--brand)" radius={[0, 6, 6, 0]} />
                       </BarChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                    </ResponsiveContainer>
+                  )}
+                </AnalyticsPanel>
+
+                <AnalyticsPanel title="Category mix" caption="Fleet volume by hardware class.">
+                  {isEmptySeries(categoryChartData, (row) => row.value) ? (
+                    <ChartEmpty
+                      height={BAR_CHART_HEIGHT}
+                      title="No hardware classes yet"
+                      hint="Categories will appear here once units are tracked."
+                    />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
+                      <BarChart data={categoryChartData} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
+                        <CartesianGrid {...CHART_GRID} horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
+                        <YAxis
+                          dataKey="label"
+                          type="category"
+                          width={categoryAxisWidth}
+                          tickLine={false}
+                          axisLine={false}
+                          interval={0}
+                          tick={<CategoryTick width={categoryAxisWidth} />}
+                        />
+                        <Tooltip
+                          cursor={{ fill: CHART_CURSOR_FILL }}
+                          content={<AnalyticsTooltip formatter={unitsLabel} />}
+                        />
+                        <Bar dataKey="value" name="Devices" fill="var(--brand)" radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </AnalyticsPanel>
               </div>
 
-              <div className="grid min-w-0 gap-6 xl:grid-cols-[1.2fr_0.8fr] [&>*]:min-w-0">
-                <Card className="min-w-0 overflow-hidden">
-                  <CardHeader>
-                    <CardTitle>Recent registry intake</CardTitle>
-                    <CardDescription>
-                      Physical units added to the registry over the last six months.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="min-w-0 px-2 sm:px-6">
-                    <ChartContainer
-                      config={{ value: { label: 'Devices registered', color: '#2563EB' } }}
-                      className="h-[300px] w-full"
-                    >
-                      <AreaChart data={overview.registrationTrend} margin={{ left: 0, right: 8 }}>
-                        <defs>
-                          <linearGradient id="device-registry-trend" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#2563EB" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#2563EB" stopOpacity={0.02} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
+              <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                <AnalyticsPanel
+                  title="Recent registry intake"
+                  caption="Physical units added to the registry over the last six months."
+                  showCaptionOnMobile
+                >
+                  {isEmptySeries(registrationTrend, (row) => row.value) ? (
+                    <ChartEmpty
+                      height={TREND_CHART_HEIGHT}
+                      title="No units registered in the last six months"
+                      hint="New inventory will appear here as it is added."
+                    />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={TREND_CHART_HEIGHT}>
+                      <AreaChart data={registrationTrend} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                        <CartesianGrid {...CHART_GRID} vertical={false} />
+                        <XAxis dataKey="month" tick={CHART_TICK} tickLine={false} axisLine={false} />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={CHART_TICK}
+                          tickLine={false}
+                          axisLine={false}
+                          width={isMobile ? valueAxisWidthMobile(String(trendMax).length) : 40}
+                        />
+                        <Tooltip content={<AnalyticsTooltip formatter={unitsLabel} />} />
                         <Area
                           type="monotone"
                           dataKey="value"
-                          stroke="#2563EB"
-                          fill="url(#device-registry-trend)"
+                          name="Registered"
+                          stroke="var(--brand)"
+                          fill="var(--brand)"
+                          fillOpacity={0.12}
                           strokeWidth={2}
                         />
                       </AreaChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                    </ResponsiveContainer>
+                  )}
+                </AnalyticsPanel>
 
-                <Card className="min-w-0 overflow-hidden">
-                  <CardHeader>
-                    <CardTitle>Warranty watchlist</CardTitle>
-                    <CardDescription>
-                      Warranty exposure windows based on `warranty_expires_at`.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-2xl border bg-muted/20 p-4">
-                      <div className="text-sm font-medium">30-day window</div>
-                      <div className="mt-2 text-3xl font-semibold">{overview.kpis.warranty30}</div>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-                      <div className="rounded-2xl border bg-muted/20 p-4">
-                        <div className="text-sm font-medium">60-day window</div>
-                        <div className="mt-2 text-2xl font-semibold">{overview.kpis.warranty60}</div>
-                      </div>
-                      <div className="rounded-2xl border bg-muted/20 p-4">
-                        <div className="text-sm font-medium">90-day window</div>
-                        <div className="mt-2 text-2xl font-semibold">{overview.kpis.warranty90}</div>
-                      </div>
-                      <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-                        <div className="text-sm font-medium text-red-700">Expired</div>
-                        <div className="mt-2 text-2xl font-semibold text-red-700">
-                          {overview.kpis.expiredWarranty}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <AnalyticsPanel title="Warranty watchlist" caption="Units whose warranty ends within each window.">
+                  <StatRow columns={2} className="grid-cols-2 gap-x-4">
+                    <StatTile label="Within 30 days" value={formatCount(overview.kpis.warranty30)} />
+                    <StatTile label="Within 60 days" value={formatCount(overview.kpis.warranty60)} />
+                    <StatTile label="Within 90 days" value={formatCount(overview.kpis.warranty90)} />
+                    <StatTile label="Expired" value={formatCount(overview.kpis.expiredWarranty)} />
+                  </StatRow>
+                </AnalyticsPanel>
               </div>
 
-              <Card className="min-w-0 overflow-hidden">
-                <CardHeader>
-                  <CardTitle>Merchant distribution</CardTitle>
-                  <CardDescription>
-                    Top merchants by assigned device count.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="min-w-0 px-2 sm:px-6">
-                  <ChartContainer
-                    config={{ value: { label: 'Assigned units', color: '#0F766E' } }}
-                    className="h-[340px] w-full"
-                  >
-                    <BarChart data={merchantChartData} layout="vertical" margin={{ left: 0, right: 8 }}>
-                      <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                      <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+              <AnalyticsPanel title="Merchant distribution" caption="Top merchants by assigned device count.">
+                {isEmptySeries(merchantChartData, (row) => row.value) ? (
+                  <ChartEmpty
+                    height={BAR_CHART_HEIGHT}
+                    title="No devices assigned to merchants yet"
+                    hint="Merchants will appear here once units are allocated."
+                  />
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(BAR_CHART_HEIGHT, merchantChartData.length * 40)}>
+                    <BarChart data={merchantChartData} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
+                      <CartesianGrid {...CHART_GRID} horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
                       <YAxis
-                        dataKey="merchantName"
+                        dataKey="label"
                         type="category"
-                        width={112}
+                        width={categoryAxisWidth}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(value: string) => value.length > 17 ? `${value.slice(0, 16)}…` : value}
+                        interval={0}
+                        tick={<CategoryTick width={categoryAxisWidth} />}
                       />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                        {merchantChartData.map((entry, index) => (
-                          <Cell key={`${entry.merchantName}-${index}`} fill={entry.fill} />
-                        ))}
-                      </Bar>
+                      <Tooltip
+                        cursor={{ fill: CHART_CURSOR_FILL }}
+                        content={<AnalyticsTooltip formatter={unitsLabel} />}
+                      />
+                      <Bar dataKey="value" name="Assigned" fill="var(--brand)" radius={[0, 6, 6, 0]} />
                     </BarChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
+                  </ResponsiveContainer>
+                )}
+              </AnalyticsPanel>
             </>
           )}
         </>
       )}
-    </div>
+    </PageShell>
+  )
+}
+
+/** Shaped like the loaded page: a figure panel, then paired chart panels. */
+function OverviewSkeleton() {
+  return (
+    <>
+      <Panel padded>
+        <StatRow columns={3}>
+          {Array.from({ length: 6 }).map((_, index) => (
+            <StatTile key={index} label={<Skeleton className="h-4 w-24" />} value="" isLoading />
+          ))}
+        </StatRow>
+      </Panel>
+      <div className="grid min-w-0 items-start gap-6 md:grid-cols-2">
+        <Skeleton className="h-[400px] w-full rounded-3xl" />
+        <Skeleton className="h-[400px] w-full rounded-3xl" />
+      </div>
+      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <Skeleton className="h-[360px] w-full rounded-3xl" />
+        <Skeleton className="h-[360px] w-full rounded-3xl" />
+      </div>
+    </>
   )
 }

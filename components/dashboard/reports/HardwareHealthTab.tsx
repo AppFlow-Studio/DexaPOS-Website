@@ -58,6 +58,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import {
   useCashDrawerHardwareStatus,
   useCashDrawerKickEvents,
@@ -66,7 +68,7 @@ import {
 } from "@/app/dashboard/hooks/useCashDrawerHardware";
 import type { KickOutcome } from "@/app/dashboard/actions/cash-drawer-hardware";
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 // ─── Shared bits ────────────────────────────────────────────────────────────
 
@@ -280,7 +282,7 @@ function KickEventsTable({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date })
 
   // Reset to the first page when filters change — React's adjust-state-during-
   // render pattern, preferred over a setState-in-effect.
-  const filterSig = `${drawerFilter}|${outcomeFilter}`;
+  const filterSig = `${drawerFilter}|${outcomeFilter}|${dateFrom.getTime()}|${dateTo.getTime()}`;
   const [prevFilterSig, setPrevFilterSig] = useState(filterSig);
   if (prevFilterSig !== filterSig) {
     setPrevFilterSig(filterSig);
@@ -456,7 +458,18 @@ function KickEventsTable({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date })
 function MovementCorrelation({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
   const { data: rows = [], isLoading } = useMovementKickCorrelation(dateFrom, dateTo);
 
+  // Counted over every row, not just the visible page.
   const problems = rows.filter((r) => r.kick_outcome !== "ok").length;
+  const { pageRows, pagination, setPage } = useClientPagination(rows, ITEMS_PER_PAGE);
+
+  // A new date range starts from the first page (adjust-state-during-render,
+  // same as KickEventsTable above).
+  const rangeSig = `${dateFrom.getTime()}|${dateTo.getTime()}`;
+  const [prevRangeSig, setPrevRangeSig] = useState(rangeSig);
+  if (prevRangeSig !== rangeSig) {
+    setPrevRangeSig(rangeSig);
+    setPage(1);
+  }
 
   function exportCSV() {
     const out = rows.map((r) => ({
@@ -532,7 +545,7 @@ function MovementCorrelation({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Dat
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((r) => {
+                pageRows.map((r) => {
                   const problem = r.kick_outcome !== "ok";
                   return (
                     <TableRow key={r.operation_id} className={problem ? "bg-amber-50/50 hover:bg-amber-50" : "hover:bg-muted/40"}>
@@ -562,6 +575,7 @@ function MovementCorrelation({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Dat
             </TableBody>
           </Table>
         </div>
+        <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="movements" />
       </CardContent>
     </Card>
   );

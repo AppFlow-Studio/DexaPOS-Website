@@ -70,11 +70,3 @@ export function PanelGrid({
     </div>
   )
 }
-
-/**
- * A hairline-separated divider between sibling blocks inside a panel, for the
- * cases where `PanelSection`'s own top rule doesn't apply.
- */
-export function PanelDivider({ className }: { className?: string }) {
-  return <div className={cn('border-t border-border/60', className)} />
-}

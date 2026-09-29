@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AlertTriangle, ArrowRight, CreditCard, Store } from 'lucide-react'
 import { toast } from 'sonner'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
 import {
   useBoardMerchantOnValor,
   useMerchantAcquirerProfile,
@@ -14,15 +14,10 @@ import {
   useSetValorAccountPrimary,
 } from '@/lib/queries/use-admin-valor-boarding'
 import { EmptySection } from './EmptySection'
-import { SectionHead } from './SectionHead'
 import { AcquirerProfileSheet } from './AcquirerProfileSheet'
 
-function statusVariant(boarded: boolean): 'default' | 'secondary' {
-  return boarded ? 'default' : 'secondary'
-}
-
 export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
-  const { data, isLoading, error: queryError } = useMerchantValorBoardingStatus(merchantId)
+  const { data, isLoading, error: queryError, refetch } = useMerchantValorBoardingStatus(merchantId)
   const { data: acquirer } = useMerchantAcquirerProfile(merchantId)
   const boarding = useBoardMerchantOnValor(merchantId)
   const setPrimary = useSetValorAccountPrimary(merchantId)
@@ -121,66 +116,79 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
     return null
   })()
 
+  const heading = {
+    label: 'Valor Boarding',
+    caption:
+      'Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO.',
+  }
+
+  const sheet = acquirer && (
+    <AcquirerProfileSheet
+      merchantId={merchantId}
+      profile={acquirer}
+      open={sheetOpen}
+      onOpenChange={setSheetOpen}
+    />
+  )
+
+  if (isLoading || error || !data || data.locations.length === 0) {
+    return (
+      <Panel>
+        <PanelSection {...heading}>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full rounded-2xl" />
+              <Skeleton className="h-24 w-full rounded-2xl" />
+            </div>
+          ) : error ? (
+            <EmptySection
+              icon={CreditCard}
+              title="We hit a snag loading Valor boarding"
+              body={error}
+              cta={
+                <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              }
+            />
+          ) : (
+            <EmptySection
+              icon={Store}
+              title="No merchant locations yet"
+              body="Create a location first, then board it on Valor for online-order card payments."
+            />
+          )}
+        </PanelSection>
+        {sheet}
+      </Panel>
+    )
+  }
+
   return (
-    <div>
-      <SectionHead
-        title="Valor Boarding"
-        sub="Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO."
-      />
+    <div className="space-y-6">
+      {sheet}
 
-      {acquirer && (
-        <AcquirerProfileSheet
-          merchantId={merchantId}
-          profile={acquirer}
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-        />
-      )}
-
-      {isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-        </div>
-      ) : error ? (
-        <EmptySection icon={CreditCard} title="Unable to load Valor boarding" body={error} />
-      ) : !data || data.locations.length === 0 ? (
-        <EmptySection
-          icon={Store}
-          title="No merchant locations yet"
-          body="Create a location first, then board it on Valor for online-order card payments."
-        />
-      ) : (
-        <>
-          {/* Step 1 — processing credentials (gates boarding) */}
-          {acquirer && (
-            <div
-              className={`mb-3 rounded-2xl border p-4 ${
-                acquirerReady ? 'bg-card' : 'border-amber-300 bg-amber-50 text-amber-900'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 font-medium">
-                    <span className="text-muted-foreground">1 ·</span> Processing credentials
-                    {acquirerReady ? (
-                      <Badge
-                        variant="outline"
-                        className="border-green-300 bg-green-50 text-green-700"
-                      >
-                        Ready
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">
-                        {acquirer.mode === 'per_location'
+      <Panel>
+        <PanelSection {...heading}>
+          <div className="space-y-3">
+            {/* Step 1 — processing credentials (gates boarding) */}
+            {acquirer && (
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border-0 bg-muted/45 p-4">
+                <div className="min-w-0 flex-1 basis-60 space-y-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
+                    <span>
+                      <span className="text-muted-foreground">1 ·</span> Processing credentials
+                    </span>
+                    {/* On a muted card the state is plain text, not a pill (§3.5). */}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {acquirerReady
+                        ? 'Ready'
+                        : acquirer.mode === 'per_location'
                           ? `${missingLocationMids} location(s) need a MID`
                           : 'Not set'}
-                      </Badge>
-                    )}
+                    </span>
                   </div>
-                  <div
-                    className={`text-xs ${acquirerReady ? 'text-muted-foreground' : 'text-amber-900'}`}
-                  >
+                  <div className="text-xs text-muted-foreground">
                     {acquirerReady
                       ? acquirerSummary()
                       : 'Required before boarding — enter the MID / V-Number from underwriting. Each MID routes settlement to the merchant’s own bank account.'}
@@ -195,88 +203,95 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                   {acquirerReady ? 'Edit' : 'Add processing credentials'}
                 </Button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Step 2 — board on Valor */}
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border bg-card p-4">
-            <div className="space-y-1">
-              <div className="font-medium">
-                <span className="text-muted-foreground">2 ·</span> Board on Valor
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {data.valorMerchantId
-                  ? `Boarded — Valor merchant ${data.valorMerchantId}. ${data.boardedCount}/${data.locations.length} location(s) provisioned.`
-                  : acquirerReady
-                    ? 'Creates one Valor merchant, then a store + EPI per location.'
-                    : 'Add processing credentials above first.'}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="shrink-0"
-              onClick={handleBoard}
-              disabled={boarding.isPending || !acquirerReady}
-              title={acquirerReady ? undefined : 'Add processing credentials first'}
-            >
-              {boarding.isPending
-                ? 'Boarding…'
-                : data.valorMerchantId
-                  ? 'Provision locations'
-                  : 'Board on Valor'}
-            </Button>
-          </div>
-
-          {blockers && blockers.length > 0 && (
-            <div className="mb-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <AlertTriangle className="h-4 w-4" />
-                Resolve these before boarding
-              </div>
-              <ul className="mt-2 list-disc space-y-1 pl-6 text-xs">
-                {blockers.map((b) => (
-                  <li key={b.code}>{b.label}</li>
-                ))}
-              </ul>
-              {resolveTarget && (
-                <div className="mt-3">
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={resolveTarget.href}>
-                      {resolveTarget.label}
-                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
+            {/* Step 2 — board on Valor */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 bg-muted/45 p-4">
+              <div className="min-w-0 flex-1 basis-60 space-y-1">
+                <div className="font-medium">
+                  <span className="text-muted-foreground">2 ·</span> Board on Valor
                 </div>
-              )}
+                <div className="text-xs text-muted-foreground">
+                  {data.valorMerchantId
+                    ? `Boarded — Valor merchant ${data.valorMerchantId}. ${data.boardedCount}/${data.locations.length} location(s) provisioned.`
+                    : acquirerReady
+                      ? 'Creates one Valor merchant, then a store + EPI per location.'
+                      : 'Add processing credentials above first.'}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={handleBoard}
+                disabled={boarding.isPending || !acquirerReady}
+                title={acquirerReady ? undefined : 'Add processing credentials first'}
+              >
+                {boarding.isPending
+                  ? 'Boarding…'
+                  : data.valorMerchantId
+                    ? 'Provision locations'
+                    : 'Board on Valor'}
+              </Button>
             </div>
-          )}
 
-          <div className="space-y-3">
+            {blockers && blockers.length > 0 && (
+              <div className="rounded-2xl bg-muted/60 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  Resolve these before boarding
+                </div>
+                <ul className="mt-2 list-disc space-y-1 pl-6 text-xs text-muted-foreground">
+                  {blockers.map((b) => (
+                    <li key={b.code}>{b.label}</li>
+                  ))}
+                </ul>
+                {resolveTarget && (
+                  <div className="mt-3">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={resolveTarget.href}>
+                        {resolveTarget.label}
+                        <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </PanelSection>
+      </Panel>
+
+      <Panel>
+        <PanelSection
+          label="Locations"
+          caption={`${data.boardedCount}/${data.locations.length} location(s) provisioned on Valor.`}
+        >
+          <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
             {data.locations.map((row) => (
-              <div key={row.locationId} className="rounded-2xl border bg-card p-4">
+              <div key={row.locationId} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="font-medium">{row.locationName}</div>
+                  <div className="min-w-0 space-y-1">
+                    <div className="truncate font-medium">{row.locationName}</div>
                     <div className="text-xs text-muted-foreground">
                       {row.boarded
                         ? 'Provisioned on Valor with a store + EPI for online-order checkout.'
                         : 'Not provisioned on Valor yet.'}
                     </div>
                   </div>
-                  <Badge variant={statusVariant(row.boarded)}>
+                  <span className="shrink-0 text-sm text-muted-foreground">
                     {row.boarded ? 'Boarded' : 'Not boarded'}
-                  </Badge>
+                  </span>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
-                  <Cell label="Valor Merchant" value={row.valorMerchantId ?? '-'} />
-                  <Cell label="Store" value={row.valorStoreId ?? '-'} />
-                  <Cell label="EPI" value={row.valorEpi ?? '-'} />
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <Cell label="Valor Merchant" value={row.valorMerchantId ?? '—'} />
+                  <Cell label="Store" value={row.valorStoreId ?? '—'} />
+                  <Cell label="EPI" value={row.valorEpi ?? '—'} />
                   <Cell label="API Keys" value={row.hasApiKeys ? 'Present' : 'Missing'} />
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <div className="text-xs text-muted-foreground">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1 basis-48 text-xs text-muted-foreground">
                     {row.boarded
                       ? row.isPrimary
                         ? 'Active · primary online-order rail'
@@ -285,9 +300,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                   </div>
                   {row.boarded &&
                     (row.isPrimary ? (
-                      <Badge variant="outline" className="shrink-0 border-green-300 bg-green-50 text-green-700">
-                        Live
-                      </Badge>
+                      <span className="shrink-0 text-sm font-medium">Live</span>
                     ) : (
                       <Button
                         size="sm"
@@ -309,21 +322,17 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
               </div>
             ))}
           </div>
-        </>
-      )}
+        </PanelSection>
+      </Panel>
     </div>
   )
 }
 
 function Cell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-card px-4 py-3">
-      <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </div>
-      <div className="mt-0.5 inline-flex items-center gap-1.5 text-[12.5px] text-foreground">
-        {value}
-      </div>
+    <div className="min-w-0">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="truncate font-medium">{value}</p>
     </div>
   )
 }

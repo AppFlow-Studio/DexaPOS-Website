@@ -16,7 +16,7 @@ export function ActiveShiftsPanel({ shifts, isLoading }: ActiveShiftsPanelProps)
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={Users}
         label="Staff Shifts"
         caption={

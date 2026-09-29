@@ -56,7 +56,7 @@ import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { MerchantChargebackFilters, MerchantChargebackRow, SubmitChargebackDefense, UploadDisputeDocument } from "../../actions/chargebacks";
 import { useAuth } from "@clerk/nextjs";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 const OPEN_STATUSES = new Set(["notified", "under_review"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -442,7 +442,7 @@ export default function DisputesPage() {
               icon={<ShieldAlert className="text-muted-foreground" />}
               isLoading={isLoading}
             />
-            <StatTile
+            <StatTile showMetaOnMobile
               label="Urgent"
               value={isLoading ? undefined : urgentCount.toLocaleString()}
               meta="Deadline within 7 days"
@@ -456,7 +456,7 @@ export default function DisputesPage() {
               icon={<Clock className="text-muted-foreground" />}
               isLoading={isLoading}
             />
-            <StatTile
+            <StatTile showMetaOnMobile
               label="Won / Resolved"
               value={isLoading ? undefined : resolvedCount.toLocaleString()}
               meta="In current page view"

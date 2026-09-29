@@ -1,112 +1,61 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, Plus, MapPin, Pencil } from 'lucide-react'
+import { CreditCard, Plus, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { useMerchantLocationMids } from '@/lib/queries/use-luqra'
 import type { LocationMidRow } from '@/app/manage/actions/admin-merchant/luqra'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
-import { SectionHead } from './SectionHead'
 import { EmptySection } from './EmptySection'
 import { AssignMidDialog } from './AssignMidDialog'
-
-const STATUS_CLASS: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-800 border-amber-200',
-    review: 'bg-blue-100 text-blue-800 border-blue-200',
-    live: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    offline: 'bg-zinc-200 text-zinc-700 border-zinc-300',
-}
-
-function MidCard({
-    row,
-    canEdit,
-    onEdit,
-}: {
-    row: LocationMidRow
-    canEdit: boolean
-    onEdit: (row: LocationMidRow) => void
-}) {
-    const hasMid = !!row.luqra_mid
-    return (
-        <div className="rounded-3xl border bg-card">
-            <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
-                <div className="space-y-0.5 min-w-0">
-                    <div className="flex items-center gap-2">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-[13px] font-medium truncate">{row.name}</span>
-                    </div>
-                    <div className="text-[11.5px] text-muted-foreground break-all">
-                        {hasMid ? (
-                            <>
-                                <span className="font-mono">{row.luqra_mid}</span>
-                                {row.luqra_mid_descriptor && (
-                                    <>
-                                        <span className="mx-1.5" aria-hidden>·</span>
-                                        <span>&ldquo;{row.luqra_mid_descriptor}&rdquo;</span>
-                                    </>
-                                )}
-                            </>
-                        ) : (
-                            <span>No MID assigned</span>
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    <Badge className={STATUS_CLASS[row.luqra_mid_status] ?? STATUS_CLASS.pending}>
-                        {row.luqra_mid_status}
-                    </Badge>
-                    {canEdit && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2"
-                            onClick={() => onEdit(row)}
-                        >
-                            {hasMid ? (
-                                <>
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Edit</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Plus className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Assign</span>
-                                </>
-                            )}
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
-                <Cell label="Processor" value="TSYS" />
-                <Cell label="Assigned" value={formatDate(row.luqra_mid_assigned_at)} />
-                <Cell label="Descriptor" value={row.luqra_mid_descriptor ?? '—'} />
-                <Cell
-                    label="Status"
-                    value={row.luqra_mid_status[0]?.toUpperCase() + row.luqra_mid_status.slice(1)}
-                />
-            </div>
-        </div>
-    )
-}
-
-function Cell({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="bg-card px-3 py-3 min-w-0">
-            <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                {label}
-            </div>
-            <div className="mt-0.5 text-[12.5px] text-foreground break-words">{value}</div>
-        </div>
-    )
-}
 
 function formatDate(iso: string | null): string {
     if (!iso) return '—'
     return new Date(iso).toLocaleDateString()
+}
+
+function statusLabel(status: string): string {
+    return status ? status[0].toUpperCase() + status.slice(1) : '—'
+}
+
+function CardField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className={`truncate font-medium tabular-nums${mono ? ' font-mono' : ''}`}>{value}</p>
+        </div>
+    )
+}
+
+function EditButton({
+    row,
+    onEdit,
+    className,
+}: {
+    row: LocationMidRow
+    onEdit: (row: LocationMidRow) => void
+    className?: string
+}) {
+    const hasMid = !!row.luqra_mid
+    return (
+        <Button variant="ghost" size="sm" className={className} onClick={() => onEdit(row)}>
+            {hasMid ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            {hasMid ? 'Edit' : 'Assign'}
+        </Button>
+    )
 }
 
 export function MidsSection({ merchantId }: { merchantId: string }) {
@@ -118,6 +67,7 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
 
     const rows: LocationMidRow[] = data?.success ? data.data : []
     const locations = rows.map((r) => ({ id: r.id, name: r.name }))
+    const { pageRows, pagination, setPage } = useClientPagination(rows, 10)
 
     const openAssign = () => {
         setEditing(null)
@@ -130,11 +80,11 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
     }
 
     return (
-        <div>
-            <SectionHead
-                title="Merchant IDs"
-                sub="Luqra acquiring identifiers, one per location."
-                actions={
+        <Panel>
+            <PanelSection
+                label="Merchant IDs"
+                caption="Luqra acquiring identifiers, one per location."
+                action={
                     canEdit && rows.length > 0 ? (
                         <Button size="sm" onClick={openAssign}>
                             <Plus className="h-3.5 w-3.5" />
@@ -142,26 +92,102 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
                         </Button>
                     ) : null
                 }
-            />
+            >
+                {isLoading ? (
+                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                        {Array.from({ length: 2 }).map((_, i) => (
+                            <div key={i} className="space-y-3 rounded-2xl border-0 bg-muted/45 p-4">
+                                <Skeleton className="h-4 w-40" />
+                                <Skeleton className="h-4 w-full" />
+                            </div>
+                        ))}
+                    </div>
+                ) : rows.length === 0 ? (
+                    <EmptySection
+                        icon={CreditCard}
+                        title="No locations yet"
+                        body="Create a location first, then assign a Luqra MID here."
+                    />
+                ) : (
+                    <>
+                        <Table variant="data" containerClassName="hidden lg:block" className="min-w-[680px]">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Location</TableHead>
+                                    <TableHead>MID</TableHead>
+                                    <TableHead>Descriptor</TableHead>
+                                    <TableHead>Processor</TableHead>
+                                    <TableHead>Assigned</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    {canEdit && <TableHead className="w-24" />}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {pageRows.map((row) => (
+                                    <TableRow key={row.id}>
+                                        <TableCell className="font-medium text-foreground">{row.name}</TableCell>
+                                        <TableCell className="font-mono text-xs">
+                                            {row.luqra_mid ?? (
+                                                <span className="font-sans text-muted-foreground">No MID assigned</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {row.luqra_mid_descriptor ?? '—'}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">TSYS</TableCell>
+                                        <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                            {formatDate(row.luqra_mid_assigned_at)}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant="secondary"
+                                                className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+                                            >
+                                                {statusLabel(row.luqra_mid_status)}
+                                            </Badge>
+                                        </TableCell>
+                                        {canEdit && (
+                                            <TableCell className="text-right">
+                                                <EditButton row={row} onEdit={openEdit} className="h-8 rounded-full px-3" />
+                                            </TableCell>
+                                        )}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
 
-            {isLoading ? (
-                <div className="space-y-3">
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-24 w-full" />
-                </div>
-            ) : rows.length === 0 ? (
-                <EmptySection
-                    icon={CreditCard}
-                    title="No locations yet"
-                    body="Create a location first, then assign a Luqra MID here."
-                />
-            ) : (
-                <div className="space-y-3">
-                    {rows.map((row) => (
-                        <MidCard key={row.id} row={row} canEdit={canEdit} onEdit={openEdit} />
-                    ))}
-                </div>
-            )}
+                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                            {pageRows.map((row) => (
+                                <div key={row.id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="truncate font-medium">{row.name}</p>
+                                            <p className="truncate font-mono text-xs text-muted-foreground">
+                                                {row.luqra_mid ?? 'No MID assigned'}
+                                            </p>
+                                        </div>
+                                        <span className="shrink-0 text-sm text-muted-foreground">
+                                            {statusLabel(row.luqra_mid_status)}
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                        <CardField label="Processor" value="TSYS" />
+                                        <CardField label="Assigned" value={formatDate(row.luqra_mid_assigned_at)} />
+                                        <CardField label="Descriptor" value={row.luqra_mid_descriptor ?? '—'} />
+                                    </div>
+                                    {canEdit && (
+                                        <div className="mt-3 flex justify-end">
+                                            <EditButton row={row} onEdit={openEdit} className="h-9 rounded-full px-4" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="locations" />
+                    </>
+                )}
+            </PanelSection>
 
             <AssignMidDialog
                 merchantId={merchantId}
@@ -170,6 +196,6 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
                 locations={locations}
                 editing={editing}
             />
-        </div>
+        </Panel>
     )
 }

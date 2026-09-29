@@ -919,7 +919,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
           </Panel>
 
           <Panel>
-            <PanelSection
+            <PanelSection showCaptionOnMobile
               label="Menu Status"
               caption={
                 menu.is_active
@@ -940,7 +940,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
           </Panel>
 
           <Panel className="border-destructive/50">
-              <PanelSection
+              <PanelSection showCaptionOnMobile
                   label="Danger Zone"
                   caption="Permanently delete this menu. This action cannot be undone."
               >

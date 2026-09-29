@@ -13,13 +13,13 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useSaveMerchantAcquirerProfile } from '@/lib/queries/use-admin-valor-boarding'
 import { revealAcquirerMid } from '@/app/manage/actions/admin-merchant/valor-acquirer'
 import type {
@@ -58,15 +58,17 @@ export function AcquirerProfileSheet({
   onOpenChange: (open: boolean) => void
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Processing credentials</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* §12/§13.1: a centred dialog, full-screen below `sm`. The content clips
+          and the body scrolls; header and footer carry no rule (§5.5). */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+        <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
+          <DialogTitle>Processing credentials</DialogTitle>
+          <DialogDescription>
             Entered from the acquirer at underwriting. Each MID routes settlement to the
             merchant’s own bank account. Stored encrypted; HQ-only.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
         {/* Remount on each open so the form re-seeds from the latest profile without
             a reset effect (initial state comes from useState initializers below). */}
         <AcquirerForm
@@ -75,8 +77,8 @@ export function AcquirerProfileSheet({
           profile={profile}
           onClose={() => onOpenChange(false)}
         />
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -147,7 +149,7 @@ function AcquirerForm({
 
   return (
     <>
-      <div className="space-y-6 px-4 py-2">
+      <div className="thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-4">
           {multiLocation && (
             <label className="flex items-center justify-between gap-3 rounded-2xl border bg-card p-3">
               <div className="space-y-0.5">
@@ -200,7 +202,7 @@ function AcquirerForm({
           </Collapsible>
       </div>
 
-      <SheetFooter>
+      <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
         <Button variant="outline" onClick={onClose} disabled={save.isPending}>
           Cancel
         </Button>
@@ -208,7 +210,7 @@ function AcquirerForm({
           {save.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
           Save
         </Button>
-      </SheetFooter>
+      </DialogFooter>
     </>
   )
 }

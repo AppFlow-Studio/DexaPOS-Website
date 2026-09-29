@@ -444,7 +444,7 @@ export function OrderOutTab({
 
       {/* D. Recent Orders */}
       <Panel>
-        <PanelSection
+        <PanelSection showCaptionOnMobile
           icon={ShoppingBag}
           label="Recent delivery orders"
           caption="The last 10 orders received from delivery platforms."
@@ -722,7 +722,7 @@ function OnlineMenuSection({
                   : "Never"
               }
             />
-            <StatTile
+            <StatTile showMetaOnMobile
               label="Items Synced"
               value={lastSync?.itemsSynced ?? 0}
               meta={

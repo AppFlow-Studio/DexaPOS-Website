@@ -28,6 +28,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** Location and net liability are the point of this table; the rest are detail. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -89,6 +91,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
+    setPage(1);
   }
 
   const sorted = data
@@ -102,6 +105,17 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
     : data;
 
   const maxLiability = Math.max(...(data ?? []).map((r) => r.netLiability), 0);
+
+  // Page the sorted rows; the bar scale, totals row and exports use every row.
+  const { pageRows, pagination, setPage } = useClientPagination(sorted ?? [], 10);
+
+  // A new date range starts from the first page.
+  const rangeSig = `${dateFrom.getTime()}|${dateTo.getTime()}`;
+  const [prevRangeSig, setPrevRangeSig] = useState(rangeSig);
+  if (prevRangeSig !== rangeSig) {
+    setPrevRangeSig(rangeSig);
+    setPage(1);
+  }
 
   const totals =
     data && data.length > 1
@@ -256,7 +270,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
               </TableRow>
             ) : (
               <>
-                {sorted.map((row) => {
+                {pageRows.map((row) => {
                   const barPct = maxLiability > 0 ? (row.netLiability / maxLiability) * 100 : 0;
                   return (
                     <TableRow
@@ -362,6 +376,12 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
             )}
           </TableBody>
         </Table>
+        <PaginationBar
+          pagination={pagination}
+          onPageChange={setPage}
+          itemLabel="locations"
+          className="px-5 pb-5"
+        />
       </CardContent>
     </Card>
   );

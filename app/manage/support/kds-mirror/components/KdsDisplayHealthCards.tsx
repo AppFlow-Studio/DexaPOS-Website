@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { MonitorX, Radio, Eye, EyeOff } from "lucide-react";
+import { EyeOff, Radio } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { KdsDeviceTruthHealthRow } from "@/app/manage/actions/kds-device-truth";
+import { CardGridEmpty } from "@/app/manage/transactions/components/ledger-primitives";
 
 /**
  * Rolling seven-day per-display health cards for a location.
@@ -18,6 +18,9 @@ import type { KdsDeviceTruthHealthRow } from "@/app/manage/actions/kds-device-tr
  * the per-item verdicts return NO_DEVICE_DATA.
  *
  * Clicking a card selects that display for the timeline and divergence list.
+ *
+ * Neutral throughout (UI-DESIGN-SYSTEM §3.5): device-truth findings are not
+ * HQ-2 alarms, so a render-suspect count is marked by weight, not amber.
  */
 export function KdsDisplayHealthCards({
   rows,
@@ -34,14 +37,23 @@ export function KdsDisplayHealthCards({
     return (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-28 w-full rounded-lg" />
+          <div key={i} className="rounded-2xl bg-muted/45 p-4">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="mt-3 h-8 w-24" />
+            <Skeleton className="mt-2 h-3 w-3/4" />
+          </div>
         ))}
       </div>
     );
   }
 
   if (rows.length === 0) {
-    return null;
+    return (
+      <CardGridEmpty
+        title="No KDS displays at this location"
+        hint="Health covers every KDS display configured here. Add a display in the location's KDS settings and it will appear once it has routed items."
+      />
+    );
   }
 
   return (
@@ -57,76 +69,85 @@ export function KdsDisplayHealthCards({
           <button
             key={row.kds_display_id ?? row.display_name ?? "unknown"}
             type="button"
+            aria-pressed={isSelected}
             onClick={() =>
               onSelectDisplay(
                 isSelected ? null : (row.kds_display_id ?? null)
               )
             }
             className={cn(
-              "flex flex-col gap-2 rounded-lg border bg-card p-3 text-left shadow-sm transition-colors",
+              "flex min-w-0 flex-col gap-2 rounded-2xl p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              // The selected card is a state: a ring, not a new box (§5.3).
               isSelected
-                ? "border-ring ring-1 ring-ring"
-                : "hover:border-border/80 hover:bg-accent/40"
+                ? "bg-muted ring-1 ring-border"
+                : "bg-muted/45 hover:bg-muted/70"
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               {reporting ? (
-                <Radio className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <Radio className="h-4 w-4 shrink-0 text-muted-foreground" />
               ) : (
                 <EyeOff className="h-4 w-4 shrink-0 text-muted-foreground" />
               )}
-              <span className="truncate text-sm font-semibold">
+              <span className="truncate text-sm font-medium">
                 {row.display_name ?? "Unnamed display"}
               </span>
               {isSelected && (
-                <Eye className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  Selected
+                </span>
               )}
             </div>
 
             {!reporting ? (
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                <span className="font-semibold">No device data.</span> This
-                display has never reported — the POS emitter has not shipped to
-                it yet. Its other numbers are not evidence of a fault.
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  No device data.
+                </span>{" "}
+                This display has never reported — the POS emitter has not
+                shipped to it yet. Its other numbers are not evidence of a fault.
               </p>
             ) : (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>
-                  <span className="font-semibold text-foreground">{routed}</span>{" "}
-                  routed
-                </span>
-                <span>
-                  <span className="font-semibold text-foreground">{acked}</span>{" "}
-                  acked
-                </span>
-                <span>
-                  <span className="font-semibold text-foreground">
-                    {row.arrived_items ?? 0}
-                  </span>{" "}
-                  arrived
-                </span>
-                {suspect > 0 && (
-                  <Badge
-                    variant="outline"
-                    className="border-transparent bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-                  >
-                    {suspect} render-suspect
-                  </Badge>
-                )}
-                {row.ack_rate_pct !== null && (
-                  <Badge
-                    variant="outline"
-                    className="border-transparent bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                  >
-                    {row.ack_rate_pct.toFixed(1)}% acked
-                  </Badge>
-                )}
-              </div>
+              <>
+                <p className="text-2xl font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                  {row.ack_rate_pct !== null
+                    ? `${row.ack_rate_pct.toFixed(1)}%`
+                    : "—"}
+                  <span className="ml-1.5 text-xs font-normal tracking-normal text-muted-foreground">
+                    acked
+                  </span>
+                </p>
+                <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span>
+                    <span className="font-medium text-foreground tabular-nums">
+                      {routed}
+                    </span>{" "}
+                    routed
+                  </span>
+                  <span>
+                    <span className="font-medium text-foreground tabular-nums">
+                      {acked}
+                    </span>{" "}
+                    acked
+                  </span>
+                  <span>
+                    <span className="font-medium text-foreground tabular-nums">
+                      {row.arrived_items ?? 0}
+                    </span>{" "}
+                    arrived
+                  </span>
+                  {suspect > 0 && (
+                    <span className="font-medium text-foreground">
+                      <span className="tabular-nums">{suspect}</span>{" "}
+                      render-suspect
+                    </span>
+                  )}
+                </p>
+              </>
             )}
 
             {routed === 0 && reporting && (
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MonitorX className="h-3 w-3" />
+              <p className="text-xs text-muted-foreground">
                 Nothing routed to this display in the last 7 days.
               </p>
             )}

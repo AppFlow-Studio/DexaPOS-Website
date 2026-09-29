@@ -47,7 +47,7 @@ const StatCard = ({
   trendColor?: string;
   icon?: LucideIcon;
 }) => (
-  <StatTile
+  <StatTile showMetaOnMobile={Boolean(trend)}
     label={title}
     value={value}
     icon={Icon ? <Icon /> : undefined}

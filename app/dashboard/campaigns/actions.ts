@@ -30,7 +30,7 @@ export async function getCampaigns(
     throw new Error("You do not have permission to view campaigns for this business.");
   }
   const supabase = createServiceRoleClient();
-  const pagination = normalizePagination({ page: options.page, pageSize: 25 });
+  const pagination = normalizePagination({ page: options.page, pageSize: 10 });
   let query = supabase.from("marketing_campaigns")
     .select("id,name,campaign_type,status,body,subject,created_at,scheduled_for,total_recipients", { count: "exact" })
     .eq("merchant_id", merchantId);
@@ -49,7 +49,7 @@ export async function getMessages(
 ): Promise<PaginatedResult<Message>> {
   const { merchantId } = await getEffectiveMerchantContext(clerkOrgId);
   const supabase = createServerSupabaseClient();
-  const pagination = normalizePagination({ page: filters.page, pageSize: 25 });
+  const pagination = normalizePagination({ page: filters.page, pageSize: 10 });
   let query = supabase.from("message_log")
     .select("id,body,campaign_id,created_at,direction,error_code,from_number,status,to_number", { count: "exact" })
     .eq("merchant_id", merchantId)

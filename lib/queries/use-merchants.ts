@@ -19,11 +19,12 @@ import type { MerchantFilters, MerchantSettingsUpdate } from '@/types/merchant'
 export function useMerchants(
   filters: MerchantFilters, 
   page: number = 1,
-  accessibleMerchantIds?: string[] // Optional: filter to only these merchant IDs (for non-super-admins)
+  accessibleMerchantIds?: string[], // Optional: filter to only these merchant IDs (for non-super-admins)
+  pageSize: number = 20
 ) {
   return useQuery({
-    queryKey: [...adminKeys.merchantList(filters, page), accessibleMerchantIds],
-    queryFn: () => getMerchants(filters, page, 20, accessibleMerchantIds),
+    queryKey: [...adminKeys.merchantList(filters, page), accessibleMerchantIds, pageSize],
+    queryFn: () => getMerchants(filters, page, pageSize, accessibleMerchantIds),
     staleTime: 30 * 1000, // 30 seconds
   })
 }

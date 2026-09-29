@@ -4,16 +4,16 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ReadonlyURLSearchParams } from 'next/navigation'
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet'
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -36,18 +36,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-const ORDER_STATUSES = [
-    { value: 'draft', label: 'Draft' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'preparing', label: 'Preparing' },
-    { value: 'ready', label: 'Ready' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' },
-    { value: 'refunded', label: 'Refunded' },
-    { value: 'void', label: 'Void' },
-]
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const PAYMENT_STATUSES = [
     { value: 'captured', label: 'Captured' },
@@ -75,13 +64,21 @@ const CARD_TYPES = [
     { value: 'other', label: 'Other' },
 ]
 
-// â”€â”€â”€ Helper: parse comma-separated URL param â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/*
+ * The field material inside this dialog: muted, borderless, pill-shaped
+ * (UI-DESIGN-SYSTEM §4.2). The dropdown triggers are Buttons, which default to
+ * an outline, so they spell it out. Literal in this .tsx on purpose (C7).
+ */
+const FIELD_TRIGGER =
+    'h-9 w-full justify-between border-0 bg-muted/60 px-4 text-[0.8125rem] font-normal shadow-none hover:bg-muted dark:bg-muted/60'
+
+// ─── Helper: parse comma-separated URL param ────────────────────────────────
 function parseList(val: string | null): string[] {
     if (!val) return []
     return val.split(',').filter(Boolean)
 }
 
-// â”€â”€â”€ Multi-select dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Multi-select dropdown ──────────────────────────────────────────────────
 interface MultiSelectProps {
     label: string
     options: { value: string; label: string }[]
@@ -104,11 +101,9 @@ function MultiSelect({ label, options, selected, onChange, disabled, placeholder
     return (
         <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild disabled={disabled}>
-                <Button variant="outline" className="w-full justify-between font-normal" size="sm">
+                <Button variant="ghost" className={cn(FIELD_TRIGGER, selected.length === 0 && 'text-muted-foreground')}>
                     <span className="truncate">{displayLabel}</span>
-                    {selected.length > 0
-                        ? <Badge className="ml-1 h-4 px-1 text-[10px]">{selected.length}</Badge>
-                        : <ChevronDown className="ml-1 h-4 w-4 text-muted-foreground" />}
+                    <ChevronDown className="ml-1 h-4 w-4 shrink-0 text-muted-foreground" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 z-[200]">
@@ -173,9 +168,9 @@ function SearchableSingleSelect({
     return (
         <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild disabled={disabled}>
-                <Button variant="outline" className="w-full justify-between font-normal" size="sm">
+                <Button variant="ghost" className={cn(FIELD_TRIGGER, !selectedLabel && 'text-muted-foreground')}>
                     <span className="truncate">{selectedLabel || placeholder || `All ${label}`}</span>
-                    <ChevronDown className="ml-1 h-4 w-4 text-muted-foreground" />
+                    <ChevronDown className="ml-1 h-4 w-4 shrink-0 text-muted-foreground" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-72 z-[200]">
@@ -185,6 +180,8 @@ function SearchableSingleSelect({
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder={searchPlaceholder || `Search ${label.toLowerCase()}...`}
+                        aria-label={`Search ${label.toLowerCase()}`}
+                        className="h-9 text-[0.8125rem]"
                         onKeyDown={(event) => event.stopPropagation()}
                     />
                 </div>
@@ -195,13 +192,13 @@ function SearchableSingleSelect({
                     </DropdownMenuItem>
                 )}
                 {filteredOptions.length === 0 ? (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">No results</div>
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">No {label.toLowerCase()} match “{search.trim()}”.</div>
                 ) : (
                     filteredOptions.map((option) => (
                         <DropdownMenuItem
                             key={option.value}
                             onSelect={() => onChange(option.value)}
-                            className={cn(selected === option.value && 'bg-accent')}
+                            className={cn(selected === option.value && 'bg-accent font-medium')}
                         >
                             {option.label}
                         </DropdownMenuItem>
@@ -212,13 +209,20 @@ function SearchableSingleSelect({
     )
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Component ─────────────────────────────────────────────────────────
 
-interface TransactionFilterSheetProps {
+interface TransactionFilterDialogProps {
     searchParams: ReadonlyURLSearchParams
 }
 
-export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetProps) {
+/**
+ * The ledger's filter panel: a trigger chip and a centred dialog
+ * (UI-DESIGN-SYSTEM §12 — panels are centred pop-ups, never side sheets). It
+ * fills the screen below `sm` because it is a form the user works through
+ * (§13.1). Filters apply as they change; "Apply" just applies at once and
+ * closes.
+ */
+export function TransactionFilterDialog({ searchParams }: TransactionFilterDialogProps) {
     const router = useRouter()
     const [open, setOpen] = useState(false)
     const [, startTransition] = useTransition()
@@ -248,8 +252,8 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         return v ? new Date(v) : null
     })
 
-    // Re-sync local state from URL when sheet is opened
-    // (so filter sheet always reflects currently-applied filters)
+    // Re-sync local state from URL when the dialog is opened
+    // (so the panel always reflects currently-applied filters)
     useEffect(() => {
         if (!open) return
         setSelectedMerchants(parseList(searchParams.get('merchants')))
@@ -297,10 +301,10 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setSelectedStaffId(null)
     }, [staffOptions, selectedStaffId])
 
-    // â”€â”€ URL sync helper â”€â”€
+    // ── URL sync helper ──
     const updateParams = (
         updates: Record<string, string | null>,
-        options?: { closeSheet?: boolean; resetPage?: boolean }
+        options?: { closeDialog?: boolean; resetPage?: boolean }
     ) => {
         const params = new URLSearchParams(searchParams.toString())
         const previous = params.toString()
@@ -316,7 +320,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         }
 
         const next = params.toString()
-        if (options?.closeSheet) {
+        if (options?.closeDialog) {
             setOpen(false)
         }
         if (next === previous) return
@@ -361,7 +365,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
             shouldSkipNextAutoApply.current = false
             return
         }
-        updateParams(debouncedFilterUpdates, { closeSheet: false, resetPage: true })
+        updateParams(debouncedFilterUpdates, { closeDialog: false, resetPage: true })
     }, [debouncedFilterUpdates, open])
 
     useEffect(() => {
@@ -370,12 +374,12 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         }
     }, [open])
 
-    // â”€â”€ Optional immediate apply button â”€â”€
+    // ── Immediate apply ──
     const applyFilters = () => {
-        updateParams(buildFilterUpdates, { closeSheet: true, resetPage: true })
+        updateParams(buildFilterUpdates, { closeDialog: true, resetPage: true })
     }
 
-    // â”€â”€ Clear all â”€â”€
+    // ── Clear all ──
     const clearAll = () => {
         setSelectedMerchants([])
         setSelectedLocations([])
@@ -393,7 +397,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setOpen(false)
     }
 
-    // â”€â”€ Active filter count (for badge on trigger button) â”€â”€
+    // ── Active filter count (shown on the trigger) ──
     const activeCount = [
         selectedMerchants.length > 0,
         selectedLocations.length > 0,
@@ -408,179 +412,177 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
 
     return (
         <>
-            {/* Trigger button â€” not using SheetTrigger asChild to avoid focus/event issues */}
-            <Button variant="outline" className="relative" onClick={() => setOpen(true)}>
-                <Filter className="mr-2 h-4 w-4" />
+            {/* Filter chip (§4.3): tinted and borderless. An applied filter reads
+                by weight and its count, not by a coloured dot. */}
+            <Button
+                variant="ghost"
+                className={cn(
+                    'h-9 shrink-0 gap-2 border-0 bg-muted/60 px-4 text-[0.8125rem] shadow-none hover:bg-muted hover:text-foreground',
+                    activeCount > 0 ? 'font-medium text-foreground' : 'text-muted-foreground'
+                )}
+                onClick={() => setOpen(true)}
+            >
+                <Filter className="h-4 w-4" />
                 Filters
                 {activeCount > 0 && (
-                    <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
-                        {activeCount}
-                    </Badge>
+                    <span className="tabular-nums">
+                        ({activeCount})
+                        <span className="sr-only"> active</span>
+                    </span>
                 )}
             </Button>
 
-            <Sheet open={open} onOpenChange={setOpen}>
-            <SheetContent side="right" className="w-[420px] max-w-[92vw] overflow-hidden">
-                <div className="flex h-full flex-col">
-                <SheetHeader className="pr-14">
-                    <div className="flex items-center justify-between gap-2">
-                        <SheetTitle>Filter Transactions</SheetTitle>
-                    </div>
-                    {activeCount > 0 && (
-                        <div className="pt-1">
-                            <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground h-7 px-2">
-                                <X className="h-3 w-3 mr-1" />
-                                Clear all
-                            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+                {/* The dialog clips; only the body scrolls (§12 overlay scroll
+                    structure). Full screen below `sm` (§13.1). */}
+                <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+                    <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
+                        <DialogTitle>Filter transactions</DialogTitle>
+                        <DialogDescription>Changes apply as you make them.</DialogDescription>
+                        {activeCount > 0 && (
+                            <div className="pt-1">
+                                <Button variant="ghost" size="sm" onClick={clearAll} className="-ml-2 h-8 px-3 text-muted-foreground">
+                                    <X className="mr-1 h-3 w-3" />
+                                    Clear all
+                                </Button>
+                            </div>
+                        )}
+                    </DialogHeader>
+
+                    {/* Groups are separated by spacing, not rules (§5.5). */}
+                    <div className="thin-scrollbar min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-4">
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Date range</Label>
+                            <DateRangePicker
+                                dateFrom={dateFrom}
+                                dateTo={dateTo}
+                                preset={datePreset}
+                                onDateRangeChange={(from, to) => { setDateFrom(from); setDateTo(to) }}
+                                onPresetChange={setDatePreset}
+                                initializeWhenEmpty={false}
+                                className="w-full"
+                                triggerClassName="h-9 w-full justify-start border-0 bg-muted/60 px-4 text-[0.8125rem] font-normal shadow-none hover:bg-muted dark:bg-muted/60"
+                            />
                         </div>
-                    )}
-                </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-4">
-                <div className="pt-2 space-y-6">
-
-                    {/* Date Range */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Date Range</Label>
-                        <DateRangePicker
-                            dateFrom={dateFrom}
-                            dateTo={dateTo}
-                            preset={datePreset}
-                            onDateRangeChange={(from, to) => { setDateFrom(from); setDateTo(to) }}
-                            onPresetChange={setDatePreset}
-                            initializeWhenEmpty={false}
-                        />
-                    </div>
-
-                    <Separator />
-
-                    {/* Merchant */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Merchant</Label>
-                        <MultiSelect
-                            label="Merchants"
-                            options={merchants.map(m => ({ value: m.id, label: m.name }))}
-                            selected={selectedMerchants}
-                            onChange={setSelectedMerchants}
-                            placeholder="All Merchants"
-                        />
-                    </div>
-
-                    {/* Location */}
-                    <div className="space-y-2">
-                        <Label className={cn('text-sm font-semibold', selectedMerchants.length === 0 && 'text-muted-foreground')}>
-                            Location
-                        </Label>
-                        <MultiSelect
-                            label="Locations"
-                            options={locations.map(l => ({ value: l.id, label: l.name }))}
-                            selected={selectedLocations}
-                            onChange={setSelectedLocations}
-                            disabled={selectedMerchants.length === 0}
-                            placeholder={selectedMerchants.length === 0 ? 'Select merchant first' : 'All Locations'}
-                        />
-                    </div>
-
-                    <Separator />
-
-                    {/* Payment Method */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Payment Method</Label>
-                        <MultiSelect
-                            label="Payment Methods"
-                            options={PAYMENT_METHODS}
-                            selected={paymentMethods}
-                            onChange={setPaymentMethods}
-                            placeholder="All Methods"
-                        />
-                    </div>
-
-                    {/* Card Type */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Card Type</Label>
-                        <MultiSelect
-                            label="Card Types"
-                            options={CARD_TYPES}
-                            selected={cardTypes}
-                            onChange={setCardTypes}
-                            placeholder="All Card Types"
-                        />
-                    </div>
-
-                    {/* Staff */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Staff</Label>
-                        <SearchableSingleSelect
-                            label="Staff"
-                            options={staffOptions.map((staff) => ({ value: staff.id, label: staff.name }))}
-                            selected={selectedStaffId}
-                            onChange={setSelectedStaffId}
-                            placeholder="All Staff"
-                            searchPlaceholder="Search staff..."
-                        />
-                    </div>
-
-                    <Separator />
-
-                    {/* Payment Status */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Status</Label>
-                        <MultiSelect
-                            label="Payment Statuses"
-                            options={PAYMENT_STATUSES}
-                            selected={paymentStatuses}
-                            onChange={setPaymentStatuses}
-                            placeholder="All Statuses"
-                        />
-                    </div>
-
-                    <Separator />
-
-                    {/* Amount Range */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Amount Range</Label>
-                        <div className="flex items-center gap-2">
-                            <div className="relative flex-1">
-                                <span className="absolute left-2.5 top-2.5 text-sm text-muted-foreground">$</span>
-                                <Input
-                                    type="number"
-                                    placeholder="Min"
-                                    value={minAmount}
-                                    onChange={e => setMinAmount(e.target.value)}
-                                    className="pl-6"
-                                    min={0}
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">Merchant</Label>
+                                <MultiSelect
+                                    label="Merchants"
+                                    options={merchants.map(m => ({ value: m.id, label: m.name }))}
+                                    selected={selectedMerchants}
+                                    onChange={setSelectedMerchants}
+                                    placeholder="All merchants"
                                 />
                             </div>
-                            <span className="text-muted-foreground text-sm">~</span>
-                            <div className="relative flex-1">
-                                <span className="absolute left-2.5 top-2.5 text-sm text-muted-foreground">$</span>
-                                <Input
-                                    type="number"
-                                    placeholder="Max"
-                                    value={maxAmount}
-                                    onChange={e => setMaxAmount(e.target.value)}
-                                    className="pl-6"
-                                    min={0}
+
+                            <div className="space-y-2">
+                                <Label className={cn('text-sm font-medium', selectedMerchants.length === 0 && 'text-muted-foreground')}>
+                                    Location
+                                </Label>
+                                <MultiSelect
+                                    label="Locations"
+                                    options={locations.map(l => ({ value: l.id, label: l.name }))}
+                                    selected={selectedLocations}
+                                    onChange={setSelectedLocations}
+                                    disabled={selectedMerchants.length === 0}
+                                    placeholder={selectedMerchants.length === 0 ? 'Select a merchant first' : 'All locations'}
                                 />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">Payment method</Label>
+                                <MultiSelect
+                                    label="Payment Methods"
+                                    options={PAYMENT_METHODS}
+                                    selected={paymentMethods}
+                                    onChange={setPaymentMethods}
+                                    placeholder="All methods"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">Card type</Label>
+                                <MultiSelect
+                                    label="Card Types"
+                                    options={CARD_TYPES}
+                                    selected={cardTypes}
+                                    onChange={setCardTypes}
+                                    placeholder="All card types"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">Staff</Label>
+                                <SearchableSingleSelect
+                                    label="Staff"
+                                    options={staffOptions.map((staff) => ({ value: staff.id, label: staff.name }))}
+                                    selected={selectedStaffId}
+                                    onChange={setSelectedStaffId}
+                                    placeholder="All staff"
+                                    searchPlaceholder="Search staff..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Status</Label>
+                            <MultiSelect
+                                label="Payment Statuses"
+                                options={PAYMENT_STATUSES}
+                                selected={paymentStatuses}
+                                onChange={setPaymentStatuses}
+                                placeholder="All statuses"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Amount range</Label>
+                            <div className="flex items-center gap-2">
+                                <div className="relative min-w-0 flex-1">
+                                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[0.8125rem] text-muted-foreground">$</span>
+                                    <Input
+                                        type="number"
+                                        aria-label="Minimum amount"
+                                        placeholder="Min"
+                                        value={minAmount}
+                                        onChange={e => setMinAmount(e.target.value)}
+                                        className="h-9 pl-7 text-[0.8125rem] tabular-nums"
+                                        min={0}
+                                    />
+                                </div>
+                                <span className="text-sm text-muted-foreground">to</span>
+                                <div className="relative min-w-0 flex-1">
+                                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[0.8125rem] text-muted-foreground">$</span>
+                                    <Input
+                                        type="number"
+                                        aria-label="Maximum amount"
+                                        placeholder="Max"
+                                        value={maxAmount}
+                                        onChange={e => setMaxAmount(e.target.value)}
+                                        className="h-9 pl-7 text-[0.8125rem] tabular-nums"
+                                        min={0}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                </div>
-                </div>
-
-                {/* Footer actions */}
-                <div className="border-t bg-background p-4 flex gap-2">
-                    <Button onClick={applyFilters} className="flex-1">
-                        Apply Filters
-                    </Button>
-                    <Button variant="outline" onClick={() => setOpen(false)} className="flex-1">
-                        Cancel
-                    </Button>
-                </div>
-                </div>
-            </SheetContent>
-            </Sheet>
+                    {/* No rule above the footer: it is a fixed flex sibling of the
+                        scroll area, so it needs no seam (§5.5, §12). */}
+                    <DialogFooter className="shrink-0 flex-row gap-2 px-6 pb-6 pt-4">
+                        <Button variant="outline" onClick={() => setOpen(false)} className="h-11 flex-1 sm:h-9">
+                            Close
+                        </Button>
+                        <Button onClick={applyFilters} className="h-11 flex-1 sm:h-9">
+                            Apply filters
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     )
 }

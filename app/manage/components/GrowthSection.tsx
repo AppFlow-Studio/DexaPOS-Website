@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts'
 import { Users, TrendingUp, AlertTriangle } from 'lucide-react'
 
@@ -15,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePlatformGrowthMetrics } from '@/lib/queries/use-platform-analytics-layer2'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import {
   AnalyticsPanel,
   AnalyticsTooltip,
@@ -40,6 +43,11 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
   // a single-digit merchant count left most of that gutter blank. Acquisition
   // counts are small — 2 characters covers them.
   const countAxisWidth = isMobile ? valueAxisWidthMobile(2) : undefined
+  // The at-risk list pages at 10 (§5.7); above the loading return so the hook
+  // order is fixed. A new date range starts it from the top.
+  const churnPage = useClientPagination(data?.churnRisk ?? [], 10)
+  const setChurnPage = churnPage.setPage
+  useEffect(() => { setChurnPage(1) }, [from, to, setChurnPage])
 
   if (isLoading) {
     return (
@@ -166,6 +174,7 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
             No merchants at churn risk
           </div>
         ) : (
+          <>
           <Table variant="data" className="min-w-[400px]">
             <TableHeader className="[&_tr]:border-0">
               <TableRow>
@@ -176,7 +185,7 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {churnRisk.map((merchant) => (
+              {churnPage.pageRows.map((merchant) => (
                 <TableRow key={merchant.merchant_id}>
                   <TableCell className="text-sm font-medium">{merchant.merchant_name}</TableCell>
                   <TableCell className="text-right text-sm tabular-nums">
@@ -194,6 +203,12 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
               ))}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={churnPage.pagination}
+            onPageChange={churnPage.setPage}
+            itemLabel="merchants"
+          />
+          </>
         )}
       </AnalyticsPanel>
     </div>

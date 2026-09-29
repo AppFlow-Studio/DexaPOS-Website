@@ -2,30 +2,28 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, Boxes, Clock3, Link2, Package, ShieldAlert } from 'lucide-react'
+import { Boxes, Link2, Package } from 'lucide-react'
 
 import { useAdminDeviceActivity, useAdminDeviceDetail } from '@/app/manage/hooks/useDeviceRegistry'
-import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
-import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
+import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
 import { DeviceStatusTransitionDialog } from '@/app/manage/devices/components/DeviceStatusTransitionDialog'
 import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
+import { PageHeader, PageShell, Panel, PanelSection, PanelSubLabel } from '@/components/dashboard/shell'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Empty } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import {
   formatDeviceCategory,
   formatDeviceStatus,
   formatMoneyDollars,
-  getDeviceCategoryIcon,
-  getDeviceStatusClasses,
   getTimelineIcon,
 } from '@/lib/device-registry/presentation'
 
+/** The feed is capped on the server at this many events (§5.7). */
+const ACTIVITY_LIMIT = 50
+
 function formatDateTime(date: string | null) {
-  if (!date) return 'N/A'
+  if (!date) return '—'
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -36,12 +34,16 @@ function formatDateTime(date: string | null) {
 }
 
 function formatDate(date: string | null) {
-  if (!date) return 'N/A'
+  if (!date) return '—'
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(date))
+}
+
+function capitalize(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value
 }
 
 export default function DeviceDetailPage() {
@@ -55,242 +57,260 @@ export default function DeviceDetailPage() {
   const activity = activityQuery.data ?? []
 
   if (detailQuery.isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-          <Skeleton className="h-[260px] w-full" />
-          <Skeleton className="h-[260px] w-full" />
-        </div>
-        <Skeleton className="h-[420px] w-full" />
-      </div>
-    )
+    return <DeviceDetailSkeleton />
   }
 
   if (detailQuery.isError || !device) {
     return (
-      <Empty
-        icon={ShieldAlert}
-        title="Device not found"
-        description={detailQuery.error?.message ?? 'The selected registry item is unavailable.'}
-        action={
-          <Button asChild variant="outline">
-            <Link href="/manage/devices">Back to inventory</Link>
-          </Button>
-        }
-      />
+      <PageShell as="div">
+        <PageHeader title="Device unavailable" backHref="/manage/devices" backLabel="Back to inventory" />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-muted/30 px-4 py-20 text-center">
+          <p className="text-sm font-medium">We couldn&apos;t load this device</p>
+          <p className="max-w-md text-xs text-muted-foreground">
+            {detailQuery.error?.message ?? 'The selected registry item is unavailable.'}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {detailQuery.isError ? (
+              <Button variant="outline" size="sm" onClick={() => void detailQuery.refetch()}>
+                Retry
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/devices">Back to inventory</Link>
+            </Button>
+          </div>
+        </div>
+      </PageShell>
     )
   }
 
-  const CategoryIcon = getDeviceCategoryIcon(device.device_category)
+  const model = [`${device.manufacturer} ${device.model_name}`, device.model_sku]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4">
-        <Button asChild variant="ghost" className="w-fit px-0 text-muted-foreground hover:bg-transparent">
-          <Link href="/manage/devices">
-            <ArrowLeft className="h-4 w-4" />
-            Back to inventory
-          </Link>
-        </Button>
-        <DeviceRegistrySectionNav />
-
-        <div className="flex flex-col gap-4 rounded-3xl border bg-card p-6 shadow-sm lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl border bg-muted/40 p-3 text-muted-foreground">
-              <CategoryIcon className="h-6 w-6" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-semibold tracking-tight">{device.serial_number}</h1>
-                <Badge
-                  variant="outline"
-                  className={cn('capitalize', getDeviceStatusClasses(device.status))}
-                >
-                  {formatDeviceStatus(device.status)}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {device.manufacturer} {device.model_name}
-                {device.model_sku ? ` | ${device.model_sku}` : ''}
-              </p>
-              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                <span>{formatDeviceCategory(device.device_category)}</span>
-                {device.pos_id ? (
-                  <>
-                    <span>|</span>
-                    <span>POS ID: {device.pos_id}</span>
-                  </>
-                ) : null}
-                <span>|</span>
-                <span>Condition: {device.condition}</span>
-                <span>|</span>
-                <span>Monthly fee: {formatMoneyDollars(device.monthly_fee)}</span>
-              </div>
-            </div>
+    <PageShell as="div">
+      <DeviceRegistryPageHeader
+        title={device.serial_number}
+        backHref="/manage/devices"
+        backLabel="Back to inventory"
+        actions={
+          <>
+            <ManageInLandiConnectButton serialNumber={device.serial_number} />
+            <DeviceStatusTransitionDialog device={device} />
+          </>
+        }
+        meta={
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+            <Badge variant="outline" className="w-fit px-2.5 text-xs font-medium">
+              {formatDeviceStatus(device.status)}
+            </Badge>
+            <span className="min-w-0">{model}</span>
+            <span>{formatDeviceCategory(device.device_category)}</span>
+            {device.pos_id ? <span className="tabular-nums">POS ID {device.pos_id}</span> : null}
+            <span className="tabular-nums">Updated {formatDateTime(device.updated_at)}</span>
           </div>
+        }
+      />
 
-          <div className="grid gap-2 text-sm text-muted-foreground">
-            <div className="pb-1">
-              <DeviceRegistryCommandPaletteTrigger />
+      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-3">
+        <Panel nested className="lg:col-span-2">
+          <PanelSection
+            label="Overview"
+            caption="Current ownership, software state, warranty, and deployment metadata."
+          >
+            <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+              <div className="min-w-0">
+                <PanelSubLabel>Ownership</PanelSubLabel>
+                <dl className="space-y-2">
+                  <DetailRow label="Merchant" value={device.merchant_name ?? 'DEXA HQ'} />
+                  <DetailRow label="Location" value={device.location_name ?? '—'} />
+                  <DetailRow label="POS ID" value={device.pos_id ?? '—'} />
+                  <DetailRow label="Condition" value={capitalize(device.condition)} />
+                  <DetailRow label="Monthly fee" value={formatMoneyDollars(device.monthly_fee)} />
+                  <DetailRow label="Purchased" value={formatDate(device.purchased_at)} />
+                  <DetailRow label="Warranty" value={formatDate(device.warranty_expires_at)} />
+                </dl>
+              </div>
+
+              <div className="min-w-0">
+                <PanelSubLabel>Software</PanelSubLabel>
+                <dl className="space-y-2">
+                  <DetailRow label="Firmware" value={device.firmware_version ?? '—'} />
+                  <DetailRow label="App version" value={device.app_version ?? '—'} />
+                  <DetailRow label="Last config" value={formatDateTime(device.last_config_at)} />
+                  <DetailRow label="MAC" value={device.mac_address ?? '—'} mono />
+                </dl>
+              </div>
             </div>
-            <div>Merchant: <span className="font-medium text-foreground">{device.merchant_name ?? 'DEXA HQ'}</span></div>
-            <div>Location: <span className="font-medium text-foreground">{device.location_name ?? 'N/A'}</span></div>
-            <div>Updated: <span className="font-medium text-foreground">{formatDateTime(device.updated_at)}</span></div>
-            <div className="flex flex-col gap-2 pt-2">
-              <ManageInLandiConnectButton serialNumber={device.serial_number} />
-              <DeviceStatusTransitionDialog device={device} />
-            </div>
-          </div>
-        </div>
+          </PanelSection>
+        </Panel>
+
+        <Panel nested>
+          <PanelSection label="Operational linkage" caption="Current bridge into the live operational tables.">
+            <ul className="space-y-3">
+              <LinkageRow icon={Link2} label="Station" id={device.linked_station_id} />
+              <LinkageRow icon={Package} label="Payment terminal" id={device.linked_payment_terminal_id} />
+              <LinkageRow icon={Boxes} label="Printer" id={device.linked_printer_id} />
+            </ul>
+
+            <PanelSubLabel className="mb-2 mt-6">Procurement</PanelSubLabel>
+            <dl className="space-y-2">
+              <DetailRow label="Catalog item" value={device.catalog_id} mono />
+              <DetailRow label="PO number" value={device.purchase_order_number ?? '—'} />
+            </dl>
+          </PanelSection>
+        </Panel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Overview</CardTitle>
-            <CardDescription>
-              Current ownership, software state, warranty, and deployment metadata.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border bg-muted/20 p-4">
-              <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Ownership</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <div>POS ID: <span className="font-medium">{device.pos_id ?? 'N/A'}</span></div>
-                <div>Merchant: <span className="font-medium">{device.merchant_name ?? 'DEXA HQ'}</span></div>
-                <div>Location: <span className="font-medium">{device.location_name ?? 'N/A'}</span></div>
-                <div>Purchased: <span className="font-medium">{formatDate(device.purchased_at)}</span></div>
-                <div>Warranty: <span className="font-medium">{formatDate(device.warranty_expires_at)}</span></div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-muted/20 p-4">
-              <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Software</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <div>Firmware: <span className="font-medium">{device.firmware_version ?? 'N/A'}</span></div>
-                <div>App version: <span className="font-medium">{device.app_version ?? 'N/A'}</span></div>
-                <div>Last config: <span className="font-medium">{formatDateTime(device.last_config_at)}</span></div>
-                <div>MAC: <span className="font-medium">{device.mac_address ?? 'N/A'}</span></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Operational linkage</CardTitle>
-            <CardDescription>Current bridge into the live operational tables.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="flex items-center gap-3 rounded-2xl border bg-muted/20 p-4">
-              <Link2 className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <div className="font-medium">Station</div>
-                <div className="text-muted-foreground">{device.linked_station_id ?? 'Not linked'}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border bg-muted/20 p-4">
-              <Package className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <div className="font-medium">Payment terminal</div>
-                <div className="text-muted-foreground">
-                  {device.linked_payment_terminal_id ?? 'Not linked'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border bg-muted/20 p-4">
-              <Boxes className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <div className="font-medium">Printer</div>
-                <div className="text-muted-foreground">{device.linked_printer_id ?? 'Not linked'}</div>
-              </div>
-            </div>
-            <div className="rounded-2xl border bg-muted/20 p-4">
-              <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                Procurement
-              </div>
-              <div className="mt-3 space-y-2 text-sm">
-                <div>Catalog item: <span className="font-medium">{device.catalog_id}</span></div>
-                <div>PO number: <span className="font-medium">{device.purchase_order_number ?? 'N/A'}</span></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity timeline</CardTitle>
-          <CardDescription>
-            Unified feed of status transitions, configuration changes, and support notes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Activity timeline"
+          caption="Status transitions, configuration changes, and support notes, newest first."
+        >
           {activityQuery.isLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} className="h-20 w-full" />
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="flex gap-3 rounded-2xl bg-muted/40 px-4 py-3">
+                  <Skeleton className="mt-0.5 h-4 w-4 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
               ))}
             </div>
           ) : activityQuery.isError ? (
-            <Empty
-              icon={Clock3}
-              title="Timeline unavailable"
-              description={activityQuery.error?.message ?? 'Failed to load device activity.'}
-            />
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-muted/30 px-4 py-12 text-center">
+              <p className="text-sm font-medium">We hit a snag loading this device&apos;s activity</p>
+              <p className="max-w-md text-xs text-muted-foreground">
+                {activityQuery.error?.message ?? 'Failed to load device activity.'}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => void activityQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
           ) : activity.length === 0 ? (
-            <Empty
-              icon={Clock3}
-              title="No activity yet"
-              description="This device has not recorded assignments, config changes, or support notes."
-            />
+            <p className="rounded-2xl bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+              No activity yet — assignments, config changes, and support notes will appear here.
+            </p>
           ) : (
-            <div className="space-y-4">
-              {activity.map((item) => {
-                const TimelineIcon = getTimelineIcon(item)
-                return (
-                  <div key={`${item.type}-${item.id}`} className="flex gap-4 rounded-2xl border p-4">
-                    <div className="mt-1 rounded-full border bg-muted/30 p-2 text-muted-foreground">
-                      <TimelineIcon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div className="space-y-1">
-                          <div className="font-medium capitalize">{item.title}</div>
-                          {item.subtitle ? (
-                            <div className="text-sm text-muted-foreground">{item.subtitle}</div>
+            <>
+              {/* A chronological feed may scroll: capped by the viewport here and
+                  by the server's event limit (§5.7). */}
+              <ol className="thin-scrollbar max-h-[min(60vh,32rem)] space-y-2 overflow-y-auto">
+                {activity.map((item) => {
+                  const TimelineIcon = getTimelineIcon(item)
+                  return (
+                    <li key={`${item.type}-${item.id}`} className="flex gap-3 rounded-2xl bg-muted/40 px-4 py-3">
+                      <TimelineIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                          <div className="min-w-0">
+                            <p className="font-medium capitalize">{item.title}</p>
+                            {item.subtitle ? (
+                              <p className="text-sm text-muted-foreground">{item.subtitle}</p>
+                            ) : null}
+                          </div>
+                          <time
+                            dateTime={item.occurred_at}
+                            className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                          >
+                            {formatDateTime(item.occurred_at)}
+                          </time>
+                        </div>
+
+                        {item.body ? <p className="text-sm text-foreground/90">{item.body}</p> : null}
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {item.actor ? <span>By {item.actor}</span> : null}
+                          {'tracking_number' in item && item.tracking_number ? (
+                            <span className="tabular-nums">Tracking {item.tracking_number}</span>
+                          ) : null}
+                          {/* On a muted row the status is a word, not a pill (§3.5). */}
+                          {'status' in item && item.status ? (
+                            <span>
+                              Status <span className="font-medium text-foreground">{formatDeviceStatus(item.status)}</span>
+                            </span>
                           ) : null}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDateTime(item.occurred_at)}
-                        </div>
                       </div>
-
-                      {item.body ? <p className="text-sm text-foreground/90">{item.body}</p> : null}
-
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        {item.actor ? <span>By {item.actor}</span> : null}
-                        {'tracking_number' in item && item.tracking_number ? (
-                          <span>Tracking {item.tracking_number}</span>
-                        ) : null}
-                        {'status' in item && item.status ? (
-                          <Badge
-                            variant="outline"
-                            className={cn(getDeviceStatusClasses(item.status))}
-                          >
-                            {formatDeviceStatus(item.status)}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                    </li>
+                  )
+                })}
+              </ol>
+              {activity.length >= ACTIVITY_LIMIT ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Showing the latest {ACTIVITY_LIMIT} events.
+                </p>
+              ) : null}
+            </>
           )}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
+    </PageShell>
+  )
+}
+
+function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex min-w-0 items-baseline justify-between gap-4 text-sm">
+      <dt className="shrink-0 text-muted-foreground">{label}</dt>
+      <dd
+        className={
+          mono
+            ? 'min-w-0 truncate text-right font-mono text-xs'
+            : 'min-w-0 truncate text-right font-medium tabular-nums'
+        }
+        title={value}
+      >
+        {value}
+      </dd>
     </div>
+  )
+}
+
+function LinkageRow({
+  icon: Icon,
+  label,
+  id,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  id: string | null
+}) {
+  return (
+    <li className="flex min-w-0 items-start gap-3 text-sm">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="font-medium">{label}</p>
+        {id ? (
+          <p className="truncate font-mono text-xs text-muted-foreground" title={id}>
+            {id}
+          </p>
+        ) : (
+          <p className="text-muted-foreground">Not linked</p>
+        )}
+      </div>
+    </li>
+  )
+}
+
+/** Shaped like the loaded page so nothing jumps when data lands (§4.9). */
+function DeviceDetailSkeleton() {
+  return (
+    <PageShell as="div">
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-40 rounded-full" />
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-5 w-80 max-w-full" />
+        <Skeleton className="h-11 w-72 max-w-full rounded-full" />
+      </div>
+      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-3">
+        <Skeleton className="h-[300px] w-full rounded-2xl lg:col-span-2" />
+        <Skeleton className="h-[300px] w-full rounded-2xl" />
+      </div>
+      <Skeleton className="h-[360px] w-full rounded-3xl" />
+    </PageShell>
   )
 }

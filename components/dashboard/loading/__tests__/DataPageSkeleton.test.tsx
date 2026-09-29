@@ -218,3 +218,25 @@ describe("DataPageSkeleton — shell", () => {
     expect(html).toContain('role="status"');
   });
 });
+
+describe("DataPageSkeleton — subtitle placeholder on phones", () => {
+  // PageHeader hides its subtitle below `sm` unless the page opts in
+  // (UI-DESIGN-SYSTEM §13.4). A skeleton that still reserved the line would
+  // shift the layout the moment the page arrived.
+  const subtitleBar = (html: string) =>
+    html.match(/class="([^"]*\bh-4 w-72\b[^"]*)"/)?.[1] ?? "";
+
+  it("hides the subtitle placeholder below sm by default", () => {
+    const html = renderToString(<DataPageSkeleton variant="table" label="Loading" />);
+
+    expect(subtitleBar(html)).toContain("max-sm:hidden");
+  });
+
+  it("keeps it for a page whose subtitle carries scope", () => {
+    const html = renderToString(
+      <DataPageSkeleton variant="table" label="Loading" showSubtitleOnMobile />,
+    );
+
+    expect(subtitleBar(html)).not.toContain("max-sm:hidden");
+  });
+});

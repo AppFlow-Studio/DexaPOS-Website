@@ -118,7 +118,7 @@ export default function InvoiceDetailPage({
 
   return (
     <PageShell width="narrow">
-      <PageHeader
+      <PageHeader showSubtitleOnMobile
         backHref="/dashboard/invoices"
         backLabel="Invoices"
         title={invoice.invoice_number}

@@ -71,7 +71,7 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
   }
 
   return (
-    <ChartCard
+    <ChartCard showSubtitleOnMobile
       title="Covers Tracker"
       subtitle={numberOfDays > 1 ? 'Average covers per hour' : 'Covers per hour'}
       icon={Users}

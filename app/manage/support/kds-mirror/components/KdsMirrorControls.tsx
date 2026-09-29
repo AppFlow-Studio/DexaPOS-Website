@@ -1,17 +1,9 @@
 "use client";
 
 import * as React from "react";
-import {
-  AlertTriangle,
-  Eye,
-  Wifi,
-  RefreshCw,
-  WifiOff,
-} from "lucide-react";
+import { AlertTriangle, Eye, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -26,85 +18,85 @@ import type {
 } from "@/app/manage/actions/kds-mirror";
 import type { MirrorRealtimeStatus } from "../hooks/useKdsMirrorRealtime";
 import { MerchantPicker } from "./MerchantPicker";
+import { KdsNotice, NoticeLead } from "./kds-primitives";
 
 /**
  * Connection status, NOT viewing status.
  *
  * Deliberately never says "Live": it reports whether the socket is up, not
  * whether the board on screen is current (the 5 s poll keeps it current
- * either way).
+ * either way). A state, not an alarm, so it is a neutral pill whose word
+ * carries the meaning (UI-DESIGN-SYSTEM §3.5, §4.6b).
  */
-function RealtimeBadge({
+export function RealtimeStatus({
   status,
   isFetching,
 }: {
   status: MirrorRealtimeStatus;
   isFetching: boolean;
 }) {
-  if (status === "live") {
-    return (
-      <Badge
-        variant="outline"
-        className="gap-1 border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-        title="Realtime subscription is up; the board updates on push."
-      >
-        <Wifi className={cn("h-3 w-3", isFetching && "animate-pulse")} />
-        Connected
-      </Badge>
-    );
-  }
+  const meta =
+    status === "live"
+      ? {
+          icon: <Wifi className={cn("h-3 w-3", isFetching && "animate-pulse")} />,
+          label: "Connected",
+          title: "Realtime subscription is up; the board updates on push.",
+        }
+      : status === "degraded"
+        ? {
+            icon: <WifiOff className="h-3 w-3" />,
+            label: "Polling only",
+            title:
+              "The realtime subscription dropped. The board is still correct but is refreshing on a 5s poll.",
+          }
+        : status === "connecting"
+          ? {
+              icon: <RefreshCw className="h-3 w-3 animate-spin" />,
+              label: "Connecting",
+              title: "Opening the realtime subscription.",
+            }
+          : null;
 
-  if (status === "degraded") {
-    return (
-      <Badge
-        variant="outline"
-        className="gap-1 border-transparent bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-        title="The realtime subscription dropped. The board is still correct but is refreshing on a 5s poll."
-      >
-        <WifiOff className="h-3 w-3" />
-        Polling only
-      </Badge>
-    );
-  }
+  if (!meta) return null;
 
-  if (status === "connecting") {
-    return (
-      <Badge variant="outline" className="gap-1">
-        <RefreshCw className="h-3 w-3 animate-spin" />
-        Connecting
-      </Badge>
-    );
-  }
-
-  return null;
-}
-
-/**
- * The disclaimer is not decoration. This whole page reconstructs server state;
- * if the tablet's socket dropped or its cache is stale, the board below is
- * perfect and the kitchen screen is blank. Support staff will draw the wrong
- * conclusion from a healthy-looking mirror unless this is on the page.
- */
-export function MirrorBlindSpotNotice() {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-      <Eye className="mt-0.5 h-4 w-4 shrink-0" />
-      <p>
-        <span className="font-semibold">
-          This is server state, not the physical screen.
-        </span>{" "}
-        It shows what the server says this station should be displaying, fetched
-        through the same RPC the tablet calls. It cannot detect a dropped
-        subscription, a crashed app, or a stale cache on the device -- in all
-        three cases this board still looks correct while the kitchen sees
-        nothing. Use it to decide{" "}
-        <span className="font-medium">server-side or device-side</span>, not to
-        confirm what was rendered.
-      </p>
-    </div>
+    <span
+      title={meta.title}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+    >
+      {meta.icon}
+      {meta.label}
+    </span>
   );
 }
 
+/**
+ * The disclaimer is not decoration. The board reconstructs server state; if
+ * the tablet's socket dropped or its cache is stale, the board is perfect and
+ * the kitchen screen is blank. Support staff will draw the wrong conclusion
+ * from a healthy-looking mirror unless this sits beside it.
+ */
+export function MirrorBlindSpotNotice() {
+  return (
+    <KdsNotice icon={Eye}>
+      <p>
+        <NoticeLead>This is server state, not the physical screen.</NoticeLead>{" "}
+        It shows what the server says this station should be displaying, fetched
+        through the same RPC the tablet calls. It cannot detect a dropped
+        subscription, a crashed app, or a stale cache on the device — in all
+        three cases this board still looks correct while the kitchen sees
+        nothing. Use it to decide{" "}
+        <NoticeLead>server-side or device-side</NoticeLead>, not to confirm what
+        was rendered.
+      </p>
+    </KdsNotice>
+  );
+}
+
+/**
+ * Seven-day routing health for the location. Problems are marked by weight
+ * and words, not colour: this is a diagnostic hint, not an HQ-2 alarm.
+ */
 function HealthHint({ health }: { health: KdsRoutingHealth | null }) {
   if (!health) return null;
 
@@ -127,24 +119,32 @@ function HealthHint({ health }: { health: KdsRoutingHealth | null }) {
 
   if (problems.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Last 7 days: {health.items_fired} items fired, no drops, no divergence.
-        Routing is healthy at this location -- a "missing order" complaint here
-        is most likely device-side.
+      <p className="text-[0.8125rem] text-muted-foreground">
+        Last 7 days: <span className="tabular-nums">{health.items_fired}</span>{" "}
+        items fired, no drops, no divergence. Routing is healthy at this
+        location — a &ldquo;missing order&rdquo; complaint here is most likely
+        device-side.
       </p>
     );
   }
 
   return (
-    <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+    <div className="flex items-start gap-2 text-[0.8125rem] font-medium text-foreground">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <p>
-        Last 7 days ({health.items_fired} items fired): {problems.join("; ")}.
+        Last 7 days (
+        <span className="tabular-nums">{health.items_fired}</span> items
+        fired): {problems.join("; ")}.
       </p>
     </div>
   );
 }
 
+/**
+ * The scope pickers that govern every tab: merchant, location, display. They
+ * sit directly on the page (§5.2); the shared Refresh and the connection
+ * status live in the page header.
+ */
 export function KdsMirrorControls({
   locations,
   displays,
@@ -154,9 +154,6 @@ export function KdsMirrorControls({
   onMerchantChange,
   onLocationChange,
   onDisplayChange,
-  realtimeStatus,
-  isFetching,
-  onRefresh,
   health,
 }: {
   locations: SupportLocationOption[];
@@ -167,27 +164,30 @@ export function KdsMirrorControls({
   onMerchantChange: (value: string) => void;
   onLocationChange: (value: string) => void;
   onDisplayChange: (value: string) => void;
-  realtimeStatus: MirrorRealtimeStatus;
-  isFetching: boolean;
-  onRefresh: () => void;
   health: KdsRoutingHealth | null;
 }) {
   const selectedDisplay = displays.find((d) => d.id === displayId) ?? null;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="min-w-0 space-y-3">
+      {/* Stacked full-width on phones, a wrapping row from `sm`. */}
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <MerchantPicker
           merchantId={merchantId}
           onMerchantChange={onMerchantChange}
         />
 
+        {/* SelectTrigger still ships a border by default (§11), so the muted
+            material is spelled out. */}
         <Select
           value={locationId ?? ""}
           onValueChange={onLocationChange}
           disabled={!merchantId || locations.length === 0}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger
+            aria-label="Location"
+            className="h-9 w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none dark:bg-muted/60 sm:w-52"
+          >
             <SelectValue placeholder="Select location" />
           </SelectTrigger>
           <SelectContent>
@@ -205,7 +205,10 @@ export function KdsMirrorControls({
           onValueChange={onDisplayChange}
           disabled={!locationId}
         >
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger
+            aria-label="KDS display"
+            className="h-9 w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none dark:bg-muted/60 sm:w-60"
+          >
             <SelectValue placeholder="Select KDS display" />
           </SelectTrigger>
           <SelectContent>
@@ -218,33 +221,20 @@ export function KdsMirrorControls({
             ))}
           </SelectContent>
         </Select>
-
-        <div className="ml-auto flex items-center gap-2">
-          <RealtimeBadge status={realtimeStatus} isFetching={isFetching} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            disabled={!locationId}
-          >
-            <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
-            Refresh
-          </Button>
-        </div>
       </div>
 
       {displayId === null && locationId && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Showing every display at this location combined. No physical screen
-          looks like this -- pick a specific display to mirror a real station.
+          looks like this — pick a specific display to mirror a real station.
         </p>
       )}
 
       {selectedDisplay?.show_all_items && (
-        <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="flex items-start gap-2 text-[0.8125rem] text-muted-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            <span className="font-medium">
+            <span className="font-medium text-foreground">
               {selectedDisplay.display_name} has show_all_items enabled.
             </span>{" "}
             Every fired item lands on this screen regardless of routing rules,

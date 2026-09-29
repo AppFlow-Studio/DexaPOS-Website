@@ -78,8 +78,8 @@ describe("Campaigns page merchant-scoped reads", () => {
       ["merchant_id", "merchant-from-session"], ["channel", "sms"],
       ["campaign_id", campaignId], ["status", "sent"], ["direction", "outbound"],
     ]));
-    expect(mocks.range).toHaveBeenCalledWith(25, 49);
-    expect(result.pagination).toMatchObject({ page: 2, total: 53, totalPages: 3 });
+    expect(mocks.range).toHaveBeenCalledWith(10, 19);
+    expect(result.pagination).toMatchObject({ page: 2, total: 53, totalPages: 6 });
     expect(result.data[0]).toMatchObject({ status: "sent", cost: null });
     // Do not fetch raw provider payloads (which can include verification codes)
     // or reinterpret submission as delivery.

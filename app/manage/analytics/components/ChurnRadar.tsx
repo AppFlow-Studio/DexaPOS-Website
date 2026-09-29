@@ -15,6 +15,8 @@ import {
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { sendChurnSlackAlert } from '@/app/manage/actions/hq-platform/analytics'
 import type {
   ChurnSeverity,
@@ -36,8 +38,8 @@ const CHURN_COLUMNS: ReportColumn[] = [
   { id: 'actions', label: 'Actions', defaultHidden: true },
 ]
 
-/** Rows shown per list before "Show all". */
-const PREVIEW_ROWS = 10
+const EMPTY_MERCHANTS: ChurnWarningMerchant[] = []
+const EMPTY_QUIET: ChurnWarningData['quietLocations'] = []
 
 // Words only: §14.3 HQ-2 keeps severity colour to `/manage/health`.
 const SEVERITY_LABEL: Record<ChurnSeverity, string> = {
@@ -80,12 +82,14 @@ type SlackState = {
  */
 export function ChurnRadar({ data, isLoading }: { data?: ChurnWarningData; isLoading: boolean }) {
   const [slack, setSlack] = useState<SlackState>({ status: 'idle' })
-  const [showAllMerchants, setShowAllMerchants] = useState(false)
-  const [showAllQuiet, setShowAllQuiet] = useState(false)
   const isMobile = useIsMobile()
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => initialHiddenColumns(CHURN_COLUMNS))
   // Hiding is mobile-only: the picker is md:hidden, so desktop ignores the set.
   const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Paged at 10 (§5.7). Hooks sit above the early returns; the pager clamps
+  // itself when a refetch shrinks either list.
+  const merchantPage = useClientPagination(data?.atRiskMerchants ?? EMPTY_MERCHANTS, 10)
+  const quietPage = useClientPagination(data?.quietLocations ?? EMPTY_QUIET, 10)
 
   if (isLoading) return <Skeleton className="h-48 w-full rounded-3xl" />
   if (!data) return null
@@ -112,8 +116,8 @@ export function ChurnRadar({ data, isLoading }: { data?: ChurnWarningData; isLoa
     ['medium', data.mediumCount],
   ] as const).filter(([, n]) => n > 0)
 
-  const merchants = showAllMerchants ? data.atRiskMerchants : data.atRiskMerchants.slice(0, PREVIEW_ROWS)
-  const quiet = showAllQuiet ? data.quietLocations : data.quietLocations.slice(0, PREVIEW_ROWS)
+  const merchants = merchantPage.pageRows
+  const quiet = quietPage.pageRows
 
   // Slack only carries critical merchants, so the button only exists when there are some.
   const slackButton = data.criticalCount > 0 && (
@@ -220,15 +224,12 @@ export function ChurnRadar({ data, isLoading }: { data?: ChurnWarningData; isLoa
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              pagination={merchantPage.pagination}
+              onPageChange={merchantPage.setPage}
+              itemLabel="merchants"
+            />
           </div>
-        )}
-        {data.atRiskMerchants.length > PREVIEW_ROWS && (
-          <ShowAllToggle
-            expanded={showAllMerchants}
-            total={data.atRiskMerchants.length}
-            noun="merchants"
-            onToggle={() => setShowAllMerchants(v => !v)}
-          />
         )}
 
         {/* Week-over-week drops can't see a location that never sold or went
@@ -263,37 +264,14 @@ export function ChurnRadar({ data, isLoading }: { data?: ChurnWarningData; isLoa
                 ))}
               </TableBody>
             </Table>
-            {data.quietLocations.length > PREVIEW_ROWS && (
-              <ShowAllToggle
-                expanded={showAllQuiet}
-                total={data.quietLocations.length}
-                noun="locations"
-                onToggle={() => setShowAllQuiet(v => !v)}
-              />
-            )}
+            <PaginationBar
+              pagination={quietPage.pagination}
+              onPageChange={quietPage.setPage}
+              itemLabel="locations"
+            />
           </div>
         )}
       </PanelSection>
     </Panel>
-  )
-}
-
-function ShowAllToggle({
-  expanded,
-  total,
-  noun,
-  onToggle,
-}: {
-  expanded: boolean
-  total: number
-  noun: string
-  onToggle: () => void
-}) {
-  return (
-    <div className="mt-2">
-      <Button variant="ghost" size="sm" className="-ml-2 h-8 rounded-full px-2 text-xs" onClick={onToggle}>
-        {expanded ? `Show top ${PREVIEW_ROWS}` : `Show all ${total} ${noun}`}
-      </Button>
-    </div>
   )
 }

@@ -1,50 +1,45 @@
 import type { LucideIcon } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
-
-export type KpiTone = 'default' | 'good' | 'warn' | 'danger'
+import { StatRow, StatTile } from '@/components/dashboard/shell'
 
 export interface KpiCell {
     icon: LucideIcon
     label: string
+    /** `—` when the figure cannot be computed, never `0` (§4.9). */
     value: string
     meta?: string
-    tone?: KpiTone
 }
 
-const TONE_CLASS: Record<KpiTone, string> = {
-    default: 'text-foreground',
-    good: 'text-emerald-700',
-    warn: 'text-amber-700',
-    danger: 'text-red-700',
-}
-
+/**
+ * The KPI figures at the top of a merchant-detail tab, rendered as `StatRow` /
+ * `StatTile` inside the tab's own `PanelSection`. Neutral by design: none of
+ * these figures is an HQ-2 alarm (§14.3), so no tone colouring.
+ *
+ * `StatRow` only takes 2|3|4 columns (§14.7 trap 6), so five or more figures
+ * stack into two rows.
+ */
 export function KpiStrip({ cells, loading = false }: { cells: KpiCell[]; loading?: boolean }) {
+    const split = Math.ceil(cells.length / 2)
+    const rows = cells.length <= 4 ? [cells] : [cells.slice(0, split), cells.slice(split)]
+
     return (
-        <div className="grid grid-cols-1 divide-y overflow-hidden rounded-3xl border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
-            {cells.map((c) => {
-                const Icon = c.icon
-                const tone = TONE_CLASS[c.tone ?? 'default']
-                return (
-                    <div key={c.label} className="px-5 py-4">
-                        <div className="flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                            <Icon className="h-3 w-3" />
-                            {c.label}
-                        </div>
-                        {loading ? (
-                            <Skeleton className="mt-2 h-6 w-24" />
-                        ) : (
-                            <div
-                                className={`mt-1.5 text-[22px] tracking-[-0.015em] tabular-nums ${tone}`}
-                            >
-                                {c.value}
-                            </div>
-                        )}
-                        {c.meta && (
-                            <div className="mt-0.5 text-[11.5px] text-muted-foreground">{c.meta}</div>
-                        )}
-                    </div>
-                )
-            })}
+        <div className="space-y-6">
+            {rows.map((row, i) => (
+                <StatRow key={i} columns={Math.min(4, Math.max(2, row.length)) as 2 | 3 | 4}>
+                    {row.map((c) => {
+                        const Icon = c.icon
+                        return (
+                            <StatTile
+                                key={c.label}
+                                icon={<Icon />}
+                                label={c.label}
+                                value={c.value}
+                                meta={c.meta}
+                                isLoading={loading}
+                            />
+                        )
+                    })}
+                </StatRow>
+            ))}
         </div>
     )
 }

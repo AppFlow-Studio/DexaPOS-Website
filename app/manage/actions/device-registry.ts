@@ -401,23 +401,30 @@ export async function getAdminDeviceActivity(
   try {
     await assertHQPermission('system.config.manage')
     const supabase = createServerSupabaseClient() as any
+    // The detail page renders this as a scrolling feed, which is capped on the
+    // server (UI-DESIGN-SYSTEM §5.7). Each source is newest-first, so the
+    // newest 50 of the merged feed are always within the newest 50 of each.
+    const activityLimit = 50
 
     const [assignmentsResult, configHistoryResult, notesResult] = await Promise.all([
       supabase
         .from('device_assignments')
         .select('*')
         .eq('device_id', deviceId)
-        .order('assigned_at', { ascending: false }),
+        .order('assigned_at', { ascending: false })
+        .limit(activityLimit),
       supabase
         .from('device_config_history')
         .select('*')
         .eq('device_id', deviceId)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(activityLimit),
       supabase
         .from('device_notes')
         .select('*')
         .eq('device_id', deviceId)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(activityLimit),
     ])
 
     const error =
@@ -432,7 +439,7 @@ export async function getAdminDeviceActivity(
       (assignmentsResult.data ?? []) as DeviceAssignmentRow[],
       (configHistoryResult.data ?? []) as DeviceConfigHistoryRow[],
       (notesResult.data ?? []) as DeviceNoteRow[]
-    )
+    ).slice(0, activityLimit)
 
     return { success: true, data: feed, error: null }
   } catch (error) {

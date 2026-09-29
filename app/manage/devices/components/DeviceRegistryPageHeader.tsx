@@ -4,37 +4,49 @@ import type { ReactNode } from 'react'
 
 import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
+import { PageHeader } from '@/components/dashboard/shell'
 
 interface DeviceRegistryPageHeaderProps {
   title: string
-  description: string
+  description?: string
   actions?: ReactNode
-  eyebrow?: string
+  backHref?: string
+  backLabel?: string
+  /**
+   * An identity row under the title — status, model, record ids. Unlike the
+   * description it stays on phones: it is scope, not decoration (§13.4).
+   */
+  meta?: ReactNode
 }
 
+/**
+ * The standard `PageHeader` (D-01, D-04, D-05) followed by the registry's
+ * section rail, the way a tabbed page puts its rail under the header (§2 B).
+ */
 export function DeviceRegistryPageHeader({
   title,
   description,
   actions,
-  eyebrow = 'Device Registry',
+  backHref,
+  backLabel,
+  meta,
 }: DeviceRegistryPageHeaderProps) {
   return (
-    <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div className="min-w-0 space-y-2">
-        <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          {eyebrow}
-        </p>
-        <DeviceRegistrySectionNav />
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-          <p className="break-words text-sm text-muted-foreground">{description}</p>
-        </div>
-      </div>
-
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <DeviceRegistryCommandPaletteTrigger />
-        {actions}
-      </div>
+    <div className="min-w-0 space-y-4">
+      <PageHeader
+        title={title}
+        subtitle={description}
+        backHref={backHref}
+        backLabel={backLabel}
+        actions={
+          <>
+            <DeviceRegistryCommandPaletteTrigger />
+            {actions}
+          </>
+        }
+      />
+      {meta}
+      <DeviceRegistrySectionNav />
     </div>
   )
 }

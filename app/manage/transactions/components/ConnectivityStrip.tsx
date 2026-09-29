@@ -1,8 +1,9 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, CircleAlert, Cpu, Plug, RefreshCcwDot } from 'lucide-react'
+import { CircleAlert, Cpu, Plug, RefreshCcwDot } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { getConnectivityStatus } from '@/app/manage/actions/hq-platform/payments'
@@ -16,6 +17,13 @@ function relativeTime(iso: string | null): string {
     return `${Math.round(ms / 86_400_000)} d ago`
 }
 
+/*
+ * The processor status line under the page header.
+ *
+ * Neutral by default (UI-DESIGN-SYSTEM §3.5): a healthy sync is the absence of
+ * an alarm, so it gets no green. The one coloured mark is the glyph beside a
+ * failed TSYS sync, and the words "Sync failed" say it too (§14.3 HQ-2).
+ */
 export function ConnectivityStrip({ merchantIds }: { merchantIds?: string[] | null }) {
     const { data, isLoading, isFetching, refetch } = useQuery({
         queryKey: ['platform-connectivity', (merchantIds ?? []).join(',')],
@@ -26,46 +34,58 @@ export function ConnectivityStrip({ merchantIds }: { merchantIds?: string[] | nu
 
     if (isLoading) {
         return (
-            <div className="flex items-center gap-3">
-                <Skeleton className="h-7 w-48" />
-                <Skeleton className="h-7 w-48" />
+            <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-7 w-56 rounded-full" />
+                <Skeleton className="h-7 w-48 rounded-full" />
             </div>
         )
     }
 
-    if (!data) return null
+    const refreshButton = (
+        <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+        >
+            <RefreshCcwDot className="h-3 w-3" />
+            {isFetching ? 'Refreshing…' : 'Refresh'}
+        </Button>
+    )
 
-    const luqraOk = data.luqra.lastStatus === 'ok'
-    const luqraColor = luqraOk
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-        : data.luqra.lastStatus === 'error'
-            ? 'border-red-200 bg-red-50 text-red-800'
-            : 'border-zinc-200 bg-zinc-50 text-zinc-700'
+    // A status line with a place in the layout says when it has nothing (§4.9).
+    if (!data) {
+        return (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Processor connectivity is unavailable right now.</span>
+                {refreshButton}
+            </div>
+        )
+    }
 
-    const procColor =
-        data.processor.terminalsLast24h > 0
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            : 'border-zinc-200 bg-zinc-50 text-zinc-700'
+    const syncFailed = data.luqra.lastStatus === 'error'
 
     return (
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
-            <div className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${luqraColor}`}>
-                <Plug className="h-3.5 w-3.5" />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1">
+                <Plug className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-medium">TSYS</span>
                 <InfoIcon tip="TSYS is the payment processing platform that syncs transaction data into Dexa POS. Last synced shows when the most recent import completed. MIDs = Merchant IDs registered in TSYS for this merchant." side="bottom" />
-                {luqraOk ? (
-                    <CheckCircle2 className="h-3 w-3" />
-                ) : data.luqra.lastStatus === 'error' ? (
-                    <CircleAlert className="h-3 w-3" />
-                ) : null}
+                {syncFailed && (
+                    <span className="inline-flex items-center gap-1 font-medium">
+                        <CircleAlert className="h-3 w-3 text-red-600 dark:text-red-400" aria-hidden />
+                        Sync failed
+                    </span>
+                )}
                 <span className="text-muted-foreground">
                     {data.luqra.lastFinishedAt ? `synced ${relativeTime(data.luqra.lastFinishedAt)}` : 'never synced'}
                 </span>
-                <span className="text-muted-foreground">·</span>
-                <span>{data.luqra.midsConfigured} MIDs</span>
+                <span className="text-muted-foreground" aria-hidden>·</span>
+                <span className="tabular-nums">{data.luqra.midsConfigured} MIDs</span>
                 {data.luqra.lastErrorCode && (
                     <span className="inline-flex items-center gap-1">
-                        <Badge variant="outline" className="ml-1 text-[10px]">
+                        <Badge variant="outline" className="font-mono text-[10px]">
                             {data.luqra.lastErrorCode}
                         </Badge>
                         <InfoIcon tip={`Last TSYS sync error code: ${data.luqra.lastErrorCode}. Contact Dexa support if this persists.`} side="bottom" />
@@ -73,28 +93,19 @@ export function ConnectivityStrip({ merchantIds }: { merchantIds?: string[] | nu
                 )}
             </div>
 
-            <div className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${procColor}`}>
-                <Cpu className="h-3.5 w-3.5" />
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1">
+                <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-medium">Processor</span>
                 <InfoIcon tip="Card payment terminals that have reported activity in the last 24 hours. Each badge shows a terminal type (e.g. dejavoo, pax) and its count." side="bottom" />
-                <span className="text-muted-foreground">{data.processor.terminalsLast24h} terminals · 24h</span>
+                <span className="text-muted-foreground tabular-nums">{data.processor.terminalsLast24h} terminals · 24h</span>
                 {data.processor.terminalTypes.slice(0, 3).map((t) => (
-                    <Badge key={t.type} variant="outline" className="text-[10px] capitalize">
+                    <span key={t.type} className="capitalize tabular-nums text-muted-foreground">
                         {t.type} {t.count}
-                    </Badge>
+                    </span>
                 ))}
             </div>
 
-            <button
-                type="button"
-                onClick={() => void refetch()}
-                disabled={isFetching}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/50"
-                title="Refresh connectivity status"
-            >
-                <RefreshCcwDot className="h-3 w-3" />
-                {isFetching ? 'Refreshing…' : 'Refresh'}
-            </button>
+            {refreshButton}
         </div>
     )
 }

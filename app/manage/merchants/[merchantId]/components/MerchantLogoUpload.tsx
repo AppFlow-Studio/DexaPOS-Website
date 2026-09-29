@@ -61,39 +61,49 @@ export function MerchantLogoUpload({ merchantId, merchantName, logoUrl }: Mercha
       role="button"
       tabIndex={0}
       onClick={handleClick}
-      onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleClick()
+        }
+      }}
       aria-label={preview ? 'Change merchant logo' : 'Upload merchant logo'}
       className={cn(
-        'relative h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden',
-        'cursor-pointer select-none group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1'
+        'relative flex h-12 w-12 shrink-0 cursor-pointer select-none items-center justify-center rounded-2xl bg-muted text-muted-foreground',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
       )}
     >
-      {/* Logo or fallback icon */}
-      {preview ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={preview}
-          alt={merchantName}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <Store className="h-6 w-6 text-primary" />
-      )}
-
-      {/* Hover / loading overlay */}
-      <div
-        className={cn(
-          'absolute inset-0 flex flex-col items-center justify-center rounded-lg transition-opacity duration-150',
-          'bg-black/55',
-          isPending ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        )}
-      >
-        {isPending ? (
-          <Loader2 className="h-4 w-4 text-white animate-spin" />
+      {/* Logo or fallback icon — clipped by its own box so the badge below can
+          sit over the plate's corner. */}
+      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-2xl">
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview}
+            alt={merchantName}
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <Camera className="h-4 w-4 text-white" />
+          <Store className="h-6 w-6" />
         )}
       </div>
+
+      {/* The change affordance is visible at rest, not revealed on hover (§7). */}
+      {!isPending && (
+        <span
+          aria-hidden="true"
+          className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border"
+        >
+          <Camera className="h-3 w-3" />
+        </span>
+      )}
+
+      {/* Upload in progress */}
+      {isPending && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/55">
+          <Loader2 className="h-4 w-4 animate-spin text-white" />
+        </div>
+      )}
 
       {/* Hidden file input */}
       <input

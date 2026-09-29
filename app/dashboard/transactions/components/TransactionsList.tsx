@@ -40,6 +40,8 @@ import {
 import { OrderResponse } from "@/types/order-management";
 import { getPaymentStatusLabel } from "@/lib/constants/payment-status";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 // ============================================================================
 // Types & Constants
@@ -379,6 +381,19 @@ export function TransactionsList({
     return result;
   }, [transactions, statusFilter, typeFilter, sortField, sortDir]);
 
+  // Page the filtered/sorted list; the table and the card grid show the same page.
+  const { pageRows, pagination, setPage } = useClientPagination(filteredTransactions, 10);
+
+  // A new result set (period change) or filter starts from the first page.
+  // Keyed on content, not array identity: the parent passes `orders || []`,
+  // a fresh array on every render while loading.
+  const resultSig = `${transactions?.length ?? 0}|${transactions?.[0]?.id ?? ""}|${transactions?.[transactions.length - 1]?.id ?? ""}|${statusFilter.join(",")}|${typeFilter.join(",")}`;
+  const [prevResultSig, setPrevResultSig] = useState(resultSig);
+  if (prevResultSig !== resultSig) {
+    setPrevResultSig(resultSig);
+    setPage(1);
+  }
+
   function handleSort(field: SortField) {
     if (sortField === field) {
       setSortDir((d) => (d === "desc" ? "asc" : "desc"));
@@ -386,6 +401,7 @@ export function TransactionsList({
       setSortField(field);
       setSortDir("desc");
     }
+    setPage(1);
   }
 
   // ---- Loading -------------------------------------------------------------
@@ -527,7 +543,7 @@ export function TransactionsList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map((tx) => {
+              {pageRows.map((tx) => {
                 const type = getOrderTypeConfig(tx.order_type);
                 const payment = getPaymentLabel(tx);
                 const PayIcon = payment.icon;
@@ -601,7 +617,7 @@ export function TransactionsList({
           {/* Phones and tablets use cards instead of a horizontally scrolling
               table (§5.3) — the old 730px min-width forced a sideways drag. */}
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-            {filteredTransactions.map((tx) => {
+            {pageRows.map((tx) => {
               const type = getOrderTypeConfig(tx.order_type);
               const payment = getPaymentLabel(tx);
               const PayIcon = payment.icon;
@@ -667,6 +683,12 @@ export function TransactionsList({
               );
             })}
           </div>
+
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="transactions"
+          />
         </>
       )}
     </div>

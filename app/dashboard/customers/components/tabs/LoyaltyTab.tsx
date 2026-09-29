@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,8 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import type { CustomerListItem } from "@/types/customer";
 import {
   useMerchantLoyaltyPrograms,
@@ -265,6 +267,12 @@ function TransactionHistorySheet({
     customerId || null,
     programId || null
   );
+  const { pageRows, pagination, setPage } = useClientPagination<any>(history ?? [], 10);
+
+  // Each opening starts from the most recent page.
+  useEffect(() => {
+    if (open) setPage(1);
+  }, [open, setPage]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -275,7 +283,8 @@ function TransactionHistorySheet({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
           {history && history.length > 0 ? (
-            <Table variant="data">
+            <>
+            <Table bounded={false} variant="data">
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead className="w-24">Date</TableHead>
@@ -285,7 +294,7 @@ function TransactionHistorySheet({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {history.map((tx: any) => (
+                {pageRows.map((tx: any) => (
                   <TableRow key={tx.id}>
                     <TableCell className="text-sm tabular-nums">
                       {new Date(tx.created_at).toLocaleDateString()}
@@ -302,6 +311,12 @@ function TransactionHistorySheet({
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              pagination={pagination}
+              onPageChange={setPage}
+              itemLabel="transactions"
+            />
+            </>
           ) : (
             <div className="py-8 text-center">
               <p className="text-sm text-muted-foreground">

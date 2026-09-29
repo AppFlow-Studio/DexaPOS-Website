@@ -70,11 +70,17 @@ export function MerchantPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
+        {/* A combobox trigger shares the muted, borderless field material
+            (UI-DESIGN-SYSTEM §4.2), so it is a ghost button with the fill. */}
         <Button
-          variant="outline"
+          variant="ghost"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-[240px] justify-between font-normal", className)}
+          aria-label="Merchant"
+          className={cn(
+            "h-9 w-full min-w-0 justify-between border-0 bg-muted/60 px-3 text-[0.8125rem] font-normal shadow-none hover:bg-muted sm:w-60",
+            className
+          )}
         >
           <span
             className={cn("truncate", !label && "text-muted-foreground")}
@@ -85,7 +91,12 @@ export function MerchantPicker({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[300px] p-0" align="start">
+      {/* popover.tsx has no data-slot for the global overlay radius, so the
+          radius is set here (§4.6). */}
+      <PopoverContent
+        className="w-[min(300px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
+        align="start"
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search by name or DBA..."

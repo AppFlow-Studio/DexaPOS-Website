@@ -26,7 +26,7 @@ import {
 import type { MerchantDetails } from '@/types/merchant'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -360,7 +360,7 @@ function AuthorizationEvidence({
   }
 
   return (
-    <details className="rounded-xl border p-3 text-sm">
+    <details className="rounded-2xl border p-4 text-sm">
       <summary className="cursor-pointer font-medium">Authorization evidence</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {Object.entries(evidence).map(([key, value]) => (
@@ -391,41 +391,6 @@ function formatDateTimeLocalInput(value: string | null | undefined): string {
 
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return localDate.toISOString().slice(0, 16)
-}
-
-function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
-  switch (status) {
-    case 'active':
-    case 'paid':
-      return 'default'
-    case 'trial':
-    case 'open':
-    case 'processing':
-      return 'outline'
-    case 'past_due':
-    case 'failed':
-    case 'suspended':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-function merchantTierStatusVariant(
-  status: MerchantTierStatusRecord['subscription_status'],
-): 'default' | 'secondary' | 'outline' | 'destructive' {
-  switch (status) {
-    case 'active':
-      return 'default'
-    case 'past_due':
-      return 'outline'
-    case 'suspended':
-      return 'destructive'
-    case 'cancelled':
-      return 'secondary'
-    default:
-      return 'secondary'
-  }
 }
 
 function buildInitialServiceFormState(
@@ -535,18 +500,18 @@ function merchantTierHighlights(plan: MerchantTierPlanRecord): string[] {
 const transactionTrendChartConfig = {
   paid: {
     label: 'Collected',
-    color: 'hsl(var(--chart-1))',
+    color: 'var(--brand)',
   },
   failed: {
     label: 'Failed',
-    color: 'hsl(var(--chart-3))',
+    color: 'var(--muted-foreground)',
   },
 } satisfies ChartConfig
 
 const transactionStatusChartConfig = {
   count: {
     label: 'Invoices',
-    color: 'hsl(var(--chart-2))',
+    color: 'var(--brand)',
   },
 } satisfies ChartConfig
 
@@ -945,7 +910,7 @@ export function HqSubscriptionsWorkspace({
         const bucket = buckets.get(statusKey)!
         const visuals = transactionStatusVisuals[statusKey] ?? {
           label: statusKey.replace('_', ' '),
-          color: 'hsl(var(--chart-2))',
+          color: 'var(--brand)',
         }
 
         return {
@@ -1665,126 +1630,109 @@ export function HqSubscriptionsWorkspace({
 
   if (!canManageBilling) {
     return (
-      <Card className="border-destructive/30">
-        <CardContent className="flex items-start gap-3 pt-6">
-          <AlertTriangle className="mt-0.5 h-5 w-5 text-destructive" />
-          <div className="space-y-1">
-            <div className="font-medium">Billing Management Restricted</div>
+      <Panel>
+        <PanelSection label="Subscriptions">
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-muted/30 px-4 py-10 text-center">
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+            <p className="text-sm font-medium">Billing management is restricted</p>
             <p className="text-sm text-muted-foreground">
               Subscription billing management requires the `system.billing.manage` HQ permission.
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight">{merchant.name}</h1>
-          <Badge variant="outline">{merchant.clerk_org_id || merchant.id}</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          One merchant tier is charged to the merchant billing card. Each location&apos;s devices and add-ons use its own card and separate subscription.
-        </p>
-      </div>
+      {/* The page's PageHeader owns the h1 (merchant name); the tab's title is a
+          PanelSection label (§14.6.4). */}
+      <Panel>
+        <PanelSection
+          label="Subscriptions"
+          caption="One merchant tier is charged to the merchant billing card. Each location's devices and add-ons use its own card and separate subscription."
+          action={
+            <Badge variant="outline" className="max-w-full truncate font-mono">
+              {merchant.clerk_org_id || merchant.id}
+            </Badge>
+          }
+        >
+          <StatRow columns={4}>
+            <StatTile label="MRR" value={formatMoney(workspaceStats.mrr)} isLoading={isLoading} />
+            <StatTile label="Locations" value={workspaceStats.locations} />
+            <StatTile label="Active Subscriptions" value={workspaceStats.activeCount} isLoading={isLoading} />
+            <StatTile label="Billing Issues" value={workspaceStats.issueCount} isLoading={isLoading} />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
-      <div className="rounded-xl border border-amber-300/70 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700 dark:text-amber-400" />
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-semibold">Merchant billing exemption</h2>
-                <Badge variant={billingExemption.active ? 'default' : 'secondary'}>
-                  {billingExemption.active ? 'Active' : billingExemption.enabled ? 'Expired' : 'Off'}
-                </Badge>
-              </div>
-              <p className="max-w-3xl text-sm text-muted-foreground">
-                Waives SaaS card and payment enforcement for this merchant. Plans and location add-ons must still be assigned normally, and a manual merchant suspension still blocks POS access.
-              </p>
-              {billingExemption.active && billingExemption.reason ? (
-                <p className="text-xs text-muted-foreground">
-                  Reason: {billingExemption.reason}
-                  {billingExemption.expiresAt
-                    ? ` | Expires ${new Date(billingExemption.expiresAt).toLocaleString()}`
-                    : ' | No automatic expiration'}
-                </p>
-              ) : null}
+      <Panel>
+        <PanelSection
+          icon={ShieldCheck}
+          label={
+            <span className="flex flex-wrap items-center gap-2">
+              Merchant billing exemption
+              <Badge variant="outline">
+                {billingExemption.active ? 'Active' : billingExemption.enabled ? 'Expired' : 'Off'}
+              </Badge>
+            </span>
+          }
+          caption="Waives SaaS card and payment enforcement for this merchant. Plans and location add-ons must still be assigned normally, and a manual merchant suspension still blocks POS access."
+          action={
+            <div className="flex items-center gap-2">
+              <Label htmlFor="merchant-billing-exempt">Exempt from billing</Label>
+              <Switch
+                id="merchant-billing-exempt"
+                checked={billingExemptionRequested}
+                onCheckedChange={setBillingExemptionRequested}
+                disabled={isPending}
+              />
             </div>
+          }
+        >
+          {billingExemption.active && billingExemption.reason ? (
+            <p className="mb-4 text-xs text-muted-foreground">
+              Reason: {billingExemption.reason}
+              {billingExemption.expiresAt
+                ? ` | Expires ${new Date(billingExemption.expiresAt).toLocaleString()}`
+                : ' | No automatic expiration'}
+            </p>
+          ) : null}
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="billing-exemption-reason">Audit reason</Label>
+              <Input
+                id="billing-exemption-reason"
+                value={billingExemptionReason}
+                onChange={(event) => setBillingExemptionReason(event.target.value)}
+                placeholder={billingExemptionRequested ? 'Internal, demo, partner, or complimentary account' : 'Why normal billing is being restored'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="billing-exemption-expires">Optional expiration</Label>
+              <Input
+                id="billing-exemption-expires"
+                type="datetime-local"
+                value={billingExemptionExpiresAt}
+                onChange={(event) => setBillingExemptionExpiresAt(event.target.value)}
+                disabled={!billingExemptionRequested}
+              />
+            </div>
+            <Button
+              type="button"
+              variant={billingExemptionRequested ? 'default' : 'outline'}
+              onClick={saveBillingExemption}
+              disabled={isPending || billingExemptionReason.trim().length < 5}
+            >
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Apply
+            </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="merchant-billing-exempt">Exempt from billing</Label>
-            <Switch
-              id="merchant-billing-exempt"
-              checked={billingExemptionRequested}
-              onCheckedChange={setBillingExemptionRequested}
-              disabled={isPending}
-            />
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
-          <div className="space-y-2">
-            <Label htmlFor="billing-exemption-reason">Audit reason</Label>
-            <Input
-              id="billing-exemption-reason"
-              value={billingExemptionReason}
-              onChange={(event) => setBillingExemptionReason(event.target.value)}
-              placeholder={billingExemptionRequested ? 'Internal, demo, partner, or complimentary account' : 'Why normal billing is being restored'}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="billing-exemption-expires">Optional expiration</Label>
-            <Input
-              id="billing-exemption-expires"
-              type="datetime-local"
-              value={billingExemptionExpiresAt}
-              onChange={(event) => setBillingExemptionExpiresAt(event.target.value)}
-              disabled={!billingExemptionRequested}
-            />
-          </div>
-          <Button
-            type="button"
-            variant={billingExemptionRequested ? 'default' : 'outline'}
-            onClick={saveBillingExemption}
-            disabled={isPending || billingExemptionReason.trim().length < 5}
-          >
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Apply
-          </Button>
-        </div>
-      </div>
+        </PanelSection>
+      </Panel>
 
       <SubscriptionCutoverReview key={merchant.id} merchantId={merchant.id} merchantRouteId={merchant.clerk_org_id || merchant.id} onPrepared={refresh} />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">MRR</div>
-            <div className="mt-2 text-2xl font-semibold">{formatMoney(workspaceStats.mrr)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Locations</div>
-            <div className="mt-2 text-2xl font-semibold">{workspaceStats.locations}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Active Subscriptions</div>
-            <div className="mt-2 text-2xl font-semibold">{workspaceStats.activeCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Billing Issues</div>
-            <div className="mt-2 text-2xl font-semibold">{workspaceStats.issueCount}</div>
-          </CardContent>
-        </Card>
-      </div>
 
       {mode === 'overview' && (
         <div className="space-y-6">
@@ -1870,34 +1818,38 @@ export function HqSubscriptionsWorkspace({
           </div>
 
           {/* Display-only progress stepper (completed steps clickable) */}
-          <ol aria-label="Subscription setup progress" className="grid grid-cols-3 gap-3">
+          {/* Neutral step pills (§3.5, §4.5): the current step takes the pill-rail
+              active state; phones show numbers only, with the title in `title`. */}
+          <ol aria-label="Subscription setup progress" className="grid grid-cols-3 gap-1 rounded-3xl bg-muted/70 p-1">
             {SUBSCRIPTION_STEPS.map((step, index) => {
               const isCurrent = index === currentStep
               const isDone = index < currentStep
               return (
-                <li key={step.id}>
+                <li key={step.id} className="min-w-0">
                   <button
                     type="button"
                     disabled={index > currentStep || isPending}
                     onClick={() => {
                       if (index <= currentStep) changeStep(index)
                     }}
-                    className={`flex w-full min-w-0 items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                    title={step.title}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={`flex w-full min-w-0 items-center justify-center gap-3 rounded-2xl p-2.5 text-sm transition-colors sm:justify-start ${
                       isCurrent
-                        ? 'border-primary/40 bg-primary/5 text-primary'
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
                         : isDone
-                          ? 'border-transparent text-foreground hover:bg-muted'
-                          : 'border-transparent text-muted-foreground'
+                          ? 'text-foreground hover:bg-muted'
+                          : 'text-muted-foreground'
                     }`}
                   >
                     <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                        isCurrent || isDone ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
+                        isCurrent ? 'bg-foreground text-background' : isDone ? 'bg-muted text-foreground' : 'bg-background/60'
                       }`}
                     >
                       {index + 1}
                     </span>
-                    <span className="min-w-0 truncate font-medium">{step.title}</span>
+                    <span className="min-w-0 truncate font-medium max-sm:sr-only">{step.title}</span>
                   </button>
                 </li>
               )
@@ -1905,461 +1857,477 @@ export function HqSubscriptionsWorkspace({
           </ol>
 
           {/* Two-column: content + sticky summary */}
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="min-w-0 space-y-5">
-              <div className="space-y-1">
-                <h2
-                  id="subscription-step-heading"
-                  ref={stepHeadingRef}
-                  tabIndex={-1}
-                  className="scroll-mt-24 text-xl font-semibold focus:outline-none"
+          {/* No `items-start` here: the summary column must stretch so the
+              summary's `lg:sticky` has room to travel. */}
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-6">
+              <Panel>
+                <PanelSection
+                  label={
+                    <h2
+                      id="subscription-step-heading"
+                      ref={stepHeadingRef}
+                      tabIndex={-1}
+                      className="scroll-mt-24 focus:outline-none"
+                    >
+                      {activeStep.title}
+                    </h2>
+                  }
+                  caption={activeStep.description}
                 >
-                  {activeStep.title}
-                </h2>
-                <p className="text-sm text-muted-foreground">{activeStep.description}</p>
-              </div>
-
-              {/* Screen 1 — Confirm the plan */}
-              {activeStep.id === 'tier' && (
-                <Card>
-                  <CardContent className="space-y-4 pt-6">
-                    <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-muted/40 p-4">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold">
-                            {merchantTierStatus.plan?.name || 'No tier assigned'}
-                          </span>
-                          <Badge variant={merchantTierStatusVariant(merchantTierStatus.subscription_status)}>
-                            {merchantTierStatus.subscription_status || 'unassigned'}
-                          </Badge>
+                  {/* Screen 1 — Confirm the plan */}
+                  {activeStep.id === 'tier' && (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-muted/60 p-4">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2">
+                              <span className="text-lg font-semibold">
+                                {merchantTierStatus.plan?.name || 'No tier assigned'}
+                              </span>
+                              {/* On a muted card the status is plain text, not a pill (§3.5). */}
+                              <span className="text-sm text-muted-foreground">
+                                {merchantTierStatus.subscription_status || 'unassigned'}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-sm text-muted-foreground tabular-nums">
+                              {merchantTierStatus.plan?.max_locations == null || !merchantTierStatus.plan
+                                ? `${merchantTierStatus.active_location_count} active locations`
+                                : `${merchantTierStatus.active_location_count} of ${merchantTierStatus.plan.max_locations} locations`}
+                              {merchantTierStatus.is_over_limit && (
+                                <span className="ml-2 font-medium text-foreground">Over limit</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-semibold tabular-nums">
+                              {merchantTierStatus.plan
+                                ? merchantTierStatus.plan.monthly_price_cents > 0
+                                  ? formatTierPrice(merchantTierStatus.plan.monthly_price_cents)
+                                  : 'Free'
+                                : '—'}
+                            </div>
+                            {merchantTierStatus.current_period_end && (
+                              <div className="text-xs text-muted-foreground">
+                                Renews {formatDate(merchantTierStatus.current_period_end)}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          {merchantTierStatus.plan?.max_locations == null || !merchantTierStatus.plan
-                            ? `${merchantTierStatus.active_location_count} active locations`
-                            : `${merchantTierStatus.active_location_count} of ${merchantTierStatus.plan.max_locations} locations`}
-                          {merchantTierStatus.is_over_limit && (
-                            <span className="ml-2 font-medium text-destructive">Over limit</span>
+
+                        <p className="text-sm text-muted-foreground">
+                          The merchant-wide fee is set automatically by active locations. Locations pay separately
+                          for their stations, devices, and features. Usually you can just continue.
+                        </p>
+
+                        {merchantTierStatus.is_over_limit && recommendedMerchantTier && (
+                          <div className="rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+                            Recommended tier by location count:{' '}
+                            <span className="font-medium">{recommendedMerchantTier.display_name}</span>.
+                          </div>
+                        )}
+
+                        <details className="rounded-2xl border p-4">
+                          <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
+                            Advanced — change plan
+                          </summary>
+                          <div className="mt-4 space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              {merchantTierPlans.length === 0 && (
+                                <p className="col-span-full rounded-2xl bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+                                  No merchant tiers yet. Add them in the billing catalog.
+                                </p>
+                              )}
+                              {merchantTierPlans.map((plan) => {
+                                const isSelected = selectedMerchantTierPlanId === plan.id
+                                return (
+                                  <button
+                                    key={plan.id}
+                                    type="button"
+                                    aria-pressed={isSelected}
+                                    onClick={() => setSelectedMerchantTierPlanId(plan.id)}
+                                    className={`flex min-w-0 flex-col rounded-2xl p-4 text-left transition-colors ${
+                                      isSelected
+                                        ? 'bg-muted ring-1 ring-border'
+                                        : 'bg-muted/45 hover:bg-muted'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-medium">{plan.display_name}</span>
+                                      {isSelected && <span className="text-xs text-muted-foreground">Selected</span>}
+                                    </div>
+                                    <span className="mt-1 text-lg font-semibold tabular-nums">
+                                      {formatTierPrice(plan.monthly_price_cents)}
+                                    </span>
+                                    <span className="mt-1 text-xs text-muted-foreground">
+                                      {formatMerchantTierBillingUnit(plan)}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>Status</Label>
+                                <Select
+                                  value={merchantTierSubscriptionStatus}
+                                  onValueChange={(value) =>
+                                    setMerchantTierSubscriptionStatus(
+                                      value as 'active' | 'past_due' | 'suspended' | 'cancelled',
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="past_due">Past Due</SelectItem>
+                                    <SelectItem value="suspended">Suspended</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Current Period Start</Label>
+                                <Input
+                                  type="date"
+                                  value={merchantTierPeriodStart}
+                                  onChange={(event) => setMerchantTierPeriodStart(event.target.value)}
+                                />
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => handleSaveMerchantTier()}
+                              disabled={isPending || !selectedMerchantTierPlanId}
+                            >
+                              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              {merchantTierSubscriptionStatus === 'active'
+                                ? billingExemption.active
+                                  ? 'Update complimentary tier'
+                                  : 'Update tier & charge'
+                                : 'Update tier'}
+                            </Button>
+                          </div>
+                        </details>
+                      </div>
+                  )}
+
+                  {/* Screen 2 — Set up the location */}
+                  {activeStep.id === 'locations' && (
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <Label>Location</Label>
+                          <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select location" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {sortedLocations.map((location) => (
+                                <SelectItem key={location.id} value={location.id}>
+                                  {location.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {selectedLocationSubscription
+                              ? `Current: ${selectedLocationSubscription.status} · ${formatMoney(selectedLocationSubscription.monthly_amount)}/mo`
+                              : 'No subscription yet for this location.'}
+                            {selectedBillingProfile ? ' · Card ready' : ' · No card on file'}
+                          </p>
+                        </div>
+
+                        {/* Features */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1 text-sm font-medium">
+                            Features
+                            <InfoHint label="Optional software add-ons this location uses (loyalty, online ordering, …). Each is billed monthly to the location card." />
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {selectedServiceRows.filter((row) => row.service.service_category !== 'hardware').length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No features available. Add them in the billing catalog.</p>
+                            ) : (
+                              selectedServiceRows
+                                .filter((row) => row.service.service_category !== 'hardware')
+                                .map(({ service, enabled, comped, subtotal }) => (
+                                  <div key={service.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/45 p-3">
+                                    <label className="flex min-w-0 items-start gap-2.5">
+                                      <Checkbox
+                                        checked={enabled}
+                                        onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
+                                        className="mt-0.5"
+                                      />
+                                      <span className="min-w-0">
+                                        <span className="block text-sm font-medium">{service.display_name}</span>
+                                        <span className="block text-xs text-muted-foreground">{summarizePricing(service)}</span>
+                                      </span>
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      {service.pricing_model !== 'flat' && enabled && !comped ? (
+                                        <div className="flex items-center gap-1">
+                                          <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label={`Decrease ${service.display_name} quantity`} onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
+                                          <Input inputMode="numeric" aria-label={`${service.display_name} quantity`} className="h-7 w-12 px-1 text-center tabular-nums" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
+                                          <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label={`Increase ${service.display_name} quantity`} onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
+                                        </div>
+                                      ) : null}
+                                      {enabled ? (
+                                        <Button
+                                          type="button"
+                                          variant={comped ? 'outline' : 'ghost'}
+                                          size="sm"
+                                          aria-pressed={comped}
+                                          className={`h-7 px-2 text-xs ${comped ? 'text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                                          title="Grant this feature for free (entitled, not billed)"
+                                          onClick={() => updateServiceState(service.id, { comped: !comped })}
+                                        >
+                                          Free
+                                        </Button>
+                                      ) : null}
+                                      <span className="w-16 text-right text-sm font-medium tabular-nums">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
+                                    </div>
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Devices */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1 text-sm font-medium">
+                            Devices
+                            <InfoHint label="Hardware-linked charges. These sync from the location's deployed devices." />
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">Synced from deployed devices.</p>
+
+                          {/* Deployed-device count, for reference only. Devices are billed
+                              per-device via the explicit hardware services below — there is no
+                              automatic per-station charge. */}
+                          <div className="mt-3 flex items-start gap-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
+                            <span className="min-w-0">
+                              {activeStationCount === null
+                                ? 'Counting deployed POS tablets…'
+                                : `${activeStationCount} POS tablet${activeStationCount === 1 ? '' : 's'} deployed. Add per-device charges below — nothing is billed automatically.`}
+                            </span>
+                            <InfoHint label="Deployed device count, for reference only. Device charges are set explicitly below (e.g. POS Tablet, KDS); there is no automatic base or per-station charge." />
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            {selectedServiceRows.filter((row) => row.service.service_category === 'hardware').length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No additional device charges.</p>
+                            ) : (
+                              selectedServiceRows
+                                .filter((row) => row.service.service_category === 'hardware')
+                                .map(({ service, enabled, comped, subtotal }) => (
+                                  <div key={service.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/45 p-3">
+                                    <label className="flex min-w-0 items-start gap-2.5">
+                                      <Checkbox
+                                        checked={enabled}
+                                        onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
+                                        className="mt-0.5"
+                                      />
+                                      <span className="min-w-0">
+                                        <span className="block text-sm font-medium">{service.display_name}</span>
+                                        <span className="block text-xs text-muted-foreground">{summarizePricing(service)}</span>
+                                      </span>
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      {service.pricing_model !== 'flat' && enabled && !comped ? (
+                                        <div className="flex items-center gap-1">
+                                          <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label={`Decrease ${service.display_name} quantity`} onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
+                                          <Input inputMode="numeric" aria-label={`${service.display_name} quantity`} className="h-7 w-12 px-1 text-center tabular-nums" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
+                                          <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label={`Increase ${service.display_name} quantity`} onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
+                                        </div>
+                                      ) : null}
+                                      {enabled ? (
+                                        <Button
+                                          type="button"
+                                          variant={comped ? 'outline' : 'ghost'}
+                                          size="sm"
+                                          aria-pressed={comped}
+                                          className={`h-7 px-2 text-xs ${comped ? 'text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                                          title="Grant this feature for free (entitled, not billed)"
+                                          onClick={() => updateServiceState(service.id, { comped: !comped })}
+                                        >
+                                          Free
+                                        </Button>
+                                      ) : null}
+                                      <span className="w-16 text-right text-sm font-medium tabular-nums">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
+                                    </div>
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Advanced */}
+                        <details className="rounded-2xl border p-4">
+                          <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
+                            Advanced — status, periods &amp; grace
+                          </summary>
+                          <div className="mt-4 space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div className="space-y-2">
+                                <Label>Status</Label>
+                                <Select value={status} onValueChange={(value) => setStatus(value as SubscriptionStatus)}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="trial">Trial</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="past_due">Past Due</SelectItem>
+                                    <SelectItem value="suspended">Suspended</SelectItem>
+                                    <SelectItem value="canceled">Canceled</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Current Period Start</Label>
+                                <Input type="date" value={currentPeriodStart} onChange={(event) => setCurrentPeriodStart(event.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Next Billing Date</Label>
+                                <Input type="date" value={nextBillingDate} onChange={(event) => setNextBillingDate(event.target.value)} />
+                              </div>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:items-end">
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-grace-until">Grace period until</Label>
+                                <Input id="edit-grace-until" type="datetime-local" value={gracePeriodEndsAt} onChange={(event) => setGracePeriodEndsAt(event.target.value)} disabled={!selectedLocationSubscription} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-grace-reason">Reason</Label>
+                                <Input id="edit-grace-reason" value={graceReason} onChange={(event) => setGraceReason(event.target.value)} placeholder="Approved extension or billing exception" disabled={!selectedLocationSubscription} />
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button type="button" variant="outline" onClick={() => saveGracePeriod(false)} disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}>
+                                  Extend grace
+                                </Button>
+                                {selectedLocationSubscription?.grace_period_ends_at ? (
+                                  <Button type="button" variant="ghost" onClick={() => saveGracePeriod(true)} disabled={isPending}>
+                                    Clear
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                  )}
+
+                  {/* Screen 3 — Review & charge */}
+                  {activeStep.id === 'review' && (
+                        <div className="space-y-4">
+                          {!selectedBillingProfile && status === 'active' && !billingExemption.active && (
+                            <div className="flex flex-col gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm sm:flex-row sm:items-start sm:justify-between">
+                              <span className="flex items-start gap-2">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span>
+                                  No card on file for {selectedLocation?.name ?? 'this location'}. Add one before charging.
+                                </span>
+                              </span>
+                              <span className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8"
+                                  asChild
+                                >
+                                  <Link
+                                    href={`/manage/merchants/${merchant.id}/billing${selectedLocation ? `?billingScope=${selectedLocation.id}` : ''}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <CreditCard className="mr-1.5 h-4 w-4" />
+                                    Add a card
+                                    <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8"
+                                  onClick={() => refresh()}
+                                  disabled={isPending}
+                                >
+                                  <RefreshCcw className={`mr-1.5 h-4 w-4${isPending ? ' animate-spin' : ''}`} />
+                                  Refresh
+                                </Button>
+                              </span>
+                            </div>
+                          )}
+                          {billingExemption.active && (
+                            <div className="flex items-start gap-2 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+                              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                              This merchant is billing exempt. Services activate without an invoice or charge.
+                            </div>
+                          )}
+                          {/* The quote is a receipt-style summary, not a record table: an
+                              inset well of label/amount rows, spaced rather than ruled (§5.5). */}
+                          <div className="space-y-2 rounded-2xl bg-muted/60 p-4 text-sm">
+                            {quote && (quote.line_items ?? []).length === 0 && (
+                              <p className="text-muted-foreground">No billable items selected yet.</p>
+                            )}
+                            {!quote && quoteError && !isQuoteLoading && (
+                              <p className="text-muted-foreground">We couldn&apos;t calculate this quote. {quoteError}</p>
+                            )}
+                            {(quote?.line_items ?? []).map((item, index) => (
+                              <div key={index} className="flex items-start justify-between gap-3">
+                                <span className="min-w-0 text-muted-foreground">
+                                  {readQuoteLineString(item, ['description', 'label', 'name'], 'Item')}
+                                </span>
+                                <span className="shrink-0 text-right font-medium tabular-nums">
+                                  {formatMoney(readQuoteLineNumber(item, ['amount', 'total', 'line_total', 'subtotal']))}
+                                </span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between gap-3 pt-2">
+                              <span className="text-muted-foreground">Subtotal</span>
+                              <span className="tabular-nums">{quote ? formatMoney(quote.subtotal ?? 0) : '—'}</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="text-muted-foreground">Card surcharge</span>
+                              <span className="tabular-nums">{quote ? formatMoney(quote.card_surcharge ?? 0) : '—'}</span>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-3 pt-2">
+                              <span className="font-semibold">Total</span>
+                              <span className="text-base font-semibold tabular-nums">{quote ? formatMoney(quote.total_amount ?? 0) : '—'}</span>
+                            </div>
+                          </div>
+                          {billingExemption.active ? (
+                            <p className="text-sm text-muted-foreground">
+                              No charge is made while the exemption is active. Services are saved and
+                              activated immediately.
+                            </p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              We&apos;ll charge{' '}
+                              <span className="font-medium text-foreground">{buildPaymentMethodLabel(selectedBillingProfile)}</span>{' '}
+                              {formatMoney(quote?.total_amount ?? 0)} today for the first month, then the same amount
+                              every month starting{' '}
+                              <span className="font-medium text-foreground">{formatDate(nextBillingDate)}</span> (one month
+                              from today).
+                            </p>
                           )}
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-semibold">
-                          {merchantTierStatus.plan
-                            ? merchantTierStatus.plan.monthly_price_cents > 0
-                              ? formatTierPrice(merchantTierStatus.plan.monthly_price_cents)
-                              : 'Free'
-                            : '—'}
-                        </div>
-                        {merchantTierStatus.current_period_end && (
-                          <div className="text-xs text-muted-foreground">
-                            Renews {formatDate(merchantTierStatus.current_period_end)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  )}
+                </PanelSection>
+              </Panel>
 
-                    <p className="text-sm text-muted-foreground">
-                      The merchant-wide fee is set automatically by active locations. Locations pay separately
-                      for their stations, devices, and features. Usually you can just continue.
-                    </p>
-
-                    {merchantTierStatus.is_over_limit && recommendedMerchantTier && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                        Recommended tier by location count:{' '}
-                        <span className="font-medium">{recommendedMerchantTier.display_name}</span>.
-                      </div>
-                    )}
-
-                    <details className="rounded-xl border p-3">
-                      <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
-                        Advanced — change plan
-                      </summary>
-                      <div className="mt-4 space-y-4">
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                          {merchantTierPlans.map((plan) => {
-                            const isSelected = selectedMerchantTierPlanId === plan.id
-                            return (
-                              <button
-                                key={plan.id}
-                                type="button"
-                                onClick={() => setSelectedMerchantTierPlanId(plan.id)}
-                                className={`flex flex-col rounded-xl border p-4 text-left transition-colors ${
-                                  isSelected
-                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                    : 'hover:border-primary/40'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-medium">{plan.display_name}</span>
-                                  {isSelected && <Badge>Selected</Badge>}
-                                </div>
-                                <span className="mt-1 text-lg font-semibold">
-                                  {formatTierPrice(plan.monthly_price_cents)}
-                                </span>
-                                <span className="mt-1 text-xs text-muted-foreground">
-                                  {formatMerchantTierBillingUnit(plan)}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Status</Label>
-                            <Select
-                              value={merchantTierSubscriptionStatus}
-                              onValueChange={(value) =>
-                                setMerchantTierSubscriptionStatus(
-                                  value as 'active' | 'past_due' | 'suspended' | 'cancelled',
-                                )
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="past_due">Past Due</SelectItem>
-                                <SelectItem value="suspended">Suspended</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Current Period Start</Label>
-                            <Input
-                              type="date"
-                              value={merchantTierPeriodStart}
-                              onChange={(event) => setMerchantTierPeriodStart(event.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => handleSaveMerchantTier()}
-                          disabled={isPending || !selectedMerchantTierPlanId}
-                        >
-                          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          {merchantTierSubscriptionStatus === 'active'
-                            ? billingExemption.active
-                              ? 'Update complimentary tier'
-                              : 'Update tier & charge'
-                            : 'Update tier'}
-                        </Button>
-                      </div>
-                    </details>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Screen 2 — Set up the location */}
-              {activeStep.id === 'locations' && (
-                <Card>
-                  <CardContent className="space-y-5 pt-6">
-                    <div className="space-y-2">
-                      <Label>Location</Label>
-                      <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select location" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sortedLocations.map((location) => (
-                            <SelectItem key={location.id} value={location.id}>
-                              {location.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedLocationSubscription
-                          ? `Current: ${selectedLocationSubscription.status} · ${formatMoney(selectedLocationSubscription.monthly_amount)}/mo`
-                          : 'No subscription yet for this location.'}
-                        {selectedBillingProfile ? ' · Card ready' : ' · No card on file'}
-                      </p>
-                    </div>
-
-                    {/* Features */}
-                    <div className="rounded-xl border p-4">
-                      <div className="flex items-center gap-1 text-sm font-medium">
-                        Features
-                        <InfoHint label="Optional software add-ons this location uses (loyalty, online ordering, …). Each is billed monthly to the location card." />
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {selectedServiceRows.filter((row) => row.service.service_category !== 'hardware').length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No features available. Add them in the billing catalog.</p>
-                        ) : (
-                          selectedServiceRows
-                            .filter((row) => row.service.service_category !== 'hardware')
-                            .map(({ service, enabled, comped, subtotal }) => (
-                              <div key={service.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
-                                <label className="flex min-w-0 items-start gap-2.5">
-                                  <Checkbox
-                                    checked={enabled}
-                                    onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
-                                    className="mt-0.5"
-                                  />
-                                  <span className="min-w-0">
-                                    <span className="block text-sm font-medium">{service.display_name}</span>
-                                    <span className="block text-xs text-muted-foreground">{summarizePricing(service)}</span>
-                                  </span>
-                                </label>
-                                <div className="flex items-center gap-2">
-                                  {service.pricing_model !== 'flat' && enabled && !comped ? (
-                                    <div className="flex items-center gap-1">
-                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
-                                      <Input inputMode="numeric" className="h-7 w-12 text-center" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
-                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
-                                    </div>
-                                  ) : null}
-                                  {enabled ? (
-                                    <Button
-                                      type="button"
-                                      variant={comped ? 'default' : 'outline'}
-                                      size="sm"
-                                      className="h-7 px-2 text-xs"
-                                      title="Grant this feature for free (entitled, not billed)"
-                                      onClick={() => updateServiceState(service.id, { comped: !comped })}
-                                    >
-                                      Free
-                                    </Button>
-                                  ) : null}
-                                  <span className="w-16 text-right text-sm font-medium">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
-                                </div>
-                              </div>
-                            ))
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Devices */}
-                    <div className="rounded-xl border p-4">
-                      <div className="flex items-center gap-1 text-sm font-medium">
-                        Devices
-                        <InfoHint label="Hardware-linked charges. These sync from the location's deployed devices." />
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">Synced from deployed devices.</p>
-
-                      {/* Deployed-device count, for reference only. Devices are billed
-                          per-device via the explicit hardware services below — there is no
-                          automatic per-station charge. */}
-                      <div className="mt-3 flex items-start gap-1.5 rounded-lg border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
-                        <span className="min-w-0">
-                          {activeStationCount === null
-                            ? 'Counting deployed POS tablets…'
-                            : `${activeStationCount} POS tablet${activeStationCount === 1 ? '' : 's'} deployed. Add per-device charges below — nothing is billed automatically.`}
-                        </span>
-                        <InfoHint label="Deployed device count, for reference only. Device charges are set explicitly below (e.g. POS Tablet, KDS); there is no automatic base or per-station charge." />
-                      </div>
-
-                      <div className="mt-3 space-y-2">
-                        {selectedServiceRows.filter((row) => row.service.service_category === 'hardware').length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No additional device charges.</p>
-                        ) : (
-                          selectedServiceRows
-                            .filter((row) => row.service.service_category === 'hardware')
-                            .map(({ service, enabled, comped, subtotal }) => (
-                              <div key={service.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
-                                <label className="flex min-w-0 items-start gap-2.5">
-                                  <Checkbox
-                                    checked={enabled}
-                                    onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
-                                    className="mt-0.5"
-                                  />
-                                  <span className="min-w-0">
-                                    <span className="block text-sm font-medium">{service.display_name}</span>
-                                    <span className="block text-xs text-muted-foreground">{summarizePricing(service)}</span>
-                                  </span>
-                                </label>
-                                <div className="flex items-center gap-2">
-                                  {service.pricing_model !== 'flat' && enabled && !comped ? (
-                                    <div className="flex items-center gap-1">
-                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
-                                      <Input inputMode="numeric" className="h-7 w-12 text-center" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
-                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
-                                    </div>
-                                  ) : null}
-                                  {enabled ? (
-                                    <Button
-                                      type="button"
-                                      variant={comped ? 'default' : 'outline'}
-                                      size="sm"
-                                      className="h-7 px-2 text-xs"
-                                      title="Grant this feature for free (entitled, not billed)"
-                                      onClick={() => updateServiceState(service.id, { comped: !comped })}
-                                    >
-                                      Free
-                                    </Button>
-                                  ) : null}
-                                  <span className="w-16 text-right text-sm font-medium">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
-                                </div>
-                              </div>
-                            ))
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Advanced */}
-                    <details className="rounded-xl border p-3">
-                      <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
-                        Advanced — status, periods &amp; grace
-                      </summary>
-                      <div className="mt-4 space-y-4">
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="space-y-2">
-                            <Label>Status</Label>
-                            <Select value={status} onValueChange={(value) => setStatus(value as SubscriptionStatus)}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="trial">Trial</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="past_due">Past Due</SelectItem>
-                                <SelectItem value="suspended">Suspended</SelectItem>
-                                <SelectItem value="canceled">Canceled</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Current Period Start</Label>
-                            <Input type="date" value={currentPeriodStart} onChange={(event) => setCurrentPeriodStart(event.target.value)} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Next Billing Date</Label>
-                            <Input type="date" value={nextBillingDate} onChange={(event) => setNextBillingDate(event.target.value)} />
-                          </div>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:items-end">
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-grace-until">Grace period until</Label>
-                            <Input id="edit-grace-until" type="datetime-local" value={gracePeriodEndsAt} onChange={(event) => setGracePeriodEndsAt(event.target.value)} disabled={!selectedLocationSubscription} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="edit-grace-reason">Reason</Label>
-                            <Input id="edit-grace-reason" value={graceReason} onChange={(event) => setGraceReason(event.target.value)} placeholder="Approved extension or billing exception" disabled={!selectedLocationSubscription} />
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" onClick={() => saveGracePeriod(false)} disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}>
-                              Extend grace
-                            </Button>
-                            {selectedLocationSubscription?.grace_period_ends_at ? (
-                              <Button type="button" variant="ghost" onClick={() => saveGracePeriod(true)} disabled={isPending}>
-                                Clear
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </details>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Screen 3 — Review & charge */}
+              {/* Billing history owns its own panel, so it sits beside the step
+                  panel rather than inside it (never a panel in a panel). */}
               {activeStep.id === 'review' && (
-                <div className="space-y-5">
-                  <Card>
-                    <CardContent className="space-y-4 pt-6">
-                      {!selectedBillingProfile && status === 'active' && !billingExemption.active && (
-                        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 sm:flex-row sm:items-start sm:justify-between">
-                          <span className="flex items-start gap-2">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span>
-                              No card on file for {selectedLocation?.name ?? 'this location'}. Add one before charging.
-                            </span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2 sm:pl-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="h-8 bg-amber-600 text-white hover:bg-amber-700"
-                              asChild
-                            >
-                              <Link
-                                href={`/manage/merchants/${merchant.id}/billing${selectedLocation ? `?billingScope=${selectedLocation.id}` : ''}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <CreditCard className="mr-1.5 h-4 w-4" />
-                                Add a card
-                                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
-                              </Link>
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
-                              onClick={() => refresh()}
-                              disabled={isPending}
-                            >
-                              <RefreshCcw className={`mr-1.5 h-4 w-4${isPending ? ' animate-spin' : ''}`} />
-                              Refresh
-                            </Button>
-                          </span>
-                        </div>
-                      )}
-                      {billingExemption.active && (
-                        <div className="flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50/60 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                          This merchant is billing exempt. Services activate without an invoice or charge.
-                        </div>
-                      )}
-                      <div className="overflow-hidden rounded-xl border">
-                        <table className="w-full text-sm">
-                          <tbody>
-                            {(quote?.line_items ?? []).map((item, index) => (
-                              <tr key={index} className="border-b last:border-0">
-                                <td className="px-3 py-2 text-muted-foreground">
-                                  {readQuoteLineString(item, ['description', 'label', 'name'], 'Item')}
-                                </td>
-                                <td className="px-3 py-2 text-right font-medium">
-                                  {formatMoney(readQuoteLineNumber(item, ['amount', 'total', 'line_total', 'subtotal']))}
-                                </td>
-                              </tr>
-                            ))}
-                            <tr className="border-b">
-                              <td className="px-3 py-2 text-muted-foreground">Subtotal</td>
-                              <td className="px-3 py-2 text-right">{formatMoney(quote?.subtotal ?? 0)}</td>
-                            </tr>
-                            <tr className="border-b">
-                              <td className="px-3 py-2 text-muted-foreground">Card surcharge</td>
-                              <td className="px-3 py-2 text-right">{formatMoney(quote?.card_surcharge ?? 0)}</td>
-                            </tr>
-                            <tr>
-                              <td className="px-3 py-2 font-semibold">Total</td>
-                              <td className="px-3 py-2 text-right text-base font-semibold">{formatMoney(quote?.total_amount ?? 0)}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      {billingExemption.active ? (
-                        <p className="text-sm text-muted-foreground">
-                          No charge is made while the exemption is active. Services are saved and
-                          activated immediately.
-                        </p>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          We&apos;ll charge{' '}
-                          <span className="font-medium text-foreground">{buildPaymentMethodLabel(selectedBillingProfile)}</span>{' '}
-                          {formatMoney(quote?.total_amount ?? 0)} today for the first month, then the same amount
-                          every month starting{' '}
-                          <span className="font-medium text-foreground">{formatDate(nextBillingDate)}</span> (one month
-                          from today).
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <BillingHistorySection
-                    invoices={filteredInvoices}
-                    invoiceActionId={invoiceActionId}
-                    isBusy={isPending}
-                    onPreview={handlePreviewInvoice}
-                    onDownload={handleDownloadInvoice}
-                    onCharge={handleChargeInvoice}
-                    limit={3}
-                  />
-                </div>
+                <BillingHistorySection
+                  invoices={filteredInvoices}
+                  invoiceActionId={invoiceActionId}
+                  isBusy={isPending}
+                  onPreview={handlePreviewInvoice}
+                  onDownload={handleDownloadInvoice}
+                  onCharge={handleChargeInvoice}
+                  limit={3}
+                />
               )}
             </div>
 
@@ -2384,7 +2352,9 @@ export function HqSubscriptionsWorkspace({
           </div>
 
           {/* Single sticky action bar — the only navigation */}
-          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 border-t bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          {/* Opaque canvas fill, no rule (§5.5): the bar separates from the
+              content scrolling beneath it by surface, not a line. */}
+          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 bg-background px-1 py-3">
             {currentStep > 0 ? (
               <Button variant="outline" onClick={() => changeStep(currentStep - 1)} disabled={isPending}>
                 <ChevronLeft className="mr-1 h-4 w-4" />
@@ -2418,24 +2388,30 @@ export function HqSubscriptionsWorkspace({
       )}
 
       <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
+        <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[90vh] sm:w-full sm:max-w-5xl sm:rounded-3xl">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Invoice Preview</DialogTitle>
             <DialogDescription>
               Preview the customer-facing subscription invoice layout before downloading it.
             </DialogDescription>
           </DialogHeader>
-          {invoicePreviewDocument ? (
-            <div className="overflow-hidden rounded-md border">
-              <iframe
-                title="Subscription invoice preview"
-                srcDoc={invoicePreviewHtml}
-                className="h-[720px] w-full bg-white"
-              />
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">No invoice selected.</div>
-          )}
+          <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
+            {invoicePreviewDocument ? (
+              <div className="overflow-hidden rounded-2xl border">
+                {/* The invoice is a printable document, so its paper stays white
+                    in both themes (§8: receipt/print views). */}
+                <iframe
+                  title="Subscription invoice preview"
+                  srcDoc={invoicePreviewHtml}
+                  className="h-[720px] w-full bg-white"
+                />
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
+                No invoice selected.
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -17,8 +17,8 @@ import { usePlatformAuditLogs } from '@/lib/queries/use-platform-analytics'
 import type { PlatformAuditLogRow } from '@/app/manage/actions/hq-platform/analytics'
 import type { MerchantsModel } from '@/types/db-modles'
 
-/** How many events one page of the table holds. */
-const PAGE_SIZE = 25
+/** How many events one page of the table holds — §5.7 caps a data table at 10. */
+const PAGE_SIZE = 10
 
 /**
  * Turns `created_menu_item` into `Created menu item`.

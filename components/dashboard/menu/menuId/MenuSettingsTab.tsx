@@ -80,7 +80,7 @@ export function MenuSettingsTab({
     return (
         <Panel>
             {/* Status */}
-            <PanelSection
+            <PanelSection showCaptionOnMobile
                 icon={Power}
                 label="Menu Status"
                 caption={

@@ -1,7 +1,5 @@
-import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
+import { TransactionsPageSkeleton } from './components/TransactionsPageSkeleton'
 
 export default function RouteLoading() {
-  return (
-    <DataPageSkeleton variant="analytics" shell="plain" label="Loading transactions" />
-  )
+  return <TransactionsPageSkeleton />
 }

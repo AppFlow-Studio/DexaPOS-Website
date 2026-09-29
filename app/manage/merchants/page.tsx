@@ -81,14 +81,16 @@ export default function MerchantsPage() {
         isManagerScoped ? merchantAccess?.map((access) => access.merchantId) : undefined
 
     // Fetch data with role-based filtering
+    // 10 per page, like every table (UI-DESIGN-SYSTEM §5.7); the grid view shares the page.
+    const pageSize = 10
     const { data, isLoading, isFetching, refetch } = useMerchants(
         activeFilters,
         page,
-        accessibleMerchantIds
+        accessibleMerchantIds,
+        pageSize
     )
     const { data: stats, isLoading: statsLoading } = useMerchantStats()
 
-    const pageSize = 20
     const totalPages = data ? Math.ceil(data.total / pageSize) : 0
 
     const handleFilterChange = (key: keyof MerchantFilters, value: string) => {

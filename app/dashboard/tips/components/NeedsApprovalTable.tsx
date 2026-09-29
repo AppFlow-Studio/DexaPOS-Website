@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Eye, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,9 @@ import {
 } from "@/components/ui/table";
 import { formatMoney, formatDate, SHIFT_LABELS } from "../lib/constants";
 import { cn } from "@/lib/utils";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
+import { useLocationStore } from "@/stores/location-store";
 import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 
 interface NeedsApprovalTableProps {
@@ -28,6 +32,13 @@ export function NeedsApprovalTable({
   onVoid,
 }: NeedsApprovalTableProps) {
   const router = useRouter();
+  const { pageRows, pagination, setPage } = useClientPagination(sessions, 10);
+
+  // A location switch starts the list from the top.
+  const selectedLocationId = useLocationStore((s) => s.selectedLocationId);
+  useEffect(() => {
+    setPage(1);
+  }, [selectedLocationId, setPage]);
 
   if (isLoading) {
     return (
@@ -88,7 +99,7 @@ export function NeedsApprovalTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sessions.map((session) => {
+          {pageRows.map((session) => {
             const variance = session.total_tips_collected - session.total_distributed;
             return (
               <TableRow key={session.id}>
@@ -147,7 +158,7 @@ export function NeedsApprovalTable({
 
       {/* Phones and tablets: cards instead of a scrolling table. */}
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-        {sessions.map((session) => {
+        {pageRows.map((session) => {
           const variance = session.total_tips_collected - session.total_distributed;
           return (
             <article
@@ -218,6 +229,12 @@ export function NeedsApprovalTable({
           );
         })}
       </div>
+
+      <PaginationBar
+        pagination={pagination}
+        onPageChange={setPage}
+        itemLabel="sessions"
+      />
     </>
   );
 }

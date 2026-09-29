@@ -67,7 +67,7 @@ export function TodayHeader({
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         label={displayDate}
         caption={locationName}
         action={

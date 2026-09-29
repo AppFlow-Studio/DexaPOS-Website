@@ -11,6 +11,8 @@ import {
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import {
@@ -177,6 +179,14 @@ export function PaymentTerminalHealthMonitor() {
       return matchesStatus && matchesSearch
     })
   }, [data?.terminals, filterStatus, search])
+  const orphanTerminals = useMemo(
+    () => (data?.terminals ?? []).filter(t => t.isOrphan),
+    [data?.terminals]
+  )
+  // Both tables page at 10 (§5.7). Hooks sit above the early returns.
+  const terminalPage = useClientPagination(filteredTerminals, 10)
+  const orphanPage = useClientPagination(orphanTerminals, 10)
+  const setTerminalPage = terminalPage.setPage
 
   if (isLoading) {
     return (
@@ -196,7 +206,6 @@ export function PaymentTerminalHealthMonitor() {
     ? Math.round((summary.connected / summary.total) * 1000) / 10
     : 0
 
-  const orphanTerminals = data.terminals.filter(t => t.isOrphan)
   const hasAlerts = summary.settlementOverdue > 0 || summary.orphans > 0 || summary.authKeysMissing > 0
   const actionRequired = (
     <div className="space-y-1">
@@ -327,11 +336,11 @@ export function PaymentTerminalHealthMonitor() {
                 <Input
                   placeholder="Search terminals…"
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => { setSearch(e.target.value); setTerminalPage(1) }}
                   className="h-9 w-44 rounded-full pl-9"
                 />
               </div>
-              <Select value={filterStatus} onValueChange={v => setFilterStatus(v as FilterStatus)}>
+              <Select value={filterStatus} onValueChange={v => { setFilterStatus(v as FilterStatus); setTerminalPage(1) }}>
                 <SelectTrigger className="h-9 w-36 rounded-full border-0 bg-muted/60 px-3 shadow-none">
                   <SelectValue />
                 </SelectTrigger>
@@ -364,7 +373,7 @@ export function PaymentTerminalHealthMonitor() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTerminals.map(t => (
+              {terminalPage.pageRows.map(t => (
                 <TerminalRow key={t.id} terminal={t} showCol={showCol} />
               ))}
               {filteredTerminals.length === 0 && (
@@ -378,6 +387,11 @@ export function PaymentTerminalHealthMonitor() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={terminalPage.pagination}
+            onPageChange={terminalPage.setPage}
+            itemLabel="terminals"
+          />
         </PanelSection>
       </Panel>
 
@@ -408,7 +422,7 @@ export function PaymentTerminalHealthMonitor() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orphanTerminals.map(t => (
+                {orphanPage.pageRows.map(t => (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.terminalName}</TableCell>
                     {showOrphanCol('tpn') && (
@@ -437,6 +451,11 @@ export function PaymentTerminalHealthMonitor() {
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              pagination={orphanPage.pagination}
+              onPageChange={orphanPage.setPage}
+              itemLabel="terminals"
+            />
           </PanelSection>
         </Panel>
       )}

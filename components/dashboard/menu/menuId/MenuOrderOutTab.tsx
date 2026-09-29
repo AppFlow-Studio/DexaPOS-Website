@@ -207,7 +207,7 @@ export function MenuOrderOutTab({
                   : "Never"
               }
             />
-            <StatTile
+            <StatTile showMetaOnMobile
               label="Items Synced"
               value={lastSync?.itemsSynced ?? 0}
               meta={

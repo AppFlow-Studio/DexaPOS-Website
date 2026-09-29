@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useVoidRefundIntelligence } from '@/lib/queries/use-platform-analytics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -11,6 +11,8 @@ import {
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Ban, ListFilter, Users } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
@@ -45,6 +47,9 @@ const STAFF_VOID_COLUMNS: ReportColumn[] = [
   { id: 'voidsPerOrder', label: 'Voids / Order' },
 ]
 
+const EMPTY_ANOMALIES: VoidAnomalyMerchant[] = []
+const EMPTY_STAFF: StaffVoidEntry[] = []
+
 /** `days` comes from the Revenue & Risk tab's shared period picker. */
 export function VoidRefundIntelligence({ days }: { days: number }) {
   const { data, isLoading } = useVoidRefundIntelligence(days)
@@ -57,6 +62,16 @@ export function VoidRefundIntelligence({ days }: { days: number }) {
     initialHiddenColumns(STAFF_VOID_COLUMNS)
   )
   const showStaffCol = (id: string) => !isMobile || !hiddenStaffCols.has(id)
+  // Both tables page at 10 (§5.7). Hooks sit above the early returns.
+  const merchantPage = useClientPagination(data?.merchantAnomalies ?? EMPTY_ANOMALIES, 10)
+  const staffPage = useClientPagination(data?.staffVoidLeaderboard ?? EMPTY_STAFF, 10)
+  const setMerchantPage = merchantPage.setPage
+  const setStaffPage = staffPage.setPage
+  // A new period is a new ranking — start both lists from the top.
+  useEffect(() => {
+    setMerchantPage(1)
+    setStaffPage(1)
+  }, [days, setMerchantPage, setStaffPage])
 
   if (isLoading) {
     return (
@@ -144,7 +159,7 @@ export function VoidRefundIntelligence({ days }: { days: number }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.merchantAnomalies.slice(0, 12).map((m: VoidAnomalyMerchant) => (
+              {merchantPage.pageRows.map((m: VoidAnomalyMerchant) => (
                 <TableRow key={m.merchantId}>
                   <TableCell>{m.merchantName}</TableCell>
                   {showCol('voidRate') && (
@@ -181,6 +196,11 @@ export function VoidRefundIntelligence({ days }: { days: number }) {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={merchantPage.pagination}
+            onPageChange={merchantPage.setPage}
+            itemLabel="merchants"
+          />
         </PanelSection>
       </Panel>
 
@@ -212,9 +232,13 @@ export function VoidRefundIntelligence({ days }: { days: number }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.staffVoidLeaderboard.map((s: StaffVoidEntry, idx: number) => (
+                {staffPage.pageRows.map((s: StaffVoidEntry, idx: number) => (
                   <TableRow key={s.staffId}>
-                    {!isMobile && <TableCell className="tabular-nums text-muted-foreground">{idx + 1}</TableCell>}
+                    {!isMobile && (
+                      <TableCell className="tabular-nums text-muted-foreground">
+                        {(staffPage.pagination.page - 1) * staffPage.pagination.pageSize + idx + 1}
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{s.staffName}</TableCell>
                     {showStaffCol('merchant') && <TableCell className="text-muted-foreground">{s.merchantName}</TableCell>}
                     {showStaffCol('voidCount') && (
@@ -230,6 +254,11 @@ export function VoidRefundIntelligence({ days }: { days: number }) {
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              pagination={staffPage.pagination}
+              onPageChange={staffPage.setPage}
+              itemLabel="staff"
+            />
           </PanelSection>
         </Panel>
       )}

@@ -36,7 +36,7 @@ export function TimesheetStats({
           icon={<Clock3 />}
           isLoading={isLoading}
         />
-        <StatTile
+        <StatTile showMetaOnMobile
           label="Overtime hours"
           value={t ? formatHours(t.otMinutes) : "—"}
           meta={
@@ -49,7 +49,7 @@ export function TimesheetStats({
           icon={<Timer />}
           isLoading={isLoading}
         />
-        <StatTile
+        <StatTile showMetaOnMobile
           label="Estimated labor cost"
           value={t ? formatMoney(t.laborCents) : "—"}
           meta={

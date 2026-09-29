@@ -60,7 +60,7 @@ Regenerate the raw numbers with `scripts/hq-audit.sh` (see below).
 | 2 — Merchant + org operations | 6 | PR 2 | Includes ★ `/manage/organizations/create-organization`. **All 6 converted** — see Family 2 status below. |
 | 3 — Merchant detail workspace | 7 | PR 3a…n | 99 files under `app/manage/merchants/[merchantId]/**`. **Split by tab** — a single diff is not reviewable. Includes ★ `…/locations/new`. |
 | 4 — Money movement + billing | 8 | PR 4 | `/manage/cash-drawers` is a 7-line wrapper; real work is in `components/CashDrawerAnalytics`. |
-| 5 — Internal operations | 12 | PR 5 | Includes ★ `/manage/profile` and ★ `/manage/audit-logs/impersonation`. **Also rewrite the hand-rolled skeletons** for `support` and `users` (see `UI-DESIGN-SYSTEM.md` §14.4). |
+| 5 — Internal operations | 12 | PR 5 | Includes ★ `/manage/profile` and ★ `/manage/audit-logs/impersonation` (**converted 2026-09-29**). **Also rewrite the hand-rolled skeletons** for `support` and `users` (see `UI-DESIGN-SYSTEM.md` §14.4). |
 | 6 — Devices + configuration | 7 | PR 6 | Includes ★ `/manage/devices/overview` and ★ `/manage/settings/integrations`. `/manage/settings` is a bare `redirect()` — **no change**. |
 | — | 1 | — | `/manage/unauthorized`: 113 lines, 8 cards, no `<h1>`. Minimal error surface; assess for **intentional exception** vs. light conversion. |
 

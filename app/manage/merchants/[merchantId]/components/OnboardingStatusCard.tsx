@@ -73,14 +73,11 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         label="Merchant Status"
         caption={
           <span className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="secondary"
-              className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize"
-            >
+            <Badge variant="outline" className="capitalize">
               {statusMeta.label}
             </Badge>
             <span>{statusMeta.description}</span>
@@ -103,7 +100,7 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
           <ChecklistRow label="First payment processed" done={checklist.firstPayment} />
 
           {merchant.activated_at && (
-            <div className="pt-1 text-xs text-muted-foreground">
+            <div className="pt-1 text-xs text-muted-foreground tabular-nums">
               Activated: {new Date(merchant.activated_at).toLocaleString()}
             </div>
           )}

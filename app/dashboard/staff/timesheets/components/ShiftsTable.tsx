@@ -1,8 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Eye, Moon, MoreHorizontal, Pencil } from "lucide-react";
 
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -115,6 +117,15 @@ export function ShiftsTable({
 }) {
   const showSkeleton = isLoading && shifts.length === 0;
   const nameOf = (shift: TimesheetShift) => people.get(shift.staffProfileId)?.displayName ?? "Unknown";
+  const { pageRows, pagination, setPage } = useClientPagination(shifts, 10);
+
+  // The page owns search/review/member/period/location, so a change to any of
+  // them shows up here as a different list of shifts: start again from the top.
+  // An adjusted shift keeps its id, so editing one does not jump the page.
+  const shiftIdsKey = shifts.map((s) => s.id).join(",");
+  useEffect(() => {
+    setPage(1);
+  }, [shiftIdsKey, setPage]);
 
   return (
     <div className={cn("min-w-0 transition-opacity", isStale && "opacity-60")} aria-busy={isLoading || isStale}>
@@ -151,7 +162,7 @@ export function ShiftsTable({
               </TableCell>
             </TableRow>
           ) : (
-            shifts.map((shift) => (
+            pageRows.map((shift) => (
               <TableRow key={shift.id} className="border-0">
                 <TableCell className="pl-4 font-medium">{nameOf(shift)}</TableCell>
                 <TableCell className="tabular-nums">{formatStampAt(shift.clockIn, timeZone)}</TableCell>
@@ -213,7 +224,7 @@ export function ShiftsTable({
             {empty}
           </div>
         ) : (
-          shifts.map((shift) => (
+          pageRows.map((shift) => (
             <article key={shift.id} className="min-w-0 space-y-3 rounded-2xl border-0 bg-muted/45 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -247,6 +258,8 @@ export function ShiftsTable({
           ))
         )}
       </div>
+
+      <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="shifts" />
     </div>
   );
 }

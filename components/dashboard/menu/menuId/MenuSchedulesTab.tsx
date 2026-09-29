@@ -60,7 +60,7 @@ export function MenuSchedulesTab({
 
             {/* Schedule Cards */}
             <Panel>
-                <PanelSection
+                <PanelSection showCaptionOnMobile
                     icon={Calendar}
                     label="Assigned Schedule"
                     action={

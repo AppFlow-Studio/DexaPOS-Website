@@ -83,7 +83,7 @@ export function OrderTypeChart({ data, isLoading }: OrderTypeChartProps) {
 
   return (
     <Panel className="h-full">
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={ChartPie}
         label="Order sources"
         caption={`${total.toLocaleString()} total orders by fulfillment type.`}

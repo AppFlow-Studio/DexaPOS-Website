@@ -416,7 +416,7 @@ export default function ServiceChargePage() {
         <>
           {isInheriting && !overrideMode && (
             <Panel>
-              <PanelSection
+              <PanelSection showCaptionOnMobile
                 icon={MapPin}
                 label={`${selectedLocation?.name ?? "This location"} — inheriting from Global`}
                 caption={
@@ -428,7 +428,7 @@ export default function ServiceChargePage() {
                 {globalRule && (
                   <StatRow columns={3} className="mb-6">
                     <StatTile label="Label" value={globalRule.name} />
-                    <StatTile
+                    <StatTile showMetaOnMobile
                       label="Rate"
                       value={`${Number(globalRule.rate_percent).toFixed(2)}%`}
                       meta={

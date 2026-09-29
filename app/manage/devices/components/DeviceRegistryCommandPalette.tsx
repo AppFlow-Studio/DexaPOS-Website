@@ -20,7 +20,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
   CommandShortcut,
 } from '@/components/ui/command'
 import { useDebounce } from '@/lib/hooks/useDebounce'
@@ -28,9 +27,7 @@ import {
   formatDeviceCategory,
   formatDeviceStatus,
   getDeviceCategoryIcon,
-  getDeviceStatusClasses,
 } from '@/lib/device-registry/presentation'
-import { cn } from '@/lib/utils'
 
 type DeviceRegistryCommandPaletteContextValue = {
   inScope: boolean
@@ -159,9 +156,7 @@ export function DeviceRegistryCommandPaletteProvider({
                 onSelect={() => openPath(item.href)}
                 className="gap-3"
               >
-                <div className="rounded-xl border bg-muted/30 p-2 text-muted-foreground">
-                  <item.icon className="h-4 w-4" />
-                </div>
+                <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{item.label}</div>
                   <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div>
@@ -170,8 +165,6 @@ export function DeviceRegistryCommandPaletteProvider({
               </CommandItem>
             ))}
           </CommandGroup>
-
-          <CommandSeparator />
 
           <CommandGroup heading="Devices">
             {searchQuery.isLoading && debouncedQuery.trim() ? (
@@ -197,18 +190,12 @@ export function DeviceRegistryCommandPaletteProvider({
                     onSelect={() => openPath(`/manage/devices/${device.id}`)}
                     className="gap-3"
                   >
-                    <div className="rounded-xl border bg-muted/30 p-2 text-muted-foreground">
-                      <CategoryIcon className="h-4 w-4" />
-                    </div>
+                    <CategoryIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium">{device.serial_number}</span>
-                        <span
-                          className={cn(
-                            'inline-flex rounded-full border px-2 py-0.5 text-[10px]',
-                            getDeviceStatusClasses(device.status)
-                          )}
-                        >
+                        {/* Neutral pill: the word carries the status (§4.6b). */}
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                           {formatDeviceStatus(device.status)}
                         </span>
                       </div>
@@ -264,7 +251,7 @@ export function DeviceRegistryCommandPaletteTrigger() {
         <Search className="h-4 w-4" />
         Search
       </span>
-      <span className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
+      <span className="hidden rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
         Ctrl/Cmd K
       </span>
     </Button>

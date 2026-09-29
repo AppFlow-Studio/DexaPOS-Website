@@ -245,7 +245,6 @@ export function DiscountAbuseDetection() {
             </TableBody>
           </Table>
           <PaginationBar
-            className="border-t-0 pt-0"
             pagination={staffPage.pagination}
             onPageChange={staffPage.setPage}
             itemLabel="staff"
@@ -281,7 +280,6 @@ export function DiscountAbuseDetection() {
               </TableBody>
             </Table>
             <PaginationBar
-              className="border-t-0 pt-0"
               pagination={flaggedPage.pagination}
               onPageChange={flaggedPage.setPage}
               itemLabel="merchants"

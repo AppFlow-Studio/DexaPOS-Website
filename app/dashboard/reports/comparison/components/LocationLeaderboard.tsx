@@ -31,6 +31,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** The row-hover "View" action is unreachable on touch, so it starts hidden. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -61,6 +63,17 @@ export function LocationLeaderboard({
   /** Column hiding only applies at mobile widths; desktop always shows all. */
   const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
   const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
+
+  // Rankings arrive pre-sorted; page them. A re-ranked list (period or metric
+  // change) starts from the first page. Keyed on content, not array identity:
+  // the parent passes `data || []`, a fresh array on every render while loading.
+  const { pageRows, pagination, setPage } = useClientPagination(rankings, 10);
+  const rankingSig = rankings.map((r) => r.location_id).join("|");
+  const [prevRankingSig, setPrevRankingSig] = useState(rankingSig);
+  if (prevRankingSig !== rankingSig) {
+    setPrevRankingSig(rankingSig);
+    setPage(1);
+  }
 
   const handleDrillDown = (locationId: string) => {
     setSelectedLocation(locationId);
@@ -154,7 +167,7 @@ export function LocationLeaderboard({
                 </TableCell>
               </TableRow>
             ) : (
-              rankings.map((location) => (
+              pageRows.map((location) => (
                 <TableRow
                   key={location.location_id}
                   className="group border-0 bg-card/70 transition-colors hover:bg-muted/40"
@@ -230,6 +243,12 @@ export function LocationLeaderboard({
             )}
           </TableBody>
         </Table>
+        <PaginationBar
+          pagination={pagination}
+          onPageChange={setPage}
+          itemLabel="locations"
+          className="px-5 pb-5"
+        />
       </CardContent>
     </Card>
   );

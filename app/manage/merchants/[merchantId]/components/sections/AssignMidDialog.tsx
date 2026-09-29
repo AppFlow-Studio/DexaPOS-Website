@@ -105,8 +105,10 @@ export function AssignMidDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[440px]">
-                <DialogHeader>
+            {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
+                the body scrolls; header and footer carry no rule (§5.5). */}
+            <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-[440px] sm:rounded-3xl">
+                <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
                     <DialogTitle>
                         {editing?.luqra_mid ? 'Edit Luqra MID' : 'Assign Luqra MID'}
                     </DialogTitle>
@@ -116,7 +118,7 @@ export function AssignMidDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-2">
+                <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
                     <div className="space-y-1.5">
                         <Label htmlFor="location">Location</Label>
                         <Select value={locationId} onValueChange={setLocationId} disabled={!!editing}>
@@ -172,7 +174,7 @@ export function AssignMidDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="flex items-center justify-between sm:justify-between">
+                <DialogFooter className="flex shrink-0 flex-row items-center justify-between px-6 pb-6 pt-4 sm:justify-between">
                     {editing?.luqra_mid ? (
                         <Button
                             variant="ghost"

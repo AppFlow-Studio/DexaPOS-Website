@@ -584,7 +584,7 @@ export function OrdersTab({ merchantInfo }: OrdersTabProps) {
                             readOnly
                             showLocationColumn={showLocationColumn}
                             locationsMap={locationsMap}
-                            pageSize={25}
+                            pageSize={10}
                         />
                     )}
                 </CardContent>

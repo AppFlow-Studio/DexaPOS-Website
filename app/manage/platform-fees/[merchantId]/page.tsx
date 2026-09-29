@@ -1,11 +1,10 @@
 'use client'
 
-import { use, useMemo, useState } from 'react'
+import { use, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { ArrowLeft, Download, ExternalLink } from 'lucide-react'
+import { Download, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -16,11 +15,27 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+} from '@/components/dashboard/shell'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  LoadError,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from '@/app/manage/transactions/components/ledger-primitives'
 import { useMerchantPlatformFees } from '@/app/manage/hooks/usePlatformFees'
 import { Money } from '@/components/platform-fees/money'
-import { KpiStrip } from '@/components/platform-fees/kpi-strip'
 import { FeeTrendChart } from '@/components/platform-fees/fee-trend-chart'
-import { MerchantAvatar } from '@/components/platform-fees/merchant-avatar'
 import { StatusBadge } from '@/components/platform-fees/status-badge'
 import { PaymentFeeTable } from '@/components/platform-fees/payment-fee-table'
 import { RecentActivityTimeline } from '@/components/platform-fees/recent-activity-timeline'
@@ -30,7 +45,10 @@ import {
   type DateRangePreset,
 } from '@/components/platform-fees/date-range-segmented'
 import type { LocationFeeRow } from '@/app/manage/actions/hq-platform/platform-fees'
-import { cn } from '@/lib/utils'
+
+const CHART_HEIGHT = 260
+const TAB_PILL_CLASS =
+  'shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
 
 export default function MerchantPlatformFeesPage({
   params,
@@ -40,8 +58,9 @@ export default function MerchantPlatformFeesPage({
   const { merchantId } = use(params)
   const [preset, setPreset] = useState<DateRangePreset>('30D')
   const range = useMemo(() => presetToRange(preset), [preset])
+  const [activeTab, setActiveTab] = useState('overview')
 
-  const { data, isLoading, isError } = useMerchantPlatformFees(
+  const { data, isLoading, isError, refetch } = useMerchantPlatformFees(
     merchantId,
     range.from,
     range.to
@@ -49,208 +68,225 @@ export default function MerchantPlatformFeesPage({
 
   const totals = data?.totals
   const byLocation = data?.byLocation ?? []
-  const merchantName = data?.merchant.name ?? 'Loading…'
-  const refunded = totals
-    ? totals.refunded_dual_pricing_fee + totals.refunded_tip_fee
-    : 0
+  const merchantName = data?.merchant.name ?? (isLoading ? 'Loading…' : 'Merchant')
+  const refunded = totals ? totals.refunded_dual_pricing_fee + totals.refunded_tip_fee : 0
   const grossCard = totals?.gross_dual_pricing_fee ?? 0
+  const paymentCount = totals?.payment_count ?? 0
   const refundedPct = grossCard > 0 ? (refunded / grossCard) * 100 : 0
-  const avgFee = totals && totals.payment_count > 0
-    ? totals.net_platform_fee / totals.payment_count
-    : 0
+  // With no payments the average is unknown, not zero (§4.9).
+  const avgFee = totals && paymentCount > 0 ? totals.net_platform_fee / paymentCount : null
   const activeLocations = byLocation.filter((l) => l.payment_count > 0).length
+  const known = !!totals
 
-  const onboardingTone = data?.merchant.onboarding_status === 'completed'
-    ? 'success'
-    : 'info'
+  // The identity line is scope (record id, size, status), so it stays on phones.
+  const identity = [
+    `${merchantId.slice(0, 8)}…`,
+    data ? `${byLocation.length} location${byLocation.length === 1 ? '' : 's'}` : null,
+    data?.merchant.type ? capitalize(data.merchant.type) : null,
+    data?.merchant.onboarding_status
+      ? data.merchant.onboarding_status === 'completed'
+        ? 'Active'
+        : capitalize(data.merchant.onboarding_status.replace(/_/g, ' '))
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  // The section rail keeps the active tab in view (§13.2): scroll the rail
+  // itself, clamped, and re-measure once it has a width.
+  const railRef = useRef<HTMLDivElement>(null)
+  const railPositioned = useRef(false)
+  useEffect(() => {
+    const rail = railRef.current
+    if (!rail) return
+    let done = false
+    const align = () => {
+      const max = rail.scrollWidth - rail.clientWidth
+      const tab = rail.querySelector<HTMLElement>('[data-state="active"]')
+      if (done || !tab || max <= 0) return
+      const left = tab.offsetLeft - (rail.clientWidth - tab.offsetWidth) / 2
+      const smooth = railPositioned.current && !matchMedia('(prefers-reduced-motion: reduce)').matches
+      rail.scrollTo({ left: Math.max(0, Math.min(left, max)), behavior: smooth ? 'smooth' : 'auto' })
+      railPositioned.current = done = true
+    }
+    align()
+    const observer = new ResizeObserver(align)
+    observer.observe(rail)
+    return () => observer.disconnect()
+  }, [activeTab])
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-3">
-        <Link
-          href="/manage/platform-fees"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" /> Platform Fees
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <MerchantAvatar name={merchantName} size={44} className="text-base" />
-            <div className="space-y-1">
-              <h1 className="text-3xl font-semibold tracking-tight">{merchantName}</h1>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="font-mono">{merchantId.slice(0, 12)}…</span>
-                <span>·</span>
-                <span>
-                  {byLocation.length} location{byLocation.length === 1 ? '' : 's'}
-                </span>
-                {data?.merchant.type && (
-                  <>
-                    <span>·</span>
-                    <span className="capitalize">{data.merchant.type}</span>
-                  </>
-                )}
-                {data?.merchant.onboarding_status && (
-                  <StatusBadge tone={onboardingTone}>
-                    {data.merchant.onboarding_status === 'completed'
-                      ? 'Active'
-                      : data.merchant.onboarding_status.replace(/_/g, ' ')}
-                  </StatusBadge>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+    <PageShell as="div">
+      <PageHeader
+        title={merchantName}
+        subtitle={identity}
+        showSubtitleOnMobile
+        subtitleClassName="tabular-nums"
+        backHref="/manage/platform-fees"
+        backLabel="Back to Platform Fees"
+        actions={
+          <>
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="h-9 gap-2 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
               onClick={() => exportLocationsCsv(merchantName, byLocation, range)}
               disabled={isLoading || byLocation.length === 0}
             >
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
-            <Link href={`/manage/merchants?id=${merchantId}`}>
-              <Button variant="ghost" size="sm" className="gap-2">
+            <Button variant="ghost" size="sm" className="h-9 gap-2 rounded-full px-4 text-[0.8125rem]" asChild>
+              <Link href={`/manage/merchants/${merchantId}`}>
                 <ExternalLink className="h-4 w-4" />
                 View merchant
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
+      {/* One control row governs every tab. The dates are scope, so they stay on phones. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <DateRangeSegmented value={preset} onChange={setPreset} />
-        <span className="text-xs text-muted-foreground">
-          {format(new Date(range.from), 'MMM d, yyyy')} —{' '}
-          {format(new Date(range.to), 'MMM d, yyyy')}
+        <span className="text-sm text-muted-foreground tabular-nums">
+          {format(new Date(range.from), 'MMM d, yyyy')} – {format(new Date(range.to), 'MMM d, yyyy')}
         </span>
       </div>
 
       {isError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load merchant fees.
-        </div>
+        <LoadError title="We couldn’t load this merchant’s fees" onRetry={() => void refetch()} />
       )}
 
-      <KpiStrip
-        loading={isLoading}
-        cells={[
-          {
-            label: 'Net platform fee',
-            value: <Money value={totals?.net_platform_fee ?? 0} />,
-            hint: totals
-              ? `${totals.payment_count.toLocaleString()} payment${totals.payment_count === 1 ? '' : 's'}`
-              : '—',
-            tone: 'positive',
-          },
-          {
-            label: 'Card surcharge',
-            value: <Money value={grossCard} />,
-            hint: 'Gross dual-pricing',
-          },
-          {
-            label: 'Refunded',
-            value: <Money value={-refunded} zeroAsDash />,
-            hint: refunded > 0 ? `${refundedPct.toFixed(1)}% of gross` : 'No refund credits',
-            tone: refunded > 0 ? 'negative' : 'default',
-          },
-          {
-            label: 'Avg fee / payment',
-            value: <Money value={avgFee} zeroAsDash />,
-            hint: totals?.payment_count
-              ? `Across ${totals.payment_count} payments`
-              : '—',
-          },
-          {
-            label: 'Active locations',
-            value: (
-              <span className="font-mono tabular-nums">
-                {activeLocations}{' '}
-                <span className="text-muted-foreground">/ {byLocation.length}</span>
+      <Panel padded>
+        <StatRow columns={3}>
+          <StatTile
+            label="Net platform fee"
+            isLoading={isLoading}
+            value={<Money value={known ? totals.net_platform_fee : null} />}
+            meta={
+              known
+                ? `${paymentCount.toLocaleString()} payment${paymentCount === 1 ? '' : 's'}`
+                : undefined
+            }
+          />
+          <StatTile
+            label="Card surcharge"
+            isLoading={isLoading}
+            value={<Money value={known ? grossCard : null} />}
+            meta="Gross dual pricing"
+          />
+          <StatTile
+            label="Refunded"
+            isLoading={isLoading}
+            value={<Money value={known ? -refunded : null} />}
+            meta={
+              known
+                ? refunded > 0
+                  ? `${refundedPct.toFixed(1)}% of gross`
+                  : 'No refund credits'
+                : undefined
+            }
+          />
+          <StatTile
+            label="Avg fee per payment"
+            isLoading={isLoading}
+            value={<Money value={avgFee} />}
+            meta={known && paymentCount === 0 ? 'No payments in this period' : undefined}
+            showMetaOnMobile
+          />
+          <StatTile
+            label="Active locations"
+            isLoading={isLoading}
+            value={
+              known ? (
+                <>
+                  {activeLocations}{' '}
+                  <span className="text-muted-foreground">/ {byLocation.length}</span>
+                </>
+              ) : (
+                '—'
+              )
+            }
+            meta="With at least one captured payment"
+          />
+        </StatRow>
+      </Panel>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {/* Pill rail (§4.5). Classes are literal, not tokens (C7). */}
+        <div ref={railRef} className="thin-scrollbar relative w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            <TabsTrigger value="overview" className={TAB_PILL_CLASS}>
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="locations" className={TAB_PILL_CLASS}>
+              Locations
+              <span className="ml-1.5 text-muted-foreground tabular-nums">{byLocation.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className={TAB_PILL_CLASS}>
+              Payments
+              <span className="ml-1.5 text-muted-foreground tabular-nums">
+                {paymentCount.toLocaleString()}
               </span>
-            ),
-            hint: 'With ≥1 captured payment',
-          },
-        ]}
-      />
+            </TabsTrigger>
+            <TabsTrigger value="config" className={TAB_PILL_CLASS}>
+              Fee configuration
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="locations">
-            Locations
-            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-mono">
-              {byLocation.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="payments">
-            Payments
-            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-mono">
-              {totals?.payment_count ?? 0}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="config">Fee Configuration</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Fee trend</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[260px]">
+        <TabsContent value="overview" className="mt-4 space-y-6">
+          {/* A chart and a short list may pair (§2 E); each keeps its own height. */}
+          <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <Panel>
+              <PanelSection label="Fee trend" caption="Card surcharge and net platform fee per day">
                 {isLoading ? (
-                  <Skeleton className="h-full w-full" />
+                  <Skeleton className="w-full rounded-2xl" style={{ height: CHART_HEIGHT }} />
                 ) : (
-                  <FeeTrendChart data={data?.byDay ?? []} />
+                  <FeeTrendChart
+                    data={data?.byDay ?? []}
+                    from={range.from}
+                    to={range.to}
+                    height={CHART_HEIGHT}
+                  />
                 )}
-              </CardContent>
-            </Card>
+              </PanelSection>
+            </Panel>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Top locations</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-32 w-full" />
-                ) : (
-                  <TopLocationsList rows={byLocation} />
-                )}
-              </CardContent>
-            </Card>
+            <Panel>
+              <PanelSection label="Top locations" caption="By net platform fee">
+                {isLoading ? <Skeleton className="h-32 w-full" /> : <TopLocationsList rows={byLocation} />}
+              </PanelSection>
+            </Panel>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Recent activity</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Panel>
+            <PanelSection label="Recent activity" caption="The latest payments in this period">
               {isLoading ? (
                 <Skeleton className="h-32 w-full" />
               ) : (
                 <RecentActivityTimeline entries={data?.recentActivity ?? []} />
               )}
-            </CardContent>
-          </Card>
+            </PanelSection>
+          </Panel>
         </TabsContent>
 
-        <TabsContent value="locations">
-          <LocationsTable rows={byLocation} loading={isLoading} />
+        <TabsContent value="locations" className="mt-4">
+          <Panel>
+            <PanelSection label="Locations" caption="Fees collected at each location in this period">
+              <LocationsTable rows={byLocation} loading={isLoading} />
+            </PanelSection>
+          </Panel>
         </TabsContent>
 
-        <TabsContent value="payments">
-          <PaymentFeeTable
-            merchantId={merchantId}
-            from={range.from}
-            to={range.to}
-          />
+        <TabsContent value="payments" className="mt-4">
+          <Panel>
+            <PaymentFeeTable merchantId={merchantId} from={range.from} to={range.to} />
+          </Panel>
         </TabsContent>
 
-        <TabsContent value="config">
+        <TabsContent value="config" className="mt-4">
           <FeeConfigReadOnly
             merchantPercentage={data?.merchant.dual_pricing_percentage ?? 0}
             rows={byLocation}
@@ -258,7 +294,7 @@ export default function MerchantPlatformFeesPage({
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   )
 }
 
@@ -269,37 +305,37 @@ function TopLocationsList({ rows }: { rows: LocationFeeRow[] }) {
     .slice(0, 5)
   if (top.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-2">
-        No location activity yet.
+      <p className="py-2 text-sm text-muted-foreground">
+        No location took a card payment in this period.
       </p>
     )
   }
   const max = top[0].net_platform_fee || 1
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-4">
       {top.map((r) => {
         const pct = Math.max(0, (r.net_platform_fee / max) * 100)
         return (
-          <li key={r.location_id} className="space-y-1">
-            <div className="flex items-baseline justify-between text-sm">
-              <span className="truncate">{r.location_name}</span>
-              <Money value={r.net_platform_fee} className="text-xs font-semibold" />
+          <li key={r.location_id} className="space-y-1.5">
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate">{r.location_name}</span>
+              <Money value={r.net_platform_fee} className="font-medium" />
             </div>
-            <div className="h-1.5 rounded bg-muted overflow-hidden">
-              <div
-                className="h-full bg-primary"
-                style={{ width: `${pct}%` }}
-              />
+            {/* A bar is chart data, so it takes the brand series colour (§3.5 use 2). */}
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-[#0C4FD1] dark:bg-[#6CA0FF]" style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-[11px] text-muted-foreground">
-              {r.payment_count} payment{r.payment_count === 1 ? '' : 's'}
-            </span>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {r.payment_count.toLocaleString()} payment{r.payment_count === 1 ? '' : 's'}
+            </p>
           </li>
         )
       })}
     </ul>
   )
 }
+
+const LOCATION_COLUMNS = 7
 
 function LocationsTable({
   rows,
@@ -308,6 +344,7 @@ function LocationsTable({
   rows: LocationFeeRow[]
   loading: boolean
 }) {
+  const { pageRows, pagination, setPage } = useClientPagination(rows, 10)
   const totals = rows.reduce(
     (acc, r) => {
       acc.gross += r.gross_dual_pricing_fee
@@ -319,9 +356,12 @@ function LocationsTable({
     { gross: 0, refunded: 0, net: 0, payments: 0 }
   )
 
+  const emptyTitle = 'No locations for this merchant'
+  const emptyHint = 'Locations appear here once they are added to the merchant.'
+
   return (
-    <div className="rounded-lg border border-border bg-card overflow-x-auto">
-      <Table>
+    <>
+      <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
         <TableHeader>
           <TableRow>
             <TableHead>Location</TableHead>
@@ -337,75 +377,95 @@ function LocationsTable({
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <TableRow key={i}>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={LOCATION_COLUMNS}>
                   <Skeleton className="h-5 w-full" />
                 </TableCell>
               </TableRow>
             ))
-          ) : rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
-                No locations found.
-              </TableCell>
-            </TableRow>
+          ) : pageRows.length === 0 ? (
+            <TableEmptyRow colSpan={LOCATION_COLUMNS} title={emptyTitle} hint={emptyHint} />
           ) : (
-            rows.map((r) => {
-              const refundedRow = r.refunded_dual_pricing_fee + r.refunded_tip_fee
-              return (
-                <TableRow key={r.location_id}>
-                  <TableCell className="font-medium">{r.location_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {r.location_address ?? '—'}
-                  </TableCell>
-                  <TableCell>
-                    {r.dual_pricing_percentage > 0 ? (
-                      <span className="font-mono text-xs rounded bg-muted px-1.5 py-0.5">
-                        {r.dual_pricing_percentage}%
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Off</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right text-sm">
-                    <Money value={r.gross_dual_pricing_fee} zeroAsDash />
-                  </TableCell>
-                  <TableCell className="text-right text-sm">
-                    <Money value={-refundedRow} zeroAsDash />
-                  </TableCell>
-                  <TableCell className="text-right text-sm font-semibold">
-                    <Money value={r.net_platform_fee} />
-                  </TableCell>
-                  <TableCell className="text-right text-sm tabular-nums">
-                    {r.payment_count}
-                  </TableCell>
-                </TableRow>
-              )
-            })
-          )}
-          {!loading && rows.length > 0 && (
-            <TableRow className="bg-muted/40 font-medium">
-              <TableCell colSpan={3}>Total</TableCell>
-              <TableCell className="text-right">
-                <Money value={totals.gross} />
-              </TableCell>
-              <TableCell className="text-right">
-                <Money value={-totals.refunded} zeroAsDash />
-              </TableCell>
-              <TableCell className="text-right">
-                <Money value={totals.net} />
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {totals.payments}
-              </TableCell>
-            </TableRow>
+            pageRows.map((r) => (
+              <TableRow key={r.location_id}>
+                <TableCell className="font-medium">{r.location_name}</TableCell>
+                <TableCell className="text-muted-foreground">{r.location_address ?? '—'}</TableCell>
+                <TableCell className="tabular-nums">
+                  {r.dual_pricing_percentage > 0 ? `${r.dual_pricing_percentage}%` : 'Off'}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Money value={r.gross_dual_pricing_fee} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Money value={-(r.refunded_dual_pricing_fee + r.refunded_tip_fee)} />
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  <Money value={r.net_platform_fee} />
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.payment_count.toLocaleString()}
+                </TableCell>
+              </TableRow>
+            ))
           )}
         </TableBody>
       </Table>
-    </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+        {loading ? (
+          <RecordCardSkeletons count={2} />
+        ) : pageRows.length === 0 ? (
+          <CardGridEmpty title={emptyTitle} hint={emptyHint} />
+        ) : (
+          pageRows.map((r) => (
+            <div key={r.location_id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+              <p className="truncate font-medium">{r.location_name}</p>
+              <p className="truncate text-xs text-muted-foreground">{r.location_address ?? '—'}</p>
+              <CardFields>
+                <CardField label="Net fee" value={<Money value={r.net_platform_fee} />} />
+                <CardField label="Card fees" value={<Money value={r.gross_dual_pricing_fee} />} />
+                <CardField
+                  label="Refunded"
+                  value={<Money value={-(r.refunded_dual_pricing_fee + r.refunded_tip_fee)} />}
+                />
+                <CardField label="Payments" value={r.payment_count.toLocaleString()} />
+                <CardField
+                  label="Card %"
+                  value={r.dual_pricing_percentage > 0 ? `${r.dual_pricing_percentage}%` : 'Off'}
+                />
+              </CardFields>
+            </div>
+          ))
+        )}
+      </div>
+
+      <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="locations" />
+
+      {/* All-location totals. A line under the table, not a tinted row that repeats on every page. */}
+      {!loading && rows.length > 0 && (
+        <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground tabular-nums">
+          <span>
+            {rows.length} location{rows.length === 1 ? '' : 's'}
+          </span>
+          <span>
+            Card fees <Money value={totals.gross} className="font-medium text-foreground" />
+          </span>
+          <span>
+            Refunded <Money value={-totals.refunded} className="font-medium text-foreground" />
+          </span>
+          <span>
+            Net fee <Money value={totals.net} className="font-medium text-foreground" />
+          </span>
+          <span>
+            <span className="font-medium text-foreground">{totals.payments.toLocaleString()}</span> payments
+          </span>
+        </p>
+      )}
+    </>
   )
 }
 
 const PLATFORM_DEFAULT_DUAL_PRICING_PCT = 3.5
+const CONFIG_COLUMNS = 3
 
 function FeeConfigReadOnly({
   merchantPercentage,
@@ -416,91 +476,82 @@ function FeeConfigReadOnly({
   rows: LocationFeeRow[]
   loading: boolean
 }) {
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-      <div className="rounded-lg border border-border bg-card overflow-x-auto">
-        <div className="border-b border-border p-4">
-          <h3 className="text-sm font-semibold">Per-location card surcharge</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Read-only. Snapshots on captured payments are immutable.
-          </p>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Location</TableHead>
-              <TableHead>Card surcharge %</TableHead>
-              <TableHead className={cn('text-right')}>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={3}>
-                    <Skeleton className="h-5 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-8">
-                  No locations.
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((r) => (
-                <TableRow key={r.location_id}>
-                  <TableCell className="font-medium">{r.location_name}</TableCell>
-                  <TableCell>
-                    <span className="font-mono text-sm">
-                      {r.dual_pricing_percentage}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {r.dual_pricing_percentage > 0 ? (
-                      <StatusBadge tone="success">Enabled</StatusBadge>
-                    ) : (
-                      <StatusBadge tone="neutral">Off</StatusBadge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+  const { pageRows, pagination, setPage } = useClientPagination(rows, 10)
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Defaults</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <ConfigRow
-            label="Merchant default"
-            value={`${merchantPercentage}%`}
-          />
-          <ConfigRow
-            label="Platform default"
-            value={`${PLATFORM_DEFAULT_DUAL_PRICING_PCT}%`}
-          />
-          <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-            To change rates, edit the merchant or location through the merchant management
-            flow.
+  return (
+    <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <Panel>
+        <PanelSection
+          label="Card surcharge by location"
+          caption="Read-only. Snapshots on captured payments are immutable."
+        >
+          {/* Three short columns and no min-width: it cannot overflow, so it may share a row (§5.6). */}
+          <Table variant="data">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Location</TableHead>
+                <TableHead>Card surcharge</TableHead>
+                <TableHead className="text-right">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={CONFIG_COLUMNS}>
+                      <Skeleton className="h-5 w-full" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : pageRows.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={CONFIG_COLUMNS}
+                  title="No locations for this merchant"
+                  hint="Rates appear here once locations are added to the merchant."
+                />
+              ) : (
+                pageRows.map((r) => (
+                  <TableRow key={r.location_id}>
+                    <TableCell className="font-medium">{r.location_name}</TableCell>
+                    <TableCell className="tabular-nums">{r.dual_pricing_percentage}%</TableCell>
+                    <TableCell className="text-right">
+                      <StatusBadge>{r.dual_pricing_percentage > 0 ? 'Enabled' : 'Off'}</StatusBadge>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="locations" />
+        </PanelSection>
+      </Panel>
+
+      <Panel>
+        <PanelSection label="Defaults">
+          <dl className="space-y-3 text-sm">
+            <ConfigRow label="Merchant default" value={`${merchantPercentage}%`} />
+            <ConfigRow label="Platform default" value={`${PLATFORM_DEFAULT_DUAL_PRICING_PCT}%`} />
+          </dl>
+          <p className="mt-5 text-xs text-muted-foreground">
+            To change rates, edit the merchant or location through the merchant management flow.
           </p>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }
 
 function ConfigRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono tabular-nums">{value}</span>
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">{value}</dd>
     </div>
   )
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 function exportLocationsCsv(

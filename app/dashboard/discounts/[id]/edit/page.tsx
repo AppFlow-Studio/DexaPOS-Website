@@ -64,7 +64,7 @@ export default function EditDiscountPage() {
 
     return (
         <PageShell>
-            <PageHeader
+            <PageHeader showSubtitleOnMobile
                 title="Edit discount"
                 subtitle={defaultValues?.name ?? "Update discount details."}
                 backHref={backHref}

@@ -7,25 +7,30 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import {
     Monitor,
     CreditCard,
     CheckCircle2,
     AlertCircle,
     Search,
-    MapPin,
     Plus,
     MoreHorizontal,
     Wifi,
     WifiOff,
-    Loader2,
     Trash2,
-    Edit,
     Link2,
     Unlink,
     RefreshCw,
     Settings2,
+    ShoppingCart,
+    ChefHat,
+    TabletSmartphone,
+    Smartphone,
+    type LucideIcon,
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
 import { useState } from 'react'
@@ -35,7 +40,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -65,6 +69,9 @@ interface DevicesTabProps {
     merchantId?: string // Optional override if needed
 }
 
+type StationRow = Station & { location_name: string }
+type TerminalRow = PaymentTerminal & { location_name: string; station_name: string | null }
+
 // Helper functions
 const getStationTypeLabel = (type: StationType): string => {
     switch (type) {
@@ -81,18 +88,20 @@ const getStationTypeLabel = (type: StationType): string => {
     }
 }
 
-const getStationTypeIcon = (type: StationType): string => {
+// A neutral glyph, not a coloured emoji: the plate is a record's identity
+// (§3.5), so it stays `bg-muted text-muted-foreground`.
+const getStationTypeIcon = (type: StationType): LucideIcon => {
     switch (type) {
         case 'register':
-            return '💳'
+            return Monitor
         case 'checkout':
-            return '🛒'
+            return ShoppingCart
         case 'kds':
-            return '🍳'
+            return ChefHat
         case 'self_service':
-            return '🖥️'
+            return TabletSmartphone
         default:
-            return '📱'
+            return Smartphone
     }
 }
 
@@ -101,7 +110,7 @@ function DeviceCardField({ label, value }: { label: string; value: string | numb
     return (
         <div className="min-w-0">
             <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="truncate font-medium">{value}</p>
+            <p className="truncate font-medium tabular-nums">{value}</p>
         </div>
     )
 }
@@ -127,18 +136,17 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     const merchantId = merchantInfo.id
     const { hasPermission } = useAdminPermissions()
     const canManageDevices = hasPermission('users.manage')
-    
+
     // Local state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [searchTerm, setSearchTerm] = useState('')
     const [activeTab, setActiveTab] = useState<'stations' | 'terminals'>('stations')
     const [isAddStationOpen, setIsAddStationOpen] = useState(false)
     const [isAddTerminalOpen, setIsAddTerminalOpen] = useState(false)
-    const [editTerminal, setEditTerminal] = useState<(PaymentTerminal & { location_name: string; station_name: string | null }) | null>(null)
+    const [editTerminal, setEditTerminal] = useState<TerminalRow | null>(null)
 
     // Use locations from merchantInfo directly
     const locationsList = merchantInfo.locations || []
-    const locationsLoading = false
 
     // Fetch stations
     const {
@@ -148,7 +156,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     } = useAdminMerchantStations(merchantId, selectedLocationId === 'all' ? null : selectedLocationId)
 
     // Fetch station stats
-    const { data: stationStatsResult } = useAdminMerchantStationStats(
+    const { data: stationStatsResult, isLoading: stationStatsLoading } = useAdminMerchantStationStats(
         merchantId,
         selectedLocationId === 'all' ? null : selectedLocationId
     )
@@ -161,7 +169,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     } = useAdminMerchantTerminals(merchantId, selectedLocationId === 'all' ? null : selectedLocationId)
 
     // Fetch terminal stats
-    const { data: terminalStatsResult } = useAdminMerchantTerminalStats(
+    const { data: terminalStatsResult, isLoading: terminalStatsLoading } = useAdminMerchantTerminalStats(
         merchantId,
         selectedLocationId === 'all' ? null : selectedLocationId
     )
@@ -180,7 +188,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     const terminalStats = terminalStatsResult?.data
 
     // Filter stations by search
-    const filteredStations = stations.filter((station: Station & { location_name: string }) => {
+    const filteredStations = stations.filter((station: StationRow) => {
         if (!searchTerm) return true
         const search = searchTerm.toLowerCase()
         return (
@@ -191,7 +199,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     })
 
     // Filter terminals by search
-    const filteredTerminals = terminals.filter((terminal: PaymentTerminal & { location_name: string; station_name: string | null }) => {
+    const filteredTerminals = terminals.filter((terminal: TerminalRow) => {
         if (!searchTerm) return true
         const search = searchTerm.toLowerCase()
         return (
@@ -201,6 +209,18 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
             terminal.location_name.toLowerCase().includes(search)
         )
     })
+
+    // §5.7: every table is paged; the mobile cards page with it.
+    const {
+        pageRows: stationPageRows,
+        pagination: stationPagination,
+        setPage: setStationPage,
+    } = useClientPagination<StationRow>(filteredStations, 10)
+    const {
+        pageRows: terminalPageRows,
+        pagination: terminalPagination,
+        setPage: setTerminalPage,
+    } = useClientPagination<TerminalRow>(filteredTerminals, 10)
 
     // Handlers
     const handleDeleteStation = async (station: Station) => {
@@ -300,94 +320,204 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     }
 
     const isLoading = stationsLoading || terminalsLoading
+    const isFiltered = Boolean(searchTerm) || selectedLocationId !== 'all'
+
+    // One actions menu per record, shared by the table row and the mobile card
+    // so the phone layout keeps every action (§5.3).
+    const renderStationActions = (station: StationRow) => (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 rounded-full p-0" aria-label={`Actions for ${station.station_name}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleToggleStationStatus(station)}>
+                    {station.is_active ? (
+                        <>
+                            <AlertCircle className="h-4 w-4 mr-2" />
+                            Deactivate
+                        </>
+                    ) : (
+                        <>
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Reactivate
+                        </>
+                    )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => handleDeleteStation(station)}
+                >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+
+    const renderTerminalActions = (terminal: TerminalRow) => (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 rounded-full p-0" aria-label={`Actions for ${terminal.terminal_name}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditTerminal(terminal)}>
+                    <Settings2 className="h-4 w-4 mr-2" />
+                    Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={() => handleTestConnection(terminal)}
+                    disabled={testConnectionMutation.isPending}
+                >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${testConnectionMutation.isPending ? 'animate-spin' : ''}`} />
+                    Test Connection
+                </DropdownMenuItem>
+                {terminal.station_id && (
+                    <DropdownMenuItem onClick={() => handleUnlinkTerminal(terminal)}>
+                        <Unlink className="h-4 w-4 mr-2" />
+                        Unlink from Station
+                    </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => handleDeleteTerminal(terminal)}
+                >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+
+    const statFigure = (value: number | undefined) => (value === undefined ? '—' : value)
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                    <h2 className="text-2xl font-bold tracking-tight">Stations & Terminals</h2>
-                    <p className="text-muted-foreground">
-                        Manage POS stations and payment terminals for this merchant
-                    </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="outline" size="sm" onClick={() => {
-                        refetchStations()
-                        refetchTerminals()
-                    }}>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Refresh
-                    </Button>
-                </div>
-            </div>
-
             {/* Device stats */}
             <Panel>
-                <PanelSection label="Devices">
-                    {/* 3-up, not 4: this tab renders beside the merchant nav, which
-                        leaves a 4th column ~100px -- narrow enough to truncate
-                        "Payment Terminals" and "Connected Terminals". */}
-                    <StatRow columns={3} className="mt-6">
-                        <StatTile
-                            label="Total Stations"
-                            icon={<Monitor />}
-                            value={stationStats?.total || 0}
-                            meta={`${stationStats?.active || 0} active`}
-                        />
-                        <StatTile
-                            label="Online Stations"
-                            icon={<CheckCircle2 />}
-                            value={stationStats?.online || 0}
-                            meta={`${stationStats?.offline || 0} offline`}
-                        />
-                        <StatTile
-                            label="Payment Terminals"
-                            icon={<CreditCard />}
-                            value={terminalStats?.total || 0}
-                            meta={`${terminalStats?.assigned || 0} assigned`}
-                        />
-                        <StatTile
-                            label="Connected Terminals"
-                            icon={<Wifi />}
-                            value={terminalStats?.connected || 0}
-                            meta={`${terminalStats?.disconnected || 0} disconnected`}
-                        />
-                    </StatRow>
+                <PanelSection
+                    label="Stations & Terminals"
+                    caption="Manage POS stations and payment terminals for this merchant"
+                    action={
+                        <Button
+                            variant="outline"
+                            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                            onClick={() => {
+                                refetchStations()
+                                refetchTerminals()
+                            }}
+                        >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh
+                        </Button>
+                    }
+                >
+                    {/* Two rows of two, not one row of four: this tab renders beside
+                        the merchant nav, which leaves a 4th column ~100px -- narrow
+                        enough to truncate "Payment Terminals" and "Connected
+                        Terminals". StatRow takes 2|3|4 only (§14.7 trap 6). */}
+                    <div className="mt-6 space-y-6">
+                        <StatRow columns={2}>
+                            <StatTile
+                                label="Total Stations"
+                                icon={<Monitor />}
+                                isLoading={stationStatsLoading}
+                                value={statFigure(stationStats?.total)}
+                                meta={stationStats ? `${stationStats.active ?? 0} active` : undefined}
+                            />
+                            <StatTile
+                                label="Online Stations"
+                                icon={<CheckCircle2 />}
+                                isLoading={stationStatsLoading}
+                                value={statFigure(stationStats?.online)}
+                                meta={stationStats ? `${stationStats.offline ?? 0} offline` : undefined}
+                            />
+                        </StatRow>
+                        <StatRow columns={2}>
+                            <StatTile
+                                label="Payment Terminals"
+                                icon={<CreditCard />}
+                                isLoading={terminalStatsLoading}
+                                value={statFigure(terminalStats?.total)}
+                                meta={terminalStats ? `${terminalStats.assigned ?? 0} assigned` : undefined}
+                            />
+                            <StatTile
+                                label="Connected Terminals"
+                                icon={<Wifi />}
+                                isLoading={terminalStatsLoading}
+                                value={statFigure(terminalStats?.connected)}
+                                meta={terminalStats ? `${terminalStats.disconnected ?? 0} disconnected` : undefined}
+                            />
+                        </StatRow>
+                    </div>
                 </PanelSection>
             </Panel>
 
-            {/* Tabs & Content */}
+            {/* Device lists */}
             <Panel>
-                <div className="border-b px-4 py-4 sm:px-6">
-                    <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <PanelSection
+                    label="Devices"
+                    action={
+                        activeTab === 'stations' ? (
+                            <Button className="w-full sm:w-auto" onClick={() => setIsAddStationOpen(true)} disabled={!canManageDevices}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Station
+                            </Button>
+                        ) : (
+                            <Button className="w-full sm:w-auto" onClick={() => setIsAddTerminalOpen(true)} disabled={!canManageDevices}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Terminal
+                            </Button>
+                        )
+                    }
+                >
+                    <div className="mt-4 flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        {/* §4.5 pill rail; classes are the TAB_* literals (C7). */}
                         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')} className="min-w-0">
-                            <div className="overflow-x-auto">
-                                <TabsList className="w-max">
-                                    <TabsTrigger value="stations">
-                                        <Monitor className="h-4 w-4 mr-2" />
-                                        Stations ({filteredStations.length})
+                            <div className="w-full min-w-0 overflow-x-auto pb-1">
+                                <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                                    <TabsTrigger
+                                        value="stations"
+                                        className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                                    >
+                                        Stations <span className="ml-1 tabular-nums">({filteredStations.length})</span>
                                     </TabsTrigger>
-                                    <TabsTrigger value="terminals">
-                                        <CreditCard className="h-4 w-4 mr-2" />
-                                        Payment Terminals ({filteredTerminals.length})
+                                    <TabsTrigger
+                                        value="terminals"
+                                        className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                                    >
+                                        Payment Terminals <span className="ml-1 tabular-nums">({filteredTerminals.length})</span>
                                     </TabsTrigger>
                                 </TabsList>
                             </div>
                         </Tabs>
                         <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto">
                             <div className="relative min-w-[140px] flex-1 sm:flex-none">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                                 <Input
                                     placeholder="Search..."
+                                    aria-label="Search devices"
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8 w-full sm:w-64"
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value)
+                                        setStationPage(1)
+                                        setTerminalPage(1)
+                                    }}
+                                    className="h-9 w-full pl-9 text-[0.8125rem] sm:w-64"
                                 />
                             </div>
-                            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                                <SelectTrigger className="w-full sm:w-[200px]">
-                                    <MapPin className="h-4 w-4 mr-2 shrink-0" />
+                            <Select
+                                value={selectedLocationId}
+                                onValueChange={(v) => {
+                                    setSelectedLocationId(v)
+                                    setStationPage(1)
+                                    setTerminalPage(1)
+                                }}
+                            >
+                                <SelectTrigger aria-label="Location" className="h-9 w-full min-w-0 text-[0.8125rem] sm:w-[200px]">
                                     <SelectValue placeholder="All Locations">
                                         {selectedLocationId === 'all'
                                             ? 'All Locations'
@@ -404,405 +534,343 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {activeTab === 'stations' && (
-                                <Button className="w-full sm:w-auto" onClick={() => setIsAddStationOpen(true)} disabled={!canManageDevices}>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Station
-                                </Button>
-                            )}
-                            {activeTab === 'terminals' && (
-                                <Button className="w-full sm:w-auto" onClick={() => setIsAddTerminalOpen(true)} disabled={!canManageDevices}>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Terminal
-                                </Button>
-                            )}
                         </div>
                     </div>
-                </div>
-                <div className="px-4 py-6 sm:px-6">
-                    {isLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : (
-                        <>
-                            {/* Stations Tab Content */}
-                            {activeTab === 'stations' && (
-                                <>
-                                    {filteredStations.length === 0 ? (
-                                        <Empty>
-                                            <EmptyHeader>
-                                                <EmptyMedia variant="icon">
-                                                    <Monitor className="h-6 w-6" />
-                                                </EmptyMedia>
-                                                <EmptyTitle>No stations found</EmptyTitle>
-                                                <EmptyDescription>
-                                                    {searchTerm || selectedLocationId !== 'all'
-                                                        ? 'Try adjusting your filters to see more stations.'
-                                                        : 'No stations are registered for this merchant yet.'}
-                                                </EmptyDescription>
-                                            </EmptyHeader>
-                                        </Empty>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                        {/* §5.3: a card grid below `lg`, never a
-                                            scrolling table. This table has 7 columns,
-                                            so at 375px it was a scroll well. */}
-                                        <Table variant="data" containerClassName="hidden lg:block">
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Station</TableHead>
-                                                    <TableHead>Type</TableHead>
-                                                    <TableHead>Location</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead>Device Info</TableHead>
-                                                    <TableHead>Last Heartbeat</TableHead>
-                                                    <TableHead className="w-[50px]"></TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {filteredStations.map((station: Station & { location_name: string }) => (
-                                                    <TableRow key={station.id}>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
-                                                                    station.is_online
-                                                                        ? 'bg-muted text-foreground'
-                                                                        : 'bg-muted text-muted-foreground'
-                                                                }`}>
-                                                                    <span className="text-lg">{getStationTypeIcon(station.station_type)}</span>
+
+                    <div className="mt-6">
+                        {isLoading ? (
+                            <div className="space-y-2" aria-busy="true">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+                                ))}
+                            </div>
+                        ) : (
+                            <>
+                                {/* Stations Tab Content */}
+                                {activeTab === 'stations' && (
+                                    <>
+                                        {filteredStations.length === 0 ? (
+                                            <Empty>
+                                                <EmptyHeader>
+                                                    <EmptyMedia variant="icon">
+                                                        <Monitor className="h-6 w-6" />
+                                                    </EmptyMedia>
+                                                    <EmptyTitle>
+                                                        {isFiltered ? 'No stations match these filters' : 'No stations yet'}
+                                                    </EmptyTitle>
+                                                    <EmptyDescription>
+                                                        {isFiltered
+                                                            ? 'Clear the search or pick another location to widen the results.'
+                                                            : 'Stations appear here once one is added for this merchant.'}
+                                                    </EmptyDescription>
+                                                </EmptyHeader>
+                                            </Empty>
+                                        ) : (
+                                            <>
+                                            {/* §5.3: a card grid below `lg`, never a
+                                                scrolling table. This table has 7 columns,
+                                                so at 375px it was a scroll well. */}
+                                            <Table variant="data" containerClassName="hidden lg:block">
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Station</TableHead>
+                                                        <TableHead>Type</TableHead>
+                                                        <TableHead>Location</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead>Device Info</TableHead>
+                                                        <TableHead>Last Heartbeat</TableHead>
+                                                        <TableHead className="w-[50px]"><span className="sr-only">Actions</span></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {stationPageRows.map((station) => {
+                                                        const StationIcon = getStationTypeIcon(station.station_type)
+                                                        return (
+                                                        <TableRow key={station.id}>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                                                        <StationIcon className="h-5 w-5" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-medium">{station.station_name}</div>
+                                                                        {station.station_code && (
+                                                                            <div className="text-sm text-muted-foreground">
+                                                                                Code: {station.station_code}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <div className="font-medium">{station.station_name}</div>
-                                                                    {station.station_code && (
-                                                                        <div className="text-sm text-muted-foreground">
-                                                                            Code: {station.station_code}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
+                                                                    {getStationTypeLabel(station.station_type)}
+                                                                </Badge>
+                                                                {station.station_number && (
+                                                                    <span className="ml-2 text-sm text-muted-foreground tabular-nums">
+                                                                        #{station.station_number}
+                                                                    </span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-sm">{station.location_name}</span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
+                                                                        {station.is_online ? 'Online' : 'Offline'}
+                                                                    </Badge>
+                                                                    {!station.is_active && (
+                                                                        <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
+                                                                            Deactivated
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {station.device_name || station.hardware_model ? (
+                                                                    <div className="text-sm">
+                                                                        <div>{station.device_name || '—'}</div>
+                                                                        <div className="text-muted-foreground">
+                                                                            {station.hardware_model || '—'}
                                                                         </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">—</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {station.last_heartbeat_at ? (
+                                                                    <span className="text-sm text-muted-foreground">
+                                                                        {formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">Never</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {canManageDevices ? (
+                                                                    renderStationActions(station)
+                                                                ) : (
+                                                                    <span className="text-xs text-muted-foreground">View only</span>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                        )
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+
+                                            {/* Mirrors the table's `hidden lg:block`. Same
+                                                page of rows, stacked: identity and status lead,
+                                                the rest drops into a two-column field grid.
+                                                Values are plain text on the muted card (§3.5). */}
+                                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                                {stationPageRows.map((station) => {
+                                                    const StationIcon = getStationTypeIcon(station.station_type)
+                                                    return (
+                                                    <div
+                                                        key={station.id}
+                                                        className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="flex min-w-0 items-center gap-3">
+                                                                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
+                                                                    <StationIcon className="h-5 w-5" />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="truncate font-semibold">{station.station_name}</p>
+                                                                    {station.station_code && (
+                                                                        <p className="truncate text-xs text-muted-foreground">
+                                                                            Code: {station.station_code}
+                                                                        </p>
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge variant="outline">
-                                                                {getStationTypeLabel(station.station_type)}
-                                                            </Badge>
-                                                            {station.station_number && (
-                                                                <span className="ml-2 text-sm text-muted-foreground">
-                                                                    #{station.station_number}
-                                                                </span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="text-sm">{station.location_name}</span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex flex-col gap-1">
-                                                                <Badge variant={station.is_online ? 'default' : 'secondary'}>
-                                                                    {station.is_online ? 'Online' : 'Offline'}
-                                                                </Badge>
-                                                                {!station.is_active && (
-                                                                    <Badge variant="destructive">Deactivated</Badge>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {station.device_name || station.hardware_model ? (
-                                                                <div className="text-sm">
-                                                                    <div>{station.device_name || '-'}</div>
-                                                                    <div className="text-muted-foreground">
-                                                                        {station.hardware_model || '-'}
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-muted-foreground">-</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {station.last_heartbeat_at ? (
+                                                            <div className="flex shrink-0 items-center gap-1">
                                                                 <span className="text-sm text-muted-foreground">
-                                                                    {formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })}
+                                                                    {station.is_online ? 'Online' : 'Offline'}
+                                                                    {!station.is_active && ' · Deactivated'}
                                                                 </span>
-                                                            ) : (
-                                                                <span className="text-muted-foreground">-</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {canManageDevices ? (
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" aria-label={`Actions for ${station.station_name}`}>
-                                                                            <MoreHorizontal className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        <DropdownMenuItem onClick={() => handleToggleStationStatus(station)}>
-                                                                            {station.is_active ? (
-                                                                                <>
-                                                                                    <AlertCircle className="h-4 w-4 mr-2" />
-                                                                                    Deactivate
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                                                                                    Reactivate
-                                                                                </>
-                                                                            )}
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem
-                                                                            className="text-destructive"
-                                                                            onClick={() => handleDeleteStation(station)}
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4 mr-2" />
-                                                                            Delete
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground">View only</span>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-
-                                        {/* Mirrors the table's `hidden lg:block`. Same
-                                            data, stacked: identity and status lead, the
-                                            rest drops into a two-column field grid. */}
-                                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-                                            {filteredStations.map((station: Station & { location_name: string }) => (
-                                                <div
-                                                    key={station.id}
-                                                    className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex min-w-0 items-center gap-3">
-                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                                                <span className="text-lg">{getStationTypeIcon(station.station_type)}</span>
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="truncate font-semibold">{station.station_name}</p>
-                                                                {station.station_code && (
-                                                                    <p className="truncate text-xs text-muted-foreground">
-                                                                        Code: {station.station_code}
-                                                                    </p>
-                                                                )}
+                                                                {canManageDevices && renderStationActions(station)}
                                                             </div>
                                                         </div>
-                                                        <Badge variant="secondary" className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium">
-                                                            {station.is_online ? 'Online' : 'Offline'}
-                                                        </Badge>
+
+                                                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                            <DeviceCardField
+                                                                label="Type"
+                                                                value={`${getStationTypeLabel(station.station_type)}${station.station_number ? ` #${station.station_number}` : ''}`}
+                                                            />
+                                                            <DeviceCardField label="Location" value={station.location_name} />
+                                                            <DeviceCardField
+                                                                label="Device"
+                                                                value={station.device_name || station.hardware_model || '—'}
+                                                            />
+                                                            <DeviceCardField
+                                                                label="Last heartbeat"
+                                                                value={
+                                                                    station.last_heartbeat_at
+                                                                        ? formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })
+                                                                        : 'Never'
+                                                                }
+                                                            />
+                                                        </div>
                                                     </div>
+                                                    )
+                                                })}
+                                            </div>
 
-                                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                                        <DeviceCardField
-                                                            label="Type"
-                                                            value={`${getStationTypeLabel(station.station_type)}${station.station_number ? ` #${station.station_number}` : ''}`}
-                                                        />
-                                                        <DeviceCardField label="Location" value={station.location_name} />
-                                                        <DeviceCardField
-                                                            label="Device"
-                                                            value={station.device_name || station.hardware_model || '—'}
-                                                        />
-                                                        <DeviceCardField
-                                                            label="Last heartbeat"
-                                                            value={
-                                                                station.last_heartbeat_at
-                                                                    ? formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })
-                                                                    : 'Never'
-                                                            }
-                                                        />
-                                                    </div>
+                                            <PaginationBar pagination={stationPagination} onPageChange={setStationPage} itemLabel="stations" />
+                                            </>
+                                        )}
+                                    </>
+                                )}
 
-                                                    {!station.is_active && (
-                                                        <Badge variant="secondary" className="mt-3 w-fit rounded-full border-0 px-2.5 text-xs font-medium">
-                                                            Deactivated
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                                {/* Terminals Tab Content */}
+                                {activeTab === 'terminals' && (
+                                    <>
+                                        {filteredTerminals.length === 0 ? (
+                                            <Empty>
+                                                <EmptyHeader>
+                                                    <EmptyMedia variant="icon">
+                                                        <CreditCard className="h-6 w-6" />
+                                                    </EmptyMedia>
+                                                    <EmptyTitle>
+                                                        {isFiltered ? 'No terminals match these filters' : 'No terminals yet'}
+                                                    </EmptyTitle>
+                                                    <EmptyDescription>
+                                                        {isFiltered
+                                                            ? 'Clear the search or pick another location to widen the results.'
+                                                            : 'Payment terminals appear here once one is added for this merchant.'}
+                                                    </EmptyDescription>
+                                                </EmptyHeader>
+                                            </Empty>
+                                        ) : (
+                                            <>
+                                            <Table variant="data" containerClassName="hidden lg:block">
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Terminal</TableHead>
+                                                        <TableHead>Type</TableHead>
+                                                        <TableHead>Serial Number</TableHead>
+                                                        <TableHead>Assigned Station</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead className="w-[50px]"><span className="sr-only">Actions</span></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {terminalPageRows.map((terminal) => (
+                                                        <TableRow key={terminal.id}>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                                                        <CreditCard className="h-5 w-5" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-medium">{terminal.terminal_name}</div>
+                                                                        <div className="text-sm text-muted-foreground">
+                                                                            {terminal.location_name}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
+                                                                    {getTerminalTypeLabel(terminal.terminal_type)}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <code className="text-sm bg-muted px-2 py-1 rounded">
+                                                                    {terminal.serial_number || '—'}
+                                                                </code>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {terminal.station_name ? (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Link2 className="h-3 w-3 text-muted-foreground" />
+                                                                        <span className="text-sm">{terminal.station_name}</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">Unassigned</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
+                                                                    {terminal.is_connected ? (
+                                                                        <Wifi className="h-3 w-3 mr-1" />
+                                                                    ) : (
+                                                                        <WifiOff className="h-3 w-3 mr-1" />
+                                                                    )}
+                                                                    {terminal.is_connected ? 'Online' : 'Offline'}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {canManageDevices ? (
+                                                                    renderTerminalActions(terminal)
+                                                                ) : (
+                                                                    <span className="text-xs text-muted-foreground">View only</span>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
 
-                            {/* Terminals Tab Content */}
-                            {activeTab === 'terminals' && (
-                                <>
-                                    {/* Unique terminals, deduplicated by serial number (Castles + Valor) */}
-                                    <ConnectedTerminalsPanel
-                                        merchantId={merchantId}
-                                        locationId={selectedLocationId === 'all' ? null : selectedLocationId}
-                                    />
-                                    {filteredTerminals.length === 0 ? (
-                                        <Empty>
-                                            <EmptyHeader>
-                                                <EmptyMedia variant="icon">
-                                                    <CreditCard className="h-6 w-6" />
-                                                </EmptyMedia>
-                                                <EmptyTitle>No terminals found</EmptyTitle>
-                                                <EmptyDescription>
-                                                    {searchTerm || selectedLocationId !== 'all'
-                                                        ? 'Try adjusting your filters to see more terminals.'
-                                                        : 'No payment terminals are registered for this merchant yet.'}
-                                                </EmptyDescription>
-                                            </EmptyHeader>
-                                        </Empty>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                        <Table variant="data" containerClassName="hidden lg:block">
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Terminal</TableHead>
-                                                    <TableHead>Type</TableHead>
-                                                    <TableHead>Serial Number</TableHead>
-                                                    <TableHead>Assigned Station</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead className="w-[50px]"></TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {filteredTerminals.map((terminal: PaymentTerminal & { location_name: string; station_name: string | null }) => (
-                                                    <TableRow key={terminal.id}>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
-                                                                    terminal.is_connected
-                                                                        ? 'bg-muted text-foreground'
-                                                                        : 'bg-muted text-muted-foreground'
-                                                                }`}>
+                                            {/* Mirrors the table's `hidden lg:block`. */}
+                                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                                {terminalPageRows.map((terminal) => (
+                                                    <div
+                                                        key={terminal.id}
+                                                        className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="flex min-w-0 items-center gap-3">
+                                                                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
                                                                     <CreditCard className="h-5 w-5" />
                                                                 </div>
-                                                                <div>
-                                                                    <div className="font-medium">{terminal.terminal_name}</div>
-                                                                    <div className="text-sm text-muted-foreground">
-                                                                        {terminal.location_name}
-                                                                    </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="truncate font-semibold">{terminal.terminal_name}</p>
+                                                                    <p className="truncate text-xs text-muted-foreground">
+                                                                        {getTerminalTypeLabel(terminal.terminal_type)}
+                                                                    </p>
                                                                 </div>
                                                             </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge variant="outline">
-                                                                {getTerminalTypeLabel(terminal.terminal_type)}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <code className="text-sm bg-muted px-2 py-1 rounded">
-                                                                {terminal.serial_number || '—'}
-                                                            </code>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {terminal.station_name ? (
-                                                                <div className="flex items-center gap-2">
-                                                                    <Link2 className="h-3 w-3 text-muted-foreground" />
-                                                                    <span className="text-sm">{terminal.station_name}</span>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-muted-foreground">Unassigned</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-2">
-                                                                {terminal.is_connected ? (
-                                                                    <Badge variant="secondary">
-                                                                        <Wifi className="h-3 w-3 mr-1" />
-                                                                        Online
-                                                                    </Badge>
-                                                                ) : (
-                                                                    <Badge variant="secondary">
-                                                                        <WifiOff className="h-3 w-3 mr-1" />
-                                                                        Offline
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {canManageDevices ? (
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" aria-label={`Actions for ${terminal.terminal_name}`}>
-                                                                            <MoreHorizontal className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        <DropdownMenuItem onClick={() => setEditTerminal(terminal)}>
-                                                                            <Settings2 className="h-4 w-4 mr-2" />
-                                                                            Edit
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem
-                                                                            onClick={() => handleTestConnection(terminal)}
-                                                                            disabled={testConnectionMutation.isPending}
-                                                                        >
-                                                                            <RefreshCw className={`h-4 w-4 mr-2 ${testConnectionMutation.isPending ? 'animate-spin' : ''}`} />
-                                                                            Test Connection
-                                                                        </DropdownMenuItem>
-                                                                        {terminal.station_id && (
-                                                                            <DropdownMenuItem onClick={() => handleUnlinkTerminal(terminal)}>
-                                                                                <Unlink className="h-4 w-4 mr-2" />
-                                                                                Unlink from Station
-                                                                            </DropdownMenuItem>
-                                                                        )}
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem
-                                                                            className="text-destructive"
-                                                                            onClick={() => handleDeleteTerminal(terminal)}
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4 mr-2" />
-                                                                            Delete
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground">View only</span>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-
-                                        {/* Mirrors the table's `hidden lg:block`. */}
-                                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-                                            {filteredTerminals.map((terminal: PaymentTerminal & { location_name: string; station_name: string | null }) => (
-                                                <div
-                                                    key={terminal.id}
-                                                    className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex min-w-0 items-center gap-3">
-                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                                                <CreditCard className="h-5 w-5 text-muted-foreground" />
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="truncate font-semibold">{terminal.terminal_name}</p>
-                                                                <p className="truncate text-xs text-muted-foreground">
-                                                                    {getTerminalTypeLabel(terminal.terminal_type)}
-                                                                </p>
+                                                            <div className="flex shrink-0 items-center gap-1">
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    {terminal.is_connected ? 'Online' : 'Offline'}
+                                                                </span>
+                                                                {canManageDevices && renderTerminalActions(terminal)}
                                                             </div>
                                                         </div>
-                                                        <Badge variant="secondary" className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium">
-                                                            {terminal.is_connected ? 'Online' : 'Offline'}
-                                                        </Badge>
-                                                    </div>
 
-                                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                                        <DeviceCardField label="Serial" value={terminal.serial_number || '—'} />
-                                                        <DeviceCardField label="Location" value={terminal.location_name} />
-                                                        <DeviceCardField label="Station" value={terminal.station_name || 'Unassigned'} />
+                                                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                            <DeviceCardField label="Serial" value={terminal.serial_number || '—'} />
+                                                            <DeviceCardField label="Location" value={terminal.location_name} />
+                                                            <DeviceCardField label="Station" value={terminal.station_name || 'Unassigned'} />
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </>
-                    )}
-                </div>
+                                                ))}
+                                            </div>
+
+                                            <PaginationBar pagination={terminalPagination} onPageChange={setTerminalPage} itemLabel="terminals" />
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </PanelSection>
             </Panel>
+
+            {/* Unique terminals, deduplicated by serial number (Castles + Valor).
+                Its own panel: a tier-1 container never nests inside another. */}
+            {activeTab === 'terminals' && (
+                <ConnectedTerminalsPanel
+                    merchantId={merchantId}
+                    locationId={selectedLocationId === 'all' ? null : selectedLocationId}
+                />
+            )}
 
             {/* Add Station Dialog */}
             <AddStationDialog

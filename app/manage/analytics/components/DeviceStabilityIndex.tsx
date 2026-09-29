@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import {
     MobileColumnsButton,
     initialHiddenColumns,
@@ -67,6 +69,20 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
 
     const { data: stabilityData, isLoading } = useDeviceStability(days)
     const { data: drillDownData, isLoading: drillDownLoading } = useVersionDrillDown(selectedVersion, days)
+
+    // Both tables page at 10 (§5.7) — replaces the old max-h scroll wells.
+    // Newest version first, the reverse of the chart's left-to-right order.
+    const versionRows = useMemo(
+        () => [...(stabilityData?.versionBars ?? [])].reverse(),
+        [stabilityData?.versionBars]
+    )
+    const versionPage = useClientPagination(versionRows, 10)
+    const modelPage = useClientPagination(drillDownData?.models ?? [], 10)
+    const setVersionPage = versionPage.setPage
+    const setModelPage = modelPage.setPage
+    // A new period or a different version is a new list — start from the top.
+    useEffect(() => { setVersionPage(1) }, [days, setVersionPage])
+    useEffect(() => { setModelPage(1) }, [days, selectedVersion, setModelPage])
 
     const INSTABILITY_THRESHOLD = 1 // 1% threshold
 
@@ -358,7 +374,7 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
                                     ))}
                                 </div>
                             ) : stabilityData && stabilityData.versionBars.length > 0 ? (
-                                <div className="max-h-95 max-w-full overflow-auto">
+                                <>
                                     {/* Min-width lifted on mobile so hidden columns actually
                                         narrow the table instead of scrolling sideways. */}
                                     <Table variant="data" className={cn(!isMobile && 'min-w-[520px]')}>
@@ -372,7 +388,7 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {[...stabilityData.versionBars].reverse().map((bar) => (
+                                            {versionPage.pageRows.map((bar) => (
                                                 <TableRow
                                                     key={bar.version}
                                                     className="cursor-pointer hover:bg-muted/50"
@@ -415,7 +431,12 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
                                             ))}
                                         </TableBody>
                                     </Table>
-                                </div>
+                                    <PaginationBar
+                                        pagination={versionPage.pagination}
+                                        onPageChange={versionPage.setPage}
+                                        itemLabel="versions"
+                                    />
+                                </>
                             ) : (
                                 <div className="h-75 flex flex-col items-center justify-center text-muted-foreground gap-3">
                                     <Smartphone className="h-10 w-10 opacity-30" />
@@ -447,7 +468,7 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
                                     </div>
 
                                     {/* Model breakdown table */}
-                                    <div className="max-h-75 overflow-auto">
+                                    <div>
                                         <Table variant="data" className="min-w-[620px]">
                                             <TableHeader className="[&_tr]:border-0">
                                                 <TableRow>
@@ -460,7 +481,7 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {drillDownData.models.map((model) => (
+                                                {modelPage.pageRows.map((model) => (
                                                     <TableRow key={model.model}>
                                                         <TableCell>
                                                             <span className="font-medium">{model.model}</span>
@@ -487,6 +508,11 @@ export default function DeviceStabilityIndex({ besideChart }: { besideChart?: Re
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        <PaginationBar
+                                            pagination={modelPage.pagination}
+                                            onPageChange={modelPage.setPage}
+                                            itemLabel="models"
+                                        />
                                     </div>
                                 </div>
                             ) : (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +17,9 @@ import { useWasteLogs, useLogWaste } from "../hooks/useWasteAndCounts";
 import { LogWasteDialog, WastePickItem } from "./LogWasteDialog";
 import { WasteReason } from "../../actions/waste";
 import { StatRow, StatTile } from "@/components/dashboard/shell";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
+import { useLocationStore } from "@/stores/location-store";
 
 const REASON_LABELS: Record<WasteReason, string> = {
   spoilage: "Spoilage",
@@ -61,6 +64,14 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
     }
     return { todayCost: today, periodCost: total };
   }, [logs, todayISO]);
+
+  const { pageRows, pagination, setPage } = useClientPagination(logs, 10);
+
+  // A location switch starts the list from the top.
+  const selectedLocationId = useLocationStore((s) => s.selectedLocationId);
+  useEffect(() => {
+    setPage(1);
+  }, [selectedLocationId, setPage]);
 
   if (isAllLocations) {
     return (
@@ -128,7 +139,7 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.map((log) => (
+              {pageRows.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="whitespace-nowrap tabular-nums">
                     {formatWasteDate(log.waste_date)}
@@ -163,7 +174,7 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
 
           {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-            {logs.map((log) => (
+            {pageRows.map((log) => (
               <article
                 key={log.id}
                 className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
@@ -224,6 +235,12 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
               </article>
             ))}
           </div>
+
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="entries"
+          />
         </>
       )}
 

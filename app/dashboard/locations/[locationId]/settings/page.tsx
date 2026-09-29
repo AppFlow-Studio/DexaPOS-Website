@@ -93,7 +93,7 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
 
   return (
     <PageShell width="narrow">
-      <PageHeader
+      <PageHeader showSubtitleOnMobile
         title="Location Tax & Banking"
         subtitle={`${location.name}${location.city ? ` · ${location.city}, ${location.state}` : ''}`}
         backHref="/dashboard/locations"

@@ -20,6 +20,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2, Building2 } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { SendAdminInviteButton } from './components/SendAdminInviteButton'
 import { SendOrganizationMembersInviteButton } from './components/SendOrganizationMembersInviteButton'
 import { MerchantsModel, PendingOrgAdminInvitesModel, UsersModel } from '@/types/db-modles'
@@ -157,6 +159,10 @@ export default function OrganizationInfoPage() {
         observer.observe(rail)
         return () => observer.disconnect()
     }, [activeTab, isLoading, error])
+
+    // §5.7: the members table pages at 10, and the mobile card grid with it.
+    // Called above the loading/error returns so the hook order is fixed.
+    const memberPage = useClientPagination<any>((data as any)?.members ?? [], 10)
 
     /* Shaped to the converted page: header block, then one panel. */
     if (isLoading) return (
@@ -454,7 +460,7 @@ export default function OrganizationInfoPage() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {(members || []).map((m: any) => (
+                                                {memberPage.pageRows.map((m: any) => (
                                                     <TableRow key={m.id}>
                                                         <TableCell>
                                                             <div className="flex min-w-0 items-center gap-3">
@@ -486,7 +492,7 @@ export default function OrganizationInfoPage() {
                                         </Table>
 
                                         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-                                            {(members || []).map((m: any) => (
+                                            {memberPage.pageRows.map((m: any) => (
                                                 <div key={m.id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex min-w-0 items-center gap-3">
@@ -522,6 +528,12 @@ export default function OrganizationInfoPage() {
                                                 </div>
                                             ))}
                                         </div>
+
+                                        <PaginationBar
+                                            pagination={memberPage.pagination}
+                                            onPageChange={memberPage.setPage}
+                                            itemLabel="members"
+                                        />
                                         </>
                                     )}
                                     {
@@ -767,7 +779,7 @@ export default function OrganizationInfoPage() {
                                     the action row below, which is where the
                                     irreversible thing actually happens (§6 ex. 2). */}
                                 <Panel>
-                                    <PanelSection
+                                    <PanelSection showCaptionOnMobile
                                         icon={AlertTriangle}
                                         label="Danger Zone"
                                         caption="Irreversible and destructive actions. Please proceed with caution."

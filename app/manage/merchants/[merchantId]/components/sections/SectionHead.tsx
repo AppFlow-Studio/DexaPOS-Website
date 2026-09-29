@@ -1,5 +1,10 @@
 import { ReactNode } from 'react'
 
+/**
+ * Legacy tab heading. New and converted tabs use `Panel > PanelSection`
+ * instead; this remains only for importers that have not moved yet. No rule
+ * under the heading (§5.5) and the §3.2 section-heading type.
+ */
 export function SectionHead({
     title,
     sub,
@@ -10,14 +15,12 @@ export function SectionHead({
     actions?: ReactNode
 }) {
     return (
-        <div className="mb-4 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-                <h2 className="text-[22px] leading-tight tracking-[-0.015em] text-foreground">
-                    {title}
-                </h2>
-                {sub && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{sub}</p>}
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="min-w-0 flex-1 basis-64">
+                <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">{title}</h2>
+                {sub && <p className="mt-1 text-sm text-muted-foreground max-sm:hidden">{sub}</p>}
             </div>
-            {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+            {actions && <div className="flex min-w-0 max-w-full items-center gap-2">{actions}</div>}
         </div>
     )
 }

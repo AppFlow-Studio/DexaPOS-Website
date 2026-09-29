@@ -18,6 +18,7 @@ export function StatTile({
   label,
   value,
   meta,
+  showMetaOnMobile = false,
   metaClassName,
   icon,
   isLoading,
@@ -30,10 +31,13 @@ export function StatTile({
   /** A small line beneath the figure — a comparison, a count, a share. */
   meta?: React.ReactNode
   /**
-   * Extra classes for the meta line. Mainly a responsive escape hatch: a tile
-   * whose meta is noise on a phone can drop it with `hidden sm:block` without
-   * the caller having to branch on viewport width in JS.
+   * The meta line is hidden below `sm` by default (UI-DESIGN-SYSTEM §13.4): a
+   * comparison or delta is detail a phone can drop. Pass this when the figure
+   * is ambiguous without it — a denominator ("of 12 locations"), a unit, an
+   * alarm, or the reason a figure reads "—".
    */
+  showMetaOnMobile?: boolean
+  /** Extra classes for the meta line. */
   metaClassName?: string
   icon?: React.ReactNode
   isLoading?: boolean
@@ -88,6 +92,7 @@ export function StatTile({
           data-slot="stat-meta"
           className={cn(
             'mt-0.5 truncate text-[0.8125rem] text-muted-foreground',
+            !showMetaOnMobile && 'max-sm:hidden',
             metaClassName
           )}
         >
@@ -182,6 +187,8 @@ export function InsetTile({
   label,
   value,
   meta,
+  showMetaOnMobile = false,
+  metaClassName,
   icon,
   dimmed,
   className,
@@ -189,6 +196,10 @@ export function InsetTile({
   label: React.ReactNode
   value: React.ReactNode
   meta?: React.ReactNode
+  /** As on `StatTile`: the meta line is hidden below `sm` unless this is set. */
+  showMetaOnMobile?: boolean
+  /** Extra classes for the meta line. */
+  metaClassName?: string
   icon?: React.ReactNode
   dimmed?: boolean
   className?: string
@@ -212,7 +223,16 @@ export function InsetTile({
         {value}
       </p>
       {meta && (
-        <p data-slot="stat-meta" className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
+        <p
+          data-slot="stat-meta"
+          className={cn(
+            'mt-1 truncate text-xs text-muted-foreground',
+            !showMetaOnMobile && 'max-sm:hidden',
+            metaClassName
+          )}
+        >
+          {meta}
+        </p>
       )}
     </div>
   )

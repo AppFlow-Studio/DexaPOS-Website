@@ -51,6 +51,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** Time, type and amount tell the story; the descriptive columns are optional. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -190,6 +192,7 @@ export default function DiscrepancyReportPage() {
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("desc"); }
+    setPage(1);
   }
 
   const processed = useMemo(() => {
@@ -212,6 +215,17 @@ export default function DiscrepancyReportPage() {
       return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
   }, [allRows, typeFilter, search, sortKey, sortDir]);
+
+  // Page the sorted/filtered timeline; KPIs and insights use every row.
+  const { pageRows, pagination, setPage } = useClientPagination(processed, 10);
+
+  // A new search, type filter or date range starts from the first page.
+  const filterSig = `${search}|${typeFilter}|${queryDateRange.from.getTime()}|${queryDateRange.to.getTime()}`;
+  const [prevFilterSig, setPrevFilterSig] = useState(filterSig);
+  if (prevFilterSig !== filterSig) {
+    setPrevFilterSig(filterSig);
+    setPage(1);
+  }
 
   const totalVoids = allRows.filter(r => r.type === "void");
   const totalRefunds = allRows.filter(r => r.type === "refund");
@@ -276,7 +290,7 @@ export default function DiscrepancyReportPage() {
       <Panel padded>
         <StatRow columns={4}>
         {kpiCards.map((kpi) => (
-          <StatTile
+          <StatTile showMetaOnMobile={isError}
             key={kpi.label}
             label={kpi.label}
             value={kpi.value ?? ""}
@@ -478,7 +492,7 @@ export default function DiscrepancyReportPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                processed.map((row) => {
+                pageRows.map((row) => {
                   const cfg = TYPE_CONFIG[row.type];
                   const Icon = cfg.icon;
                   return (
@@ -523,6 +537,12 @@ export default function DiscrepancyReportPage() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="events"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
     </PageShell>

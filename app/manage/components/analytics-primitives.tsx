@@ -417,20 +417,19 @@ export function CategoryTick({
 
 /**
  * One analytics block: a titled panel wrapping a chart or a table.
- *
- * `flush` drops the section's own padding for a table, which brings its own
- * `rounded-2xl bg-muted/20` well — §5.2 says a table is not wrapped in a
- * panel's padding, or you get a box inside a box.
  */
 export function AnalyticsPanel({
   title,
   caption,
+  showCaptionOnMobile = false,
   icon,
   action,
   children,
 }: {
   title: React.ReactNode
   caption?: React.ReactNode
+  /** Passed to `PanelSection`: keep a caption that states scope or a basis. */
+  showCaptionOnMobile?: boolean
   icon?: React.ComponentType<{ className?: string }>
   action?: React.ReactNode
   children: React.ReactNode
@@ -440,19 +439,13 @@ export function AnalyticsPanel({
       <PanelSection
         icon={icon}
         label={title}
-        // Captions are desktop-only. On a phone every one of these restates
-        // its own title in more words ("Platform GMV Trend" / "Daily gross
-        // merchandise value"), and that line plus its margin is vertical space
-        // the chart itself needs — a stack of eight panels paid it eight
-        // times. Hidden with CSS rather than a JS breakpoint so the server and
-        // client render the same markup, and so the text stays available to
-        // screen readers and to find-in-page at every width.
-        //
-        // `captionClassName` hides the whole `<p>`, not just its text: wrapping
-        // the contents instead would leave the paragraph's own `mt-1` behind
-        // as a phantom 4px gap.
+        // Captions are desktop-only by default (PanelSection hides them below
+        // `sm`). On a phone most of these restate their own title in more words
+        // ("Platform GMV Trend" / "Daily gross merchandise value"), and that
+        // line is vertical space the chart itself needs — a stack of eight
+        // panels paid it eight times.
         caption={caption}
-        captionClassName="hidden sm:block"
+        showCaptionOnMobile={showCaptionOnMobile}
         action={action}
       >
         {children}

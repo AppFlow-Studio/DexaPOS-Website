@@ -297,6 +297,8 @@ export function LocationDensityInsights() {
   const showCityCol = (id: string) => !isMobile || !cityHiddenCols.has(id)
   // Above the loading/empty early returns, like the other hooks.
   const cityPage = useClientPagination(data?.byCity ?? [])
+  // Paged at 10 (§5.7) — replaces the old max-h-80 scroll well.
+  const statePage = useClientPagination(data?.byState ?? [], 10)
 
   if (isLoading) {
     // Built from the same Panel/PanelSection/StatRow primitives as the loaded
@@ -495,47 +497,50 @@ export function LocationDensityInsights() {
               />
             }
           >
-            <div className="max-h-80 overflow-auto">
-              {/* Min-width lifted on mobile so hidden columns actually narrow the
-                  table instead of leaving it scrolling sideways. */}
-              <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
-                <TableHeader className="[&_tr]:border-0">
-                  <TableRow>
-                    <TableHead>State</TableHead>
-                    {showStateCol('locations') && <TableHead className="text-right">Locations</TableHead>}
-                    {showStateCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
-                    {showStateCol('gpv') && <TableHead className="whitespace-nowrap text-right">30d GPV</TableHead>}
-                    {/* Top Cities was `hidden lg:table-cell`; the picker now owns
-                        that decision so there is one mechanism, not two fighting. */}
-                    {showStateCol('topCities') && <TableHead className="hidden lg:table-cell">Top Cities</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.byState.map(row => (
-                    <TableRow key={row.state}>
-                      <TableCell>
-                        <div className="font-medium">{row.stateName}</div>
-                        <div className="text-xs text-muted-foreground">{row.state}</div>
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
+              <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead>State</TableHead>
+                  {showStateCol('locations') && <TableHead className="text-right">Locations</TableHead>}
+                  {showStateCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                  {showStateCol('gpv') && <TableHead className="whitespace-nowrap text-right">30d GPV</TableHead>}
+                  {/* Top Cities was `hidden lg:table-cell`; the picker now owns
+                      that decision so there is one mechanism, not two fighting. */}
+                  {showStateCol('topCities') && <TableHead className="hidden lg:table-cell">Top Cities</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statePage.pageRows.map(row => (
+                  <TableRow key={row.state}>
+                    <TableCell>
+                      <div className="font-medium">{row.stateName}</div>
+                      <div className="text-xs text-muted-foreground">{row.state}</div>
+                    </TableCell>
+                    {showStateCol('locations') && (
+                      <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                    )}
+                    {showStateCol('merchants') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                    )}
+                    {showStateCol('gpv') && (
+                      <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                    )}
+                    {showStateCol('topCities') && (
+                      <TableCell className="hidden text-muted-foreground lg:table-cell">
+                        {row.topCities.slice(0, 2).join(' · ')}
                       </TableCell>
-                      {showStateCol('locations') && (
-                        <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
-                      )}
-                      {showStateCol('merchants') && (
-                        <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
-                      )}
-                      {showStateCol('gpv') && (
-                        <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
-                      )}
-                      {showStateCol('topCities') && (
-                        <TableCell className="hidden text-muted-foreground lg:table-cell">
-                          {row.topCities.slice(0, 2).join(' · ')}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <PaginationBar
+              pagination={statePage.pagination}
+              onPageChange={statePage.setPage}
+              itemLabel="states"
+            />
           </PanelSection>
         </Panel>
 
@@ -612,7 +617,6 @@ export function LocationDensityInsights() {
             </TableBody>
           </Table>
           <PaginationBar
-            className="border-t-0 pt-0"
             pagination={cityPage.pagination}
             onPageChange={cityPage.setPage}
             itemLabel="cities"

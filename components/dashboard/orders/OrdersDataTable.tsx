@@ -199,7 +199,7 @@ export function OrdersDataTable({
     readOnly,
     showLocationColumn,
     locationsMap,
-    pageSize = 50,
+    pageSize = 10,
     hideOrderStatus = false,
     serverPaginated = false,
     searchValue,

@@ -81,13 +81,15 @@ import {
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { HardwareHealthTab } from "@/components/dashboard/reports/HardwareHealthTab";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const VARIANCE_WARNING = 5;
 const VARIANCE_ALERT = 20;
 const NO_SALE_THRESHOLD = 5;
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 const DRAWER_COLORS = [
   "#2563eb", "#16a34a", "#dc2626", "#d97706",
@@ -309,7 +311,7 @@ function SummaryCards({
       <Panel padded>
         <StatRow columns={4}>
         {cards.map((card) => (
-          <StatTile
+          <StatTile showMetaOnMobile={Boolean(card.subtitle)}
             key={card.title}
             label={card.title}
             value={<span className={card.valueClass}>{card.value}</span>}
@@ -393,8 +395,18 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
     });
   }, [sessions, sortKey, sortAsc, statusFilter]);
 
+  // A new date range starts from the first page.
+  const rangeSig = `${dateFrom.getTime()}|${dateTo.getTime()}`;
+  const [prevRangeSig, setPrevRangeSig] = useState(rangeSig);
+  if (prevRangeSig !== rangeSig) {
+    setPrevRangeSig(rangeSig);
+    setPage(1);
+  }
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  // Clamped so a shrinking list (refetch) never strands the view past the end.
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // Reset to page 1 when filter/sort changes
   const handleSort = (key: SortKey) => {
@@ -610,20 +622,20 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                 variant="outline"
                 size="icon"
                 className="h-7 w-7"
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
+                disabled={currentPage === 1}
+                onClick={() => setPage(currentPage - 1)}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-xs">
-                Page {page} of {totalPages}
+                Page {currentPage} of {totalPages}
               </span>
               <Button
                 variant="outline"
                 size="icon"
                 className="h-7 w-7"
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                disabled={currentPage === totalPages}
+                onClick={() => setPage(currentPage + 1)}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -664,7 +676,7 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
         </p>
       </div>
       <div className="overflow-x-auto">
-        <Table variant="data">
+        <Table bounded={false} variant="data">
           <TableHeader className="[&_tr]:border-0">
             <TableRow className="border-muted/50">
               <TableHead className="text-xs h-7 pl-4">Time</TableHead>
@@ -744,6 +756,19 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
       return true;
     });
   }, [ops, employeeFilter, drawerFilter]);
+  const {
+    pageRows: pagedOps,
+    pagination: opsPagination,
+    setPage: setOpsPage,
+  } = useClientPagination(filteredOps, ITEMS_PER_PAGE);
+
+  // A new filter or date range starts from the first page.
+  const opsSig = `${employeeFilter}|${drawerFilter}|${dateFrom.getTime()}|${dateTo.getTime()}`;
+  const [prevOpsSig, setPrevOpsSig] = useState(opsSig);
+  if (prevOpsSig !== opsSig) {
+    setPrevOpsSig(opsSig);
+    setOpsPage(1);
+  }
 
   // Aggregate per employee for chart (use full ops, not filtered — shows true comparison)
   const byEmployee = useMemo(() => {
@@ -985,7 +1010,7 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                     </TableCell>
                   </TableRow>
                 )
-                : filteredOps.map((op) => (
+                : pagedOps.map((op) => (
                     <TableRow key={op.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {format(new Date(op.performed_at), "MMM d, h:mm a")}
@@ -1018,6 +1043,12 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
             </TableBody>
           </Table>
         </div>
+        <PaginationBar
+          pagination={opsPagination}
+          onPageChange={setOpsPage}
+          isLoading={isLoading}
+          itemLabel="events"
+        />
         {!isLoading && filteredOps.length > 0 && (
           <p className="text-sm text-muted-foreground">
             {filteredOps.length} event{filteredOps.length !== 1 ? "s" : ""}

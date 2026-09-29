@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, TrendingUp, Clock, DollarSign, ArrowUpDown } from "lucide-react";
 import {
   Select,
@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { PageShell, PageHeader, Panel, PanelSection, StatRow, StatTile, InsetTile } from "@/components/dashboard/shell";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import { useMyTipHistory } from "../hooks/useTipDistribution";
 import { SHIFT_LABELS, formatMoney } from "../lib/constants";
 import type { MyTipEntry } from "@/app/dashboard/actions/tips";
@@ -195,6 +197,13 @@ export default function MyTipsPage() {
     limitDays
   );
 
+  const { pageRows, pagination, setPage } = useClientPagination(entries, 10);
+
+  // A new range or location starts the shift list from the top.
+  useEffect(() => {
+    setPage(1);
+  }, [limitDays, selectedLocationId, setPage]);
+
   // Aggregate summaries
   const totalNet = entries.reduce((sum, e) => sum + e.net_tips, 0);
   const totalOwn = entries.reduce((sum, e) => sum + e.individual_tips_earned, 0);
@@ -239,7 +248,7 @@ export default function MyTipsPage() {
 
       {/* Summary */}
       <Panel>
-        <PanelSection
+        <PanelSection showCaptionOnMobile
           icon={DollarSign}
           label="Summary"
           caption={
@@ -308,7 +317,7 @@ export default function MyTipsPage() {
       {/* Weekly rollup */}
       {!isLoading && weeks.length > 0 && (
         <Panel>
-          <PanelSection
+          <PanelSection showCaptionOnMobile
             icon={TrendingUp}
             label="Weekly Rollup"
             caption="Net tips by week, most recent first"
@@ -378,17 +387,23 @@ export default function MyTipsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry) => (
+                {pageRows.map((entry) => (
                   <DetailRow key={entry.session_id} entry={entry} />
                 ))}
               </TableBody>
             </Table>
 
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-              {entries.map((entry) => (
+              {pageRows.map((entry) => (
                 <TipEntryCard key={entry.session_id} entry={entry} />
               ))}
             </div>
+
+            <PaginationBar
+              pagination={pagination}
+              onPageChange={setPage}
+              itemLabel="shifts"
+            />
           </PanelSection>
         </Panel>
       )}

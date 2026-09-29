@@ -45,6 +45,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** Station name and auto-bumped anchor the row; the middle figures are optional. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -96,6 +98,7 @@ export default function KitchenPerformancePage() {
   function handleStationSort(key: StationSort) {
     if (key === stationSort) setStationDir(d => d === "asc" ? "desc" : "asc");
     else { setStationSort(key); setStationDir("desc"); }
+    setPage(1);
   }
 
   const sortedStations = useMemo(() => {
@@ -111,6 +114,17 @@ export default function KitchenPerformancePage() {
 
   const maxItems = sortedStations.reduce((m, s) => Math.max(m, s.total_items), 0);
   const maxPrep = sortedStations.reduce((m, s) => Math.max(m, s.avg_prep_minutes), 0);
+
+  // Page the sorted stations; the bar scales above use every station.
+  const { pageRows, pagination, setPage } = useClientPagination(sortedStations, 10);
+
+  // A new date range starts from the first page.
+  const rangeSig = `${queryDateRange.from.getTime()}|${queryDateRange.to.getTime()}`;
+  const [prevRangeSig, setPrevRangeSig] = useState(rangeSig);
+  if (prevRangeSig !== rangeSig) {
+    setPrevRangeSig(rangeSig);
+    setPage(1);
+  }
 
   const kpis = [
     {
@@ -162,7 +176,7 @@ export default function KitchenPerformancePage() {
       <Panel padded>
         <StatRow columns={4}>
         {kpis.map((kpi) => (
-          <StatTile
+          <StatTile showMetaOnMobile={isError}
             key={kpi.label}
             label={kpi.label}
             value={kpi.value ?? ""}
@@ -363,7 +377,7 @@ export default function KitchenPerformancePage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedStations.map((station) => {
+                pageRows.map((station) => {
                   const itemsPct = maxItems > 0 ? (station.total_items / maxItems) * 100 : 0;
                   const prepPct = maxPrep > 0 ? (station.avg_prep_minutes / maxPrep) * 100 : 0;
                   const autoBumpRate = station.total_items > 0
@@ -423,6 +437,12 @@ export default function KitchenPerformancePage() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="stations"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
     </PageShell>

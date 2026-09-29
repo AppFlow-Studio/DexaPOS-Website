@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
-  AlertOctagon,
   Ban,
   CheckCircle2,
   Eye,
@@ -11,12 +10,13 @@ import {
   RefreshCcwDot,
   RotateCcw,
   Search,
+  X,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -43,7 +44,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import type { PaginationMeta } from '@/types/pagination'
 import { cn } from '@/lib/utils'
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  FilterSelect,
+  LoadError,
+  RecordCard,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from '@/app/manage/transactions/components/ledger-primitives'
 
 import {
   abandonDeadLetterEntry,
@@ -55,27 +69,15 @@ import {
   type DlqStatus,
 } from '@/app/manage/actions/dead-letter-queue'
 
-import { DeadLetterDetailSheet } from './DeadLetterDetailSheet'
+import { DeadLetterDetailDialog } from './DeadLetterDetailDialog'
+import { RetryFigure, STATUS_LABELS, dlqRowState } from './dlq-row'
 
-const PAGE_SIZE = 50
+/** Every table pages 10 at a time, server-paged lists included (§5.7). */
+const PAGE_SIZE = 10
+const TABLE_COLUMNS = 6
 
 interface Props {
   canMutate: boolean
-}
-
-function statusBadgeClass(status: string): string {
-  switch (status) {
-    case 'pending':
-      return 'border-amber-300 bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
-    case 'retrying':
-      return 'border-blue-300 bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'
-    case 'resolved':
-      return 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
-    case 'abandoned':
-      return 'border-slate-300 bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300'
-    default:
-      return 'border-slate-300 bg-slate-100 text-slate-700'
-  }
 }
 
 function absoluteTime(dateStr: string): string {
@@ -103,12 +105,22 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
   const [searchInput, setSearchInput] = useState('')
   const search = useDebouncedValue(searchInput, 300)
 
+  const hasActiveFilters =
+    source !== 'all' || eventType !== 'all' || status !== 'all' || searchInput.trim() !== ''
+
+  function clearFilters() {
+    setSource('all')
+    setEventType('all')
+    setStatus('all')
+    setSearchInput('')
+  }
+
   // ── Pagination ─────────────────────────────────────────────────────────────
-  const [offset, setOffset] = useState(0)
+  const [page, setPage] = useState(1)
 
   // Reset page when filters change.
   useEffect(() => {
-    setOffset(0)
+    setPage(1)
   }, [source, eventType, status, search])
 
   const filters: DlqFilters = useMemo(
@@ -127,8 +139,8 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
   const queryClient = useQueryClient()
 
   const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['dlq', filters, PAGE_SIZE, offset],
-    queryFn: () => listDeadLetterEntries(filters, PAGE_SIZE, offset),
+    queryKey: ['dlq', filters, PAGE_SIZE, page],
+    queryFn: () => listDeadLetterEntries(filters, PAGE_SIZE, (page - 1) * PAGE_SIZE),
     staleTime: 10_000,
     refetchInterval: isLiveTail ? 30_000 : false,
     placeholderData: (prev) => prev,
@@ -137,9 +149,26 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
   const rows = data?.data ?? []
   const total = data?.total ?? 0
   const facets = data?.facets ?? { sources: [], eventTypes: [] }
+  const loadError = data?.error ?? null
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const pagination: PaginationMeta = {
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+  }
+
+  // Clamp: resolving the last entry on a page must not strand the user on an
+  // empty one (§5.7).
+  useEffect(() => {
+    if (!isFetching && page > totalPages) setPage(totalPages)
+  }, [isFetching, page, totalPages])
 
   // ── Status counts (separate lightweight query) ─────────────────────────────
-  const { data: countsData } = useQuery({
+  const { data: countsData, isLoading: countsLoading } = useQuery({
     queryKey: ['dlq-counts', { source: filters.source, eventType: filters.eventType, search: filters.search }],
     queryFn: async () => {
       const [pending, retrying, abandoned, resolved] = await Promise.all([
@@ -148,11 +177,13 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
         listDeadLetterEntries({ ...filters, status: 'abandoned' }, 1, 0),
         listDeadLetterEntries({ ...filters, status: 'resolved' }, 1, 0),
       ])
+      // A count that failed to load is unknown, not zero (§4.9).
+      const count = (r: { total: number; error: string | null }) => (r.error ? null : r.total)
       return {
-        pending: pending.total,
-        retrying: retrying.total,
-        abandoned: abandoned.total,
-        resolved: resolved.total,
+        pending: count(pending),
+        retrying: count(retrying),
+        abandoned: count(abandoned),
+        resolved: count(resolved),
       }
     },
     staleTime: 10_000,
@@ -163,39 +194,51 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
   function invalidateAll() {
     queryClient.invalidateQueries({ queryKey: ['dlq'] })
     queryClient.invalidateQueries({ queryKey: ['dlq-counts'] })
+    // The open detail panel reads its own query; refresh it too.
+    queryClient.invalidateQueries({ queryKey: ['dlq-entry'] })
   }
 
   const retryMutation = useMutation({
     mutationFn: (id: string) => retryDeadLetterEntry(id),
     onSuccess: (result) => {
       if (!result.success) {
+        toast.error(result.error || 'Retry refused')
         return
+      }
+      if (result.resolved) {
+        toast.success('Retry succeeded, entry resolved')
+      } else {
+        toast.warning(`Retry did not resolve${result.error ? ` (${result.error})` : ''}`)
       }
       invalidateAll()
     },
-    onError: (err) => {},
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Retry failed'),
   })
 
   const resolveMutation = useMutation({
     mutationFn: (id: string) => resolveDeadLetterEntry(id),
     onSuccess: (result) => {
       if (!result.success) {
+        toast.error(result.error || 'Resolve failed')
         return
       }
+      toast.success('Marked as resolved')
       invalidateAll()
     },
-    onError: (err) => {},
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Resolve failed'),
   })
 
   const abandonMutation = useMutation({
     mutationFn: (args: { id: string; reason: string }) => abandonDeadLetterEntry(args.id, args.reason),
     onSuccess: (result) => {
       if (!result.success) {
+        toast.error(result.error || 'Abandon failed')
         return
       }
+      toast.success('Marked as abandoned')
       invalidateAll()
     },
-    onError: (err) => {},
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Abandon failed'),
   })
 
   // ── Abandon dialog ─────────────────────────────────────────────────────────
@@ -213,6 +256,7 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
   function submitAbandon() {
     if (!abandonTarget) return
     if (!abandonReason.trim()) {
+      toast.error('Reason is required')
       return
     }
     abandonMutation.mutate(
@@ -221,274 +265,333 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
     )
   }
 
-  // ── Detail sheet ───────────────────────────────────────────────────────────
+  // ── Detail panel ───────────────────────────────────────────────────────────
   const [detailId, setDetailId] = useState<string | null>(null)
 
-  const from = total === 0 ? 0 : offset + 1
-  const to = total === 0 ? 0 : Math.min(offset + rows.length, total)
-  const canPrev = offset > 0
-  const canNext = offset + PAGE_SIZE < total
+  // ── Presentation ───────────────────────────────────────────────────────────
+  const statusTiles: { key: DlqStatus; label: string; meta: string }[] = [
+    {
+      key: 'pending',
+      label: 'Pending',
+      meta: countsData?.pending ? 'Failed, awaiting retry or triage' : 'All clear',
+    },
+    { key: 'retrying', label: 'Retrying', meta: 'Replay in flight' },
+    { key: 'abandoned', label: 'Abandoned', meta: 'Given up, reason recorded' },
+    { key: 'resolved', label: 'Resolved', meta: 'Replayed or marked fixed' },
+  ]
+
+  const emptyTitle = hasActiveFilters
+    ? 'No failed deliveries match these filters'
+    : 'All clear — no failed webhook deliveries'
+  const emptyHint = hasActiveFilters
+    ? 'Clear the search or filters to widen the results.'
+    : 'Payloads that fail processing will appear here for retry or triage.'
+
+  /** Row actions, shared by the table row and the phone card. */
+  const renderRowActions = (row: DlqRow) => {
+    const { isTerminal, canRetry } = dlqRowState(row)
+    const label = `${row.source}${row.event_type ? ` ${row.event_type}` : ''}`
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            aria-label={`Actions for ${label} entry`}
+            className="h-8 w-8 rounded-full p-0"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={() => setDetailId(row.id)}>
+            <Eye className="mr-2 h-4 w-4" />
+            View details
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={!canMutate || !canRetry || retryMutation.isPending}
+            onSelect={() => retryMutation.mutate(row.id)}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Retry
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canMutate || isTerminal || resolveMutation.isPending}
+            onSelect={() => resolveMutation.mutate(row.id)}
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            Resolve
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!canMutate || isTerminal}
+            onSelect={() => openAbandon(row)}
+          >
+            <Ban className="mr-2 h-4 w-4" />
+            Abandon
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      {/* Filter bar */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="grid gap-3 md:grid-cols-5">
-            <label className="flex flex-col gap-1 text-sm md:col-span-2">
-              <span className="text-muted-foreground">Search error message</span>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="pl-9"
-                  placeholder="e.g. Restaurant not found"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-              </div>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Source</span>
-              <select
-                className="h-9 rounded-md border bg-background px-2 text-sm"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              >
-                <option value="all">All sources</option>
-                {facets.sources.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Event type</span>
-              <select
-                className="h-9 rounded-md border bg-background px-2 text-sm"
-                value={eventType}
-                onChange={(e) => setEventType(e.target.value)}
-              >
-                <option value="all">All events</option>
-                {facets.eventTypes.map((e) => (
-                  <option key={e} value={e}>{e}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Status</span>
-              <select
-                className="h-9 rounded-md border bg-background px-2 text-sm"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as DlqStatus | 'all')}
-              >
-                <option value="all">All statuses</option>
-                <option value="pending">Pending</option>
-                <option value="retrying">Retrying</option>
-                <option value="resolved">Resolved</option>
-                <option value="abandoned">Abandoned</option>
-              </select>
-            </label>
-          </div>
-          <div className="flex items-center justify-between">
-            {/* Status chips */}
-            <div className="flex flex-wrap items-center gap-2">
-              {(
-                [
-                  { key: 'pending', label: 'Pending', count: countsData?.pending ?? 0 },
-                  { key: 'retrying', label: 'Retrying', count: countsData?.retrying ?? 0 },
-                  { key: 'abandoned', label: 'Abandoned', count: countsData?.abandoned ?? 0 },
-                  { key: 'resolved', label: 'Resolved', count: countsData?.resolved ?? 0 },
-                ] as Array<{ key: DlqStatus; label: string; count: number }>
-              ).map((chip) => (
-                <button
-                  key={chip.key}
-                  type="button"
-                  onClick={() =>
-                    setStatus((current) => (current === chip.key ? 'all' : chip.key))
+    <>
+      {/* Queue status — the figures double as the status filter. */}
+      <Panel>
+        <PanelSection
+          label="Queue status"
+          caption="Follows the source, event, and search filters. Select a figure to filter by it."
+        >
+          <StatRow columns={4}>
+            {statusTiles.map((tile) => {
+              const count = countsData?.[tile.key]
+              const alarm = tile.key === 'pending' && !!count
+              return (
+                <StatTile
+                  key={tile.key}
+                  label={tile.label}
+                  value={
+                    count == null ? (
+                      '—'
+                    ) : (
+                      // Pending entries are failed deliveries an operator must
+                      // act on: the figure carries the alarm, the meta says it
+                      // in words (§3.5, §14.3 HQ-2).
+                      <span className={cn(alarm && 'text-red-600 dark:text-red-400')}>
+                        {count.toLocaleString()}
+                      </span>
+                    )
                   }
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-                    status === chip.key
-                      ? statusBadgeClass(chip.key)
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  {chip.label}
-                  <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-semibold">
-                    {chip.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
+                  meta={countsLoading ? undefined : count == null ? 'Count unavailable' : tile.meta}
+                  // Alarm text and the reason for a "—" are not detail a phone drops.
+                  showMetaOnMobile={alarm || (count == null && !countsLoading)}
+                  isLoading={countsLoading}
+                  onClick={() => setStatus((current) => (current === tile.key ? 'all' : tile.key))}
+                  isActive={status === 'all' || status === tile.key}
+                />
+              )
+            })}
+          </StatRow>
+        </PanelSection>
+      </Panel>
+
+      {/* The queue: toolbar, table from `lg`, record cards below (§5.3). */}
+      <Panel>
+        <PanelSection
+          label="Failed deliveries"
+          caption="Newest first. Pending and retrying views refresh every 30 seconds."
+          action={
+            <Button
+              variant="outline"
+              className="h-9 px-4 text-[0.8125rem] font-medium"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
               <RefreshCcwDot className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
               Refresh
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="max-h-[62vh] overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-20 bg-card">
-                <TableRow>
-                  <TableHead className="w-[140px]">Created</TableHead>
-                  <TableHead className="w-[180px]">Source / Event</TableHead>
-                  <TableHead className="w-[110px]">Status</TableHead>
-                  <TableHead>Error</TableHead>
-                  <TableHead className="w-[90px]">Retries</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={`loading-${i}`}>
-                      <TableCell colSpan={6}>
-                        <Skeleton className="h-8 w-full" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center">
-                      <AlertOctagon className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        No DLQ entries match these filters.
-                      </p>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row) => {
-                    const maxedOut = (row.retry_count ?? 0) >= (row.max_retries ?? 0)
-                    const retryDisabled =
-                      !canMutate ||
-                      maxedOut ||
-                      row.status === 'resolved' ||
-                      row.status === 'retrying'
-                    const isTerminal = row.status === 'resolved' || row.status === 'abandoned'
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell className="text-xs">
-                          <div
-                            className="flex flex-col gap-0.5"
-                            title={absoluteTime(row.created_at)}
-                          >
-                            <span className="font-medium">{relativeTime(row.created_at)}</span>
-                            <span className="text-muted-foreground text-[10px]">
-                              {format(new Date(row.created_at), 'MMM d, yyyy')}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <Badge variant="outline" className="w-fit font-mono text-[10px]">
-                              {row.source}
-                            </Badge>
-                            <Badge variant="outline" className="w-fit font-mono text-[10px]">
-                              {row.event_type || '—'}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={statusBadgeClass(row.status)}>
-                            {row.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[420px]">
-                          <p
-                            className="truncate text-sm"
-                            title={row.error_message ?? ''}
-                          >
-                            {row.error_message || '—'}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <span
-                            className={cn(
-                              'font-mono',
-                              maxedOut && 'text-red-600 dark:text-red-400'
-                            )}
-                          >
-                            {row.retry_count ?? 0}/{row.max_retries ?? 0}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem onClick={() => setDetailId(row.id)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View details
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                disabled={retryDisabled || retryMutation.isPending}
-                                onClick={() => retryMutation.mutate(row.id)}
-                              >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                Retry
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={!canMutate || isTerminal || resolveMutation.isPending}
-                                onClick={() => resolveMutation.mutate(row.id)}
-                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Resolve
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={!canMutate || isTerminal}
-                                onClick={() => openAbandon(row)}
-                              >
-                                <Ban className="mr-2 h-4 w-4" />
-                                Abandon
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          {/* Pagination */}
-          <div className="flex flex-col gap-2 border-t px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-            <span>
-              Showing {from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!canPrev}
-                onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!canNext}
-                onClick={() => setOffset((o) => o + PAGE_SIZE)}
-              >
-                Next
-              </Button>
+          }
+        >
+          {/* Toolbar (§5.2): search left, muted filter pills right. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full min-w-0 sm:flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                aria-label="Search error messages"
+                className="h-9 pl-9 text-[0.8125rem]"
+                placeholder="Search error messages, e.g. Restaurant not found"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterSelect
+                value={source}
+                onValueChange={setSource}
+                options={facets.sources.map((s) => ({ value: s, label: s }))}
+                allLabel="All sources"
+                ariaLabel="Source"
+              />
+              <FilterSelect
+                value={eventType}
+                onValueChange={setEventType}
+                options={facets.eventTypes.map((e) => ({ value: e, label: e }))}
+                allLabel="All events"
+                ariaLabel="Event type"
+              />
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  className="h-9 gap-1.5 px-4 text-[0.8125rem] text-muted-foreground"
+                  onClick={clearFilters}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Clear filters
+                </Button>
+              )}
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Detail sheet */}
-      <DeadLetterDetailSheet
+          <div className="mt-4 min-w-0">
+            {loadError ? (
+              <LoadError
+                title="The dead letter queue failed to load"
+                detail={loadError}
+                onRetry={() => void refetch()}
+              />
+            ) : (
+              <>
+                <Table variant="data" containerClassName="hidden lg:block" className="min-w-[680px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[140px]">Created</TableHead>
+                      <TableHead className="w-[170px]">Source / event</TableHead>
+                      <TableHead className="w-[110px]">Status</TableHead>
+                      <TableHead>Error</TableHead>
+                      <TableHead className="w-[90px] text-right">Retries</TableHead>
+                      <TableHead className="w-[56px]">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <TableRow key={`loading-${i}`}>
+                          {Array.from({ length: TABLE_COLUMNS }).map((_, j) => (
+                            <TableCell key={j}>
+                              <Skeleton className="h-4 w-full" />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : rows.length === 0 ? (
+                      <TableEmptyRow colSpan={TABLE_COLUMNS} title={emptyTitle} hint={emptyHint} />
+                    ) : (
+                      rows.map((row) => {
+                        const { isTerminal } = dlqRowState(row)
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell>
+                              <div className="flex flex-col gap-0.5 tabular-nums" title={absoluteTime(row.created_at)}>
+                                <span className="text-sm font-medium">{relativeTime(row.created_at)}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {format(new Date(row.created_at), 'MMM d, yyyy')}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <span className="truncate text-sm font-medium">{row.source}</span>
+                                <span className="truncate font-mono text-xs text-muted-foreground">
+                                  {row.event_type || '—'}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {STATUS_LABELS[row.status] ?? row.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[420px]">
+                              {/* A live entry needs attention: marked by weight, not colour (§3.5). */}
+                              <p
+                                className={cn(
+                                  'truncate text-sm',
+                                  isTerminal ? 'text-muted-foreground' : 'font-medium text-foreground'
+                                )}
+                                title={row.error_message ?? ''}
+                              >
+                                {row.error_message || '—'}
+                              </p>
+                            </TableCell>
+                            <TableCell className="text-right text-sm">
+                              <RetryFigure row={row} />
+                            </TableCell>
+                            <TableCell>{renderRowActions(row)}</TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+
+                {/* Below `lg` each entry is a card (§5.3). Card and row open the
+                    same detail panel. */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                  {isLoading ? (
+                    <RecordCardSkeletons count={4} />
+                  ) : rows.length === 0 ? (
+                    <CardGridEmpty title={emptyTitle} hint={emptyHint} />
+                  ) : (
+                    rows.map((row) => {
+                      const { isTerminal } = dlqRowState(row)
+                      const label = `${row.source}${row.event_type ? ` · ${row.event_type}` : ''}`
+                      return (
+                        <RecordCard key={row.id}>
+                          {/* A stretched button makes the summary the control,
+                              while the actions menu stays its own button above
+                              it — never a div with onClick. */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              aria-label={`View details for ${label} entry`}
+                              onClick={() => setDetailId(row.id)}
+                              className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            <div className="pointer-events-none relative flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold">{label}</p>
+                                <p
+                                  className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums"
+                                  title={absoluteTime(row.created_at)}
+                                >
+                                  {relativeTime(row.created_at)}
+                                </p>
+                                <p
+                                  className={cn(
+                                    'mt-3 line-clamp-2 break-words text-sm',
+                                    isTerminal ? 'text-muted-foreground' : 'font-medium text-foreground'
+                                  )}
+                                >
+                                  {row.error_message || '—'}
+                                </p>
+                                <CardFields>
+                                  <CardField label="Status" value={STATUS_LABELS[row.status] ?? row.status} />
+                                  <CardField label="Retries" value={<RetryFigure row={row} />} />
+                                </CardFields>
+                              </div>
+                              <div className="pointer-events-auto -mr-1 -mt-1 shrink-0">
+                                {renderRowActions(row)}
+                              </div>
+                            </div>
+                          </div>
+                        </RecordCard>
+                      )
+                    })
+                  )}
+                </div>
+
+                <PaginationBar
+                  pagination={pagination}
+                  onPageChange={setPage}
+                  isLoading={isFetching}
+                  itemLabel="entries"
+                />
+                {!isLoading && total > 0 && total <= PAGE_SIZE && (
+                  <p className="mt-3 text-xs text-muted-foreground tabular-nums sm:text-sm">
+                    {total.toLocaleString()} {total === 1 ? 'entry' : 'entries'}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </PanelSection>
+      </Panel>
+
+      <DeadLetterDetailDialog
         id={detailId}
         canMutate={canMutate}
         onClose={() => setDetailId(null)}
@@ -502,19 +605,20 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
         resolvePending={resolveMutation.isPending}
       />
 
-      {/* Abandon dialog */}
+      {/* A short question with one field stays a centred card at every width (§13.1). */}
       <Dialog open={!!abandonTarget} onOpenChange={(open) => !open && closeAbandon()}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Abandon DLQ entry</DialogTitle>
+            <DialogTitle>Abandon this entry?</DialogTitle>
             <DialogDescription>
-              This marks the entry as permanently abandoned. The reason is appended
-              to the error message for the audit trail.
+              The entry is marked as permanently abandoned. The reason is appended
+              to its error message for the audit trail.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Reason</label>
+            <Label htmlFor="dlq-abandon-reason">Reason</Label>
             <Textarea
+              id="dlq-abandon-reason"
               placeholder="Why is this entry being abandoned?"
               value={abandonReason}
               onChange={(e) => setAbandonReason(e.target.value)}
@@ -530,11 +634,11 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
               disabled={!abandonReason.trim() || abandonMutation.isPending}
               onClick={submitAbandon}
             >
-              Abandon entry
+              {abandonMutation.isPending ? 'Abandoning…' : 'Abandon entry'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

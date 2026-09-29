@@ -2,15 +2,13 @@
 
 import * as React from 'react'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Panel } from '@/components/dashboard/shell/Panel'
-import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -353,59 +351,51 @@ export function AdminLocationDetailSheet({
   if (!currentLocation) return null
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-5xl overflow-y-auto p-0">
-        <SheetHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 px-6 py-5">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* §12/§13.1: a centred dialog, not a side sheet, and full-screen below
+          `sm` (it is an editor). The content clips; the tab body scrolls. */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-4xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0 px-6 pb-4 pr-14 pt-6 text-left">
           <div className="flex items-start gap-4">
-            <div
-              className={cn(
-                'flex h-14 w-14 items-center justify-center rounded-2xl border',
-                currentLocation.is_active
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : 'border-slate-200 bg-slate-100 text-slate-500'
-              )}
-            >
-              <MapPin className="h-7 w-7" />
+            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
+              <MapPin className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <SheetTitle className="text-2xl">{currentLocation.name}</SheetTitle>
+                <DialogTitle className="text-2xl">{currentLocation.name}</DialogTitle>
                 {currentLocation.code ? <Badge variant="outline" className="font-mono text-xs">{currentLocation.code}</Badge> : null}
-                <Badge variant={currentLocation.is_active ? 'default' : 'secondary'}>
+                <Badge variant="outline">
                   {currentLocation.is_active ? 'Active' : 'Inactive'}
                 </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    currentLocation.is_accepting_orders
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                      : 'border-amber-200 bg-amber-50 text-amber-700'
-                  )}
-                >
+                <Badge variant="outline">
                   {currentLocation.is_accepting_orders ? 'Accepting Orders' : 'Orders Paused'}
                 </Badge>
               </div>
-              <SheetDescription className="mt-2">
+              <DialogDescription className="mt-2">
                 {[currentLocation.address_line1, currentLocation.city, currentLocation.state]
                   .filter(Boolean)
                   .join(', ')}
-              </SheetDescription>
+              </DialogDescription>
             </div>
           </div>
-        </SheetHeader>
+        </DialogHeader>
 
-        <div className="px-6 py-5">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="details" className="gap-2"><Building2 className="h-4 w-4" />Details</TabsTrigger>
-              <TabsTrigger value="hours" className="gap-2"><Clock className="h-4 w-4" />Hours</TabsTrigger>
-              <TabsTrigger value="settings" className="gap-2"><Settings className="h-4 w-4" />Settings</TabsTrigger>
-            </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col gap-0">
+          {/* §4.5 pill rail; classes are the TAB_* literals (C7). */}
+          <div className="shrink-0 px-6">
+            <div className="w-full min-w-0 overflow-x-auto pb-1">
+              <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                <TabsTrigger value="details" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"><Building2 className="h-4 w-4" />Details</TabsTrigger>
+                <TabsTrigger value="hours" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"><Clock className="h-4 w-4" />Hours</TabsTrigger>
+                <TabsTrigger value="settings" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"><Settings className="h-4 w-4" />Settings</TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
-            <TabsContent value="details">
-              <Panel>
-                <PanelSection label="Location Details" caption="Edit the full location profile from HQ">
-                  <div className="mt-4 space-y-4">
+          <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5">
+            <TabsContent value="details" className="mt-0">
+              <DialogSection label="Location Details" caption="Edit the full location profile from HQ">
+                <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Name</Label>
@@ -455,7 +445,7 @@ export function AdminLocationDetailSheet({
                     <div className="space-y-2">
                       <Label>State</Label>
                       <Select value={details.state} onValueChange={(value) => setDetails((p) => ({ ...p, state: value }))}>
-                        <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select state" /></SelectTrigger>
                         <SelectContent>{US_STATES.map((state) => <SelectItem key={state.code} value={state.code}>{state.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
@@ -466,7 +456,7 @@ export function AdminLocationDetailSheet({
                     <div className="space-y-2">
                       <Label>Timezone</Label>
                       <Select value={details.timezone} onValueChange={(value) => setDetails((p) => ({ ...p, timezone: value }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>{US_TIMEZONES.map((timezone) => <SelectItem key={timezone.value} value={timezone.value}>{timezone.label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
@@ -480,7 +470,7 @@ export function AdminLocationDetailSheet({
                     </div>
                     <div className="space-y-2">
                       <Label>Sales Tax Rate</Label>
-                      <Input type="number" step="0.01" min="0" max="100" value={details.sales_tax_rate} onChange={(e) => setDetails((p) => ({ ...p, sales_tax_rate: e.target.value }))} />
+                      <Input type="number" step="0.01" min="0" max="100" className="tabular-nums" value={details.sales_tax_rate} onChange={(e) => setDetails((p) => ({ ...p, sales_tax_rate: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Registration Status</Label>
@@ -490,7 +480,7 @@ export function AdminLocationDetailSheet({
                           setDetails((p) => ({ ...p, tax_registration_status: value }))
                         }
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>
                           <SelectItem value="verified">Verified</SelectItem>
@@ -503,15 +493,13 @@ export function AdminLocationDetailSheet({
                     {isSavingDetails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Details
                   </Button>
-                  </div>
-                </PanelSection>
-              </Panel>
+                </div>
+              </DialogSection>
             </TabsContent>
 
-            <TabsContent value="hours">
-              <Panel>
-                <PanelSection label="Business Hours" caption="Update operating hours for each day">
-                  <div className="mt-4 space-y-3">
+            <TabsContent value="hours" className="mt-0">
+              <DialogSection label="Business Hours" caption="Update operating hours for each day">
+                <div className="space-y-3">
                   {DAYS.map(({ key, label }) => {
                     const day = hours[key] || DEFAULT_BUSINESS_HOURS[key] || { open: '09:00', close: '17:00', is_closed: false, is_overnight: false }
                     const isOvernight = day.is_overnight ?? false
@@ -527,29 +515,29 @@ export function AdminLocationDetailSheet({
                     }
 
                     return (
-                      <div key={key} className={cn('rounded-xl border p-4', day.is_closed && 'bg-muted/40')}>
+                      <div key={key} className={cn('rounded-2xl border p-4', day.is_closed && 'bg-muted/40')}>
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 w-32 shrink-0">
                               <span className="text-sm font-medium">{label}</span>
                               {isOvernight && !day.is_closed && (
-                                <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5">
+                                <Badge variant="outline" className="gap-1 px-1.5 text-xs">
                                   <Moon className="h-2.5 w-2.5" />
                                   Overnight
                                 </Badge>
                               )}
                             </div>
-                            <Switch checked={!day.is_closed} onCheckedChange={(checked) => handleHourChange(key, { is_closed: !checked })} />
+                            <Switch checked={!day.is_closed} onCheckedChange={(checked) => handleHourChange(key, { is_closed: !checked })} aria-label={`${label} open`} />
                             <span className="text-sm text-muted-foreground">{day.is_closed ? 'Closed' : 'Open'}</span>
                           </div>
                           <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center', day.is_closed && 'pointer-events-none opacity-40')}>
                             <Select value={day.open} onValueChange={(value) => handleHourChange(key, { open: value })} disabled={day.is_closed}>
-                              <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="w-full tabular-nums sm:w-40" aria-label={`${label} opens`}><SelectValue /></SelectTrigger>
                               <SelectContent>{TIME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
                             <span className="text-sm text-muted-foreground text-center">to</span>
                             <Select value={day.close} onValueChange={(value) => handleHourChange(key, { close: value })} disabled={day.is_closed}>
-                              <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="w-full tabular-nums sm:w-44" aria-label={`${label} closes`}><SelectValue /></SelectTrigger>
                               <SelectContent>{closeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
                             <div className="flex items-center gap-1.5">
@@ -572,19 +560,17 @@ export function AdminLocationDetailSheet({
                     {isSavingHours ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Hours
                   </Button>
-                  </div>
-                </PanelSection>
-              </Panel>
+                </div>
+              </DialogSection>
             </TabsContent>
 
-            <TabsContent value="settings">
-              <Panel>
-                <PanelSection
-                  icon={ShoppingCart}
-                  label="Order Settings"
-                  caption="Control whether this location accepts orders"
-                >
-                  <div className="mt-4 flex items-center justify-between gap-4">
+            <TabsContent value="settings" className="mt-0 space-y-8">
+              <DialogSection
+                icon={ShoppingCart}
+                label="Order Settings"
+                caption="Control whether this location accepts orders"
+              >
+                <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">{currentLocation.is_accepting_orders ? 'Accepting orders' : 'Orders paused'}</p>
                     <p className="text-sm text-muted-foreground">
@@ -593,31 +579,30 @@ export function AdminLocationDetailSheet({
                   </div>
                   <div className="flex items-center gap-3">
                     {isTogglingOrders ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
-                    <Switch checked={currentLocation.is_accepting_orders} onCheckedChange={handleToggleOrders} disabled={isTogglingOrders || !currentLocation.is_active} />
+                    <Switch aria-label="Accepting orders" checked={currentLocation.is_accepting_orders} onCheckedChange={handleToggleOrders} disabled={isTogglingOrders || !currentLocation.is_active} />
                   </div>
-                  </div>
-                </PanelSection>
+                </div>
+              </DialogSection>
 
-                <PanelSection
-                  icon={Globe}
-                  label="Pricing & Menu"
-                  caption="Inheritance and pricing strategy"
-                  divider
-                >
-                  <div className="mt-4 space-y-4">
-                  <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-3">
+              <DialogSection
+                icon={Globe}
+                label="Pricing & Menu"
+                caption="Inheritance and pricing strategy"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-4 rounded-2xl bg-muted/60 px-4 py-3">
                     <div>
                       <p className="font-medium">Use Merchant Pricing Defaults</p>
                       <p className="text-sm text-muted-foreground">Inherit pricing behavior from merchant defaults</p>
                     </div>
-                    <Switch checked={currentLocation.use_merchant_pricing_defaults} onCheckedChange={handleDefaultsToggle} />
+                    <Switch aria-label="Use merchant pricing defaults" checked={currentLocation.use_merchant_pricing_defaults} onCheckedChange={handleDefaultsToggle} />
                   </div>
                   {!currentLocation.use_merchant_pricing_defaults ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Pricing Strategy</Label>
                         <Select value={currentLocation.pricing_strategy || 'manual'} onValueChange={(value) => handleStrategyChange(value as 'manual' | 'dual')}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="manual">Manual Pricing</SelectItem>
                             <SelectItem value="dual">Dual Pricing</SelectItem>
@@ -626,23 +611,22 @@ export function AdminLocationDetailSheet({
                       </div>
                       <div className="space-y-2">
                         <Label>Dual Pricing Percentage</Label>
-                        <Input type="number" min="0" max="100" step="0.01" defaultValue={currentLocation.dual_pricing_percentage ?? 4} onBlur={(e) => handleDualPercentageBlur(e.target.value)} disabled={currentLocation.pricing_strategy !== 'dual'} />
+                        <Input type="number" min="0" max="100" step="0.01" className="tabular-nums" defaultValue={currentLocation.dual_pricing_percentage ?? 4} onBlur={(e) => handleDualPercentageBlur(e.target.value)} disabled={currentLocation.pricing_strategy !== 'dual'} />
                       </div>
                     </div>
                   ) : null}
-                  <div className="rounded-xl border bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
+                  <div className="rounded-2xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
                     Menu mode: {currentLocation.uses_global_menu ? 'Using merchant global menu' : 'Using location-specific menu'}
                   </div>
-                  </div>
-                </PanelSection>
+                </div>
+              </DialogSection>
 
-                <PanelSection
-                  icon={Power}
-                  label="Location Status"
-                  caption="Activate or deactivate this location"
-                  divider
-                >
-                  <div className="mt-4 flex items-center justify-between gap-4">
+              <DialogSection
+                icon={Power}
+                label="Location Status"
+                caption="Activate or deactivate this location"
+              >
+                <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">{currentLocation.is_active ? 'Active' : 'Inactive'}</p>
                     <p className="text-sm text-muted-foreground">
@@ -653,13 +637,43 @@ export function AdminLocationDetailSheet({
                     {isTogglingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Power className="mr-2 h-4 w-4" />}
                     {currentLocation.is_active ? 'Deactivate' : 'Activate'}
                   </Button>
-                  </div>
-                </PanelSection>
-              </Panel>
+                </div>
+              </DialogSection>
             </TabsContent>
-          </Tabs>
-        </div>
-      </SheetContent>
-    </Sheet>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * A headed section inside the dialog. A dialog is already the tier-1 surface,
+ * so its sections are plain spaced blocks with the brand-blue heading (§3.1,
+ * §3.2) — never a `Panel` inside the panel. The literal accent classes live
+ * here, in the `.tsx` (C7).
+ */
+function DialogSection({
+  icon: Icon,
+  label,
+  caption,
+  children,
+}: {
+  icon?: React.ComponentType<{ className?: string }>
+  label: string
+  caption?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="min-w-0 space-y-4">
+      <div>
+        <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+          {Icon && <Icon className="h-[1.125rem] w-[1.125rem] shrink-0" />}
+          {label}
+        </h3>
+        {caption && <p className="mt-1 text-sm text-muted-foreground max-sm:hidden">{caption}</p>}
+      </div>
+      {children}
+    </section>
   )
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +19,9 @@ import {
 } from "../hooks/useWasteAndCounts";
 import { CreateCountDialog, CountPickItem } from "./CreateCountDialog";
 import { CountDetailSheet } from "./CountDetailSheet";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
+import { useLocationStore } from "@/stores/location-store";
 
 interface CountsTabProps {
   items: CountPickItem[];
@@ -32,6 +35,13 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
 
   const { data: counts = [], isLoading } = useInventoryCounts();
   const createCount = useCreateInventoryCount();
+  const { pageRows, pagination, setPage } = useClientPagination(counts, 10);
+
+  // A location switch starts the list from the top.
+  const selectedLocationId = useLocationStore((s) => s.selectedLocationId);
+  useEffect(() => {
+    setPage(1);
+  }, [selectedLocationId, setPage]);
 
   const openCount = (id: string) => {
     setSelectedCountId(id);
@@ -102,7 +112,7 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {counts.map((count) => (
+              {pageRows.map((count) => (
                 <TableRow
                   key={count.id}
                   className="cursor-pointer"
@@ -138,7 +148,7 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
 
           {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-            {counts.map((count) => (
+            {pageRows.map((count) => (
               <button
                 key={count.id}
                 type="button"
@@ -183,6 +193,12 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
               </button>
             ))}
           </div>
+
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="counts"
+          />
         </>
       )}
 

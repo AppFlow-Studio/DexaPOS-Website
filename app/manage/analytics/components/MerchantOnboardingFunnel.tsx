@@ -13,6 +13,8 @@ import {
 } from '@/components/dashboard/reports/MobileColumnsButton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, TrendingUp, Filter } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
@@ -63,6 +65,8 @@ const STALLED_COLUMNS: ReportColumn[] = [
   { id: 'readiness', label: 'Readiness' },
 ]
 
+const EMPTY_STALLED: StalledMerchant[] = []
+
 export function MerchantOnboardingFunnel() {
   const { data, isLoading } = useMerchantOnboardingFunnel()
   const router = useRouter()
@@ -70,6 +74,8 @@ export function MerchantOnboardingFunnel() {
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
     initialHiddenColumns(STALLED_COLUMNS)
   )
+  // Paged at 10 (§5.7); above the early returns so the hook order is fixed.
+  const stalledPage = useClientPagination(data?.stalledMerchants ?? EMPTY_STALLED, 10)
 
   if (isLoading) {
     return (
@@ -180,7 +186,7 @@ export function MerchantOnboardingFunnel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stalled.map((m: StalledMerchant) => (
+                {stalledPage.pageRows.map((m: StalledMerchant) => (
                   <TableRow
                     key={m.id}
                     className="cursor-pointer"
@@ -227,6 +233,11 @@ export function MerchantOnboardingFunnel() {
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              pagination={stalledPage.pagination}
+              onPageChange={stalledPage.setPage}
+              itemLabel="merchants"
+            />
           </PanelSection>
         </Panel>
       )}

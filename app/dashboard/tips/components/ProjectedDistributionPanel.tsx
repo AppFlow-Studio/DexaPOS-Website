@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { RefreshCw, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +16,8 @@ import { Panel, PanelSection, StatRow, StatTile } from "@/components/dashboard/s
 import { formatMoney } from "../lib/constants";
 import { usePreviewTipDistribution } from "../hooks/useTipDistribution";
 import { useQueryClient } from "@tanstack/react-query";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /**
  * An in/out figure pair on a card. When neither side has a value the whole
@@ -81,6 +84,12 @@ export function ProjectedDistributionPanel({
   const noLocation = !locationId || locationId === "all";
   const details = preview?.details || [];
   const hasData = details.length > 0;
+  const { pageRows, pagination, setPage } = useClientPagination(details, 10);
+
+  // A location or day change starts the list from the top.
+  useEffect(() => {
+    setPage(1);
+  }, [locationId, sessionDate, setPage]);
   const updatedAt = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
@@ -112,7 +121,7 @@ export function ProjectedDistributionPanel({
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={TrendingUp}
         label="Projected Distribution"
         caption="A live preview — final amounts may differ after close-out."
@@ -204,7 +213,7 @@ export function ProjectedDistributionPanel({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {details.map((d, i) => (
+                {pageRows.map((d, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-sm font-medium">{d.staff_name}</TableCell>
                     <TableCell className="text-sm">
@@ -236,7 +245,7 @@ export function ProjectedDistributionPanel({
 
             {/* Phones and tablets: cards instead of a scrolling table. */}
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-              {details.map((d, i) => (
+              {pageRows.map((d, i) => (
                 <article key={i} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -271,6 +280,12 @@ export function ProjectedDistributionPanel({
                 </article>
               ))}
             </div>
+
+            <PaginationBar
+              pagination={pagination}
+              onPageChange={setPage}
+              itemLabel="employees"
+            />
           </div>
         )}
       </PanelSection>

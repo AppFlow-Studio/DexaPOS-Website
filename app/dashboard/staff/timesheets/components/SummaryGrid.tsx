@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
   ArrowUpDown,
   ChevronRight,
@@ -20,6 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import { cn } from "@/lib/utils";
 import { formatHours, formatMoney } from "@/lib/timesheets/format";
 import type { TimesheetBucket } from "@/lib/timesheets/period";
@@ -200,6 +202,20 @@ export function SummaryGrid({
   // push its neighbours around and a week overflowed a 1440px screen.
   const minWidth = 200 + buckets.length * 64 + 320;
 
+  // Only the people rows are paged. The totals band comes from `totals`, which
+  // the page sums over every visible row, so it stays correct on every page.
+  const { pageRows, pagination, setPage } = useClientPagination(rows, 10);
+
+  // Search, review filter and sort live on the page; any of them (or a new
+  // period/location) changes the ordered list of people here, so start again
+  // from the top. An edited shift keeps the same people, so the page holds.
+  const resetKey = `${buckets[0]?.key ?? ""}|${buckets.length}|${rows
+    .map((r) => r.employee.staffProfileId)
+    .join(",")}`;
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, setPage]);
+
   return (
     <div
       className={cn("min-w-0 space-y-3 transition-opacity", isStale && "opacity-60")}
@@ -272,7 +288,7 @@ export function SummaryGrid({
               </TableCell>
             </TableRow>
           ) : (
-            rows.map((row) => (
+            pageRows.map((row) => (
               <TableRow key={row.employee.staffProfileId} className="group border-0">
                 <TableCell className={cn("overflow-hidden", STICKY_BODY)}>
                   <button
@@ -390,7 +406,7 @@ export function SummaryGrid({
             {empty}
           </div>
         ) : (
-          rows.map((row) => (
+          pageRows.map((row) => (
             <article
               key={row.employee.staffProfileId}
               className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
@@ -505,6 +521,8 @@ export function SummaryGrid({
           ))
         )}
       </div>
+
+      <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="team members" />
     </div>
   );
 }

@@ -3,20 +3,25 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Eye, Monitor, PackageX, Radio, Send } from "lucide-react";
+import { Eye, RefreshCw } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+} from "@/components/dashboard/shell";
+import {
+  CardGridEmpty,
+  LoadError,
+} from "@/app/manage/transactions/components/ledger-primitives";
 import {
   KdsMirrorControls,
   MirrorBlindSpotNotice,
+  RealtimeStatus,
 } from "./components/KdsMirrorControls";
 import { KdsSendLedger, type KdsSendLedgerHandle } from "./components/KdsSendLedger";
 import {
@@ -27,6 +32,8 @@ import { KdsStationBoard } from "./components/KdsStationBoard";
 import { KdsDisplayHealthCards } from "./components/KdsDisplayHealthCards";
 import { KdsDeviceTruthTimeline } from "./components/KdsDeviceTruthTimeline";
 import { KdsDivergenceList } from "./components/KdsDivergenceList";
+import { KdsMirrorSkeleton } from "./components/KdsMirrorSkeleton";
+import { KdsNotice, NoticeLead, WindowSelect } from "./components/kds-primitives";
 import {
   TIMELINE_WINDOWS,
   type TimelineWindowKey,
@@ -44,6 +51,15 @@ import {
   useKdsDeviceTruthWindow,
 } from "./hooks/useKdsDeviceTruth";
 
+type KdsTab = "board" | "ledger" | "unsent" | "device-truth";
+
+const TABS: { value: KdsTab; label: string }[] = [
+  { value: "board", label: "Board" },
+  { value: "ledger", label: "Send ledger" },
+  { value: "unsent", label: "Unsent items" },
+  { value: "device-truth", label: "Device truth" },
+];
+
 /**
  * The device-truth tab's own honesty notice: a display that has never reported
  * is not a broken display. NO_DEVICE_DATA is the answer until the POS emitter
@@ -51,21 +67,23 @@ import {
  */
 function DeviceTruthBlindSpotNotice() {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-      <Eye className="mt-0.5 h-4 w-4 shrink-0" />
+    <KdsNotice icon={Eye}>
       <p>
-        <span className="font-semibold">
-          This is device-attested, reported on the heartbeat.
-        </span>{" "}
+        <NoticeLead>This is device-attested, reported on the heartbeat.</NoticeLead>{" "}
         It shows what each tablet says it received and painted, diffed against
         the server routing log. A display with no device data at all means the
         emitter has not shipped to it yet —{" "}
-        <span className="font-medium">
+        <NoticeLead>
           absence of device evidence is not evidence of a fault.
-        </span>
+        </NoticeLead>
       </p>
-    </div>
+    </KdsNotice>
   );
+}
+
+/** Every tab needs a merchant and a location first; each says why in words. */
+function PickScope({ hint }: { hint: string }) {
+  return <CardGridEmpty title="Pick a merchant and location" hint={hint} />;
 }
 
 function KdsMirrorPageInner() {
@@ -78,9 +96,9 @@ function KdsMirrorPageInner() {
   const displayParam = searchParams.get("display");
   const highlightOrderId = searchParams.get("order");
 
-  // The single Refresh button in the header controls drives all three views:
-  // it invalidates the board, and re-anchors + refetches the send ledger and
-  // the unsent-items view through these handles (neither tab may own a second
+  // The single Refresh button in the header drives all views: it invalidates
+  // the board, and re-anchors + refetches the send ledger and the
+  // unsent-items view through these handles (neither tab may own a second
   // refresh button).
   const ledgerRef = React.useRef<KdsSendLedgerHandle>(null);
   const unsentRef = React.useRef<KdsUnsentItemsHandle>(null);
@@ -88,15 +106,41 @@ function KdsMirrorPageInner() {
   // A deep link to a specific order opens on the send ledger (the order row is
   // the reason they came); a ?tab= param (e.g. the old /kds-truth redirect)
   // opens that tab; everything else opens on the board.
-  const [activeTab, setActiveTab] = React.useState<
-    "board" | "ledger" | "unsent" | "device-truth"
-  >(() => {
+  const [activeTab, setActiveTab] = React.useState<KdsTab>(() => {
     const tab = searchParams.get("tab");
     if (tab === "ledger" || tab === "unsent" || tab === "device-truth") {
       return tab;
     }
     return highlightOrderId ? "ledger" : "board";
   });
+
+  // Keep the active pill in view on a narrow rail (UI-DESIGN-SYSTEM §13.2):
+  // scroll the rail itself, clamped, and re-measure once it has a width.
+  const tabRailRef = React.useRef<HTMLDivElement>(null);
+  const tabRailPositioned = React.useRef(false);
+  React.useEffect(() => {
+    const rail = tabRailRef.current;
+    if (!rail) return;
+    let done = false;
+    const align = () => {
+      const max = rail.scrollWidth - rail.clientWidth;
+      const tab = rail.querySelector<HTMLElement>('[data-state="active"]');
+      if (done || !tab || max <= 0) return;
+      const left = tab.offsetLeft - (rail.clientWidth - tab.offsetWidth) / 2;
+      const smooth =
+        tabRailPositioned.current &&
+        !matchMedia("(prefers-reduced-motion: reduce)").matches;
+      rail.scrollTo({
+        left: Math.max(0, Math.min(left, max)),
+        behavior: smooth ? "smooth" : "auto",
+      });
+      tabRailPositioned.current = done = true;
+    };
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [activeTab]);
 
   // "all" and absent both mean location-wide; normalise to null.
   const displayId =
@@ -170,19 +214,30 @@ function KdsMirrorPageInner() {
   }, [queryClient, locationId, displayId]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <div className="flex items-center gap-2">
-        <Monitor className="h-5 w-5" />
-        <div>
-          <h1 className="text-lg font-semibold">KDS</h1>
-          <p className="text-xs text-muted-foreground">
-            Kitchen display support — server reconstruction, send history, and
-            device-attested truth.
-          </p>
-        </div>
-      </div>
-
-      <MirrorBlindSpotNotice />
+    <PageShell as="div">
+      <PageHeader
+        title="KDS"
+        subtitle="Kitchen display support — server reconstruction, send history, and device-attested truth."
+        actions={
+          <>
+            <RealtimeStatus
+              status={realtime.status}
+              isFetching={liveBoard.isFetching}
+            />
+            <Button
+              variant="outline"
+              className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={handleRefresh}
+              disabled={!locationId}
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", liveBoard.isFetching && "animate-spin")}
+              />
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
       {/* No merchant-list gate: the picker searches on demand and labels its
           own selection, so the controls render immediately. */}
@@ -206,16 +261,13 @@ function KdsMirrorPageInner() {
         onDisplayChange={(value) => {
           setParams({ display: value === "all" ? null : value });
         }}
-        realtimeStatus={realtime.status}
-        isFetching={liveBoard.isFetching}
-        onRefresh={handleRefresh}
         health={health.data ?? null}
       />
 
       <Tabs
         value={activeTab}
         onValueChange={(value) => {
-          const next =
+          const next: KdsTab =
             value === "ledger" ||
             value === "unsent" ||
             value === "device-truth"
@@ -235,201 +287,197 @@ function KdsMirrorPageInner() {
           }
           setParams(updates);
         }}
-        className="flex flex-col gap-4"
       >
-        <TabsList className="w-fit">
-          <TabsTrigger value="board">Board</TabsTrigger>
-          <TabsTrigger value="ledger">Send ledger</TabsTrigger>
-          <TabsTrigger value="unsent">Unsent items</TabsTrigger>
-          <TabsTrigger value="device-truth">Device truth</TabsTrigger>
-        </TabsList>
+        {/* Pill rail (§4.5). Classes are literal, not tokens (C7). */}
+        <div
+          ref={tabRailRef}
+          className="thin-scrollbar relative w-full min-w-0 overflow-x-auto pb-1"
+        >
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            {TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-        <TabsContent value="board" className="flex flex-col gap-4">
-          {liveBoard.isError && (
-            <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-              Could not load the board:{" "}
-              {liveBoard.error instanceof Error
-                ? liveBoard.error.message
-                : "unknown error"}
-            </p>
-          )}
+        <TabsContent value="board" className="mt-4">
+          <Panel>
+            <PanelSection
+              label="Station board"
+              caption={
+                selectedDisplay
+                  ? `What the server says ${selectedDisplay.display_name} should be displaying, arranged as the tablet arranges it.`
+                  : "What the server says this location's displays should be showing."
+              }
+            >
+              <div className="space-y-5">
+                <MirrorBlindSpotNotice />
 
-          {!locationId ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-              <Monitor className="mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">Pick a merchant and location</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Then choose the KDS display the kitchen is complaining about.
-              </p>
-            </div>
-          ) : (
-            <KdsStationBoard
-              tickets={liveBoard.data ?? []}
-              display={selectedDisplay}
-              isLoading={liveBoard.isLoading}
-              highlightOrderId={highlightOrderId}
-            />
-          )}
-        </TabsContent>
+                {liveBoard.isError && (
+                  <LoadError
+                    title="We couldn't load the board"
+                    detail={
+                      liveBoard.error instanceof Error
+                        ? liveBoard.error.message
+                        : undefined
+                    }
+                    onRetry={() => void liveBoard.refetch()}
+                  />
+                )}
 
-        <TabsContent value="ledger" className="flex flex-col gap-4">
-          {locationId ? (
-            <KdsSendLedger
-              ref={ledgerRef}
-              locationId={locationId}
-              orderId={highlightOrderId}
-              onShowOnBoard={(orderId) => {
-                setParams({ order: orderId });
-                setActiveTab("board");
-              }}
-              onClearOrder={() => setParams({ order: null })}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-              <Send className="mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">Pick a merchant and location</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The send ledger shows every order-to-kitchen send attempt
-                received from the POS at a location.
-              </p>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="unsent" className="flex flex-col gap-4">
-          {locationId ? (
-            <KdsUnsentItems
-              ref={unsentRef}
-              locationId={locationId}
-              orderId={highlightOrderId}
-              onClearOrder={() => setParams({ order: null })}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-              <PackageX className="mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">Pick a merchant and location</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The unsent-items view shows every item still sitting in an
-                order that never fired to the kitchen.
-              </p>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="device-truth" className="flex flex-col gap-4">
-          <DeviceTruthBlindSpotNotice />
-          {!locationId ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-              <Radio className="mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">Pick a merchant and location</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The health cards cover every KDS display at the location; the
-                timeline and divergence list are per display.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  What each tablet reported it received and painted, diffed
-                  against what the server routed.
-                </p>
-                <Select
-                  value={truthWindowKey}
-                  onValueChange={(value) => {
-                    setTruthWindowKey(value as TimelineWindowKey);
-                    // Re-anchor the window to now so a wider/narrower
-                    // selection shows the most recent data instead of
-                    // re-windowing the old anchor.
-                    setTruthWindowEndMs(Date.now());
-                  }}
-                  disabled={!displayId}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMELINE_WINDOWS.map((w) => (
-                      <SelectItem key={w.key} value={w.key}>
-                        {w.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!locationId ? (
+                  <PickScope hint="Then choose the KDS display the kitchen is complaining about." />
+                ) : (
+                  <KdsStationBoard
+                    tickets={liveBoard.data ?? []}
+                    display={selectedDisplay}
+                    isLoading={liveBoard.isLoading}
+                    highlightOrderId={highlightOrderId}
+                  />
+                )}
               </div>
+            </PanelSection>
+          </Panel>
+        </TabsContent>
 
-              <KdsDisplayHealthCards
-                rows={deviceHealth.data ?? []}
-                selectedDisplayId={displayId}
-                onSelectDisplay={(id) =>
-                  setParams({ display: id === null ? null : id })
-                }
-                isLoading={deviceHealth.isLoading}
-              />
+        <TabsContent value="ledger" className="mt-4">
+          <Panel>
+            <PanelSection
+              label="Send ledger"
+              caption="Every order-to-kitchen send attempt the server received from the POS at this location."
+            >
+              {locationId ? (
+                <KdsSendLedger
+                  ref={ledgerRef}
+                  locationId={locationId}
+                  orderId={highlightOrderId}
+                  onShowOnBoard={(orderId) => {
+                    setParams({ order: orderId });
+                    setActiveTab("board");
+                  }}
+                  onClearOrder={() => setParams({ order: null })}
+                />
+              ) : (
+                <PickScope hint="The send ledger shows every order-to-kitchen send attempt received from the POS at a location." />
+              )}
+            </PanelSection>
+          </Panel>
+        </TabsContent>
 
-              {displayId ? (
+        <TabsContent value="unsent" className="mt-4">
+          <Panel>
+            <PanelSection
+              label="Unsent items"
+              caption="Items still sitting in orders that never fired to the kitchen."
+            >
+              {locationId ? (
+                <KdsUnsentItems
+                  ref={unsentRef}
+                  locationId={locationId}
+                  orderId={highlightOrderId}
+                  onClearOrder={() => setParams({ order: null })}
+                />
+              ) : (
+                <PickScope hint="The unsent-items view shows every item still sitting in an order that never fired to the kitchen." />
+              )}
+            </PanelSection>
+          </Panel>
+        </TabsContent>
+
+        <TabsContent value="device-truth" className="mt-4">
+          <Panel>
+            <PanelSection
+              label="Display health"
+              caption="Last 7 days, per display. Pick a display to open its timeline."
+              showCaptionOnMobile
+            >
+              <div className="space-y-5">
+                <DeviceTruthBlindSpotNotice />
+                {!locationId ? (
+                  <PickScope hint="The health cards cover every KDS display at the location; the timeline and divergence list are per display." />
+                ) : (
+                  <KdsDisplayHealthCards
+                    rows={deviceHealth.data ?? []}
+                    selectedDisplayId={displayId}
+                    onSelectDisplay={(id) =>
+                      setParams({ display: id === null ? null : id })
+                    }
+                    isLoading={deviceHealth.isLoading}
+                  />
+                )}
+              </div>
+            </PanelSection>
+
+            {locationId &&
+              (displayId ? (
                 <>
-                  <div className="flex flex-col gap-2">
-                    <h2 className="text-sm font-semibold">
-                      Routed vs seen —{" "}
-                      {(displays.data ?? []).find((d) => d.id === displayId)
-                        ?.display_name ?? "this display"}
-                    </h2>
-                    <KdsDeviceTruthTimeline
-                      window={deviceTruthWindow}
-                      isLoading={deviceTruth.isLoading}
-                    />
-                  </div>
+                  <PanelSection
+                    label={`Routed vs seen — ${selectedDisplay?.display_name ?? "this display"}`}
+                    caption="Device events are reported on the POS heartbeat (60s) and kept for 30 days. A device lane entry can lag the server lane by up to one heartbeat."
+                    action={
+                      <WindowSelect
+                        value={truthWindowKey}
+                        onValueChange={(value) => {
+                          setTruthWindowKey(value);
+                          // Re-anchor the window to now so a wider/narrower
+                          // selection shows the most recent data instead of
+                          // re-windowing the old anchor.
+                          setTruthWindowEndMs(Date.now());
+                        }}
+                        options={TIMELINE_WINDOWS}
+                      />
+                    }
+                  >
+                    <div className="space-y-5">
+                      {deviceTruth.isError && (
+                        <LoadError
+                          title="We couldn't load the truth window"
+                          detail={
+                            deviceTruth.error instanceof Error
+                              ? deviceTruth.error.message
+                              : undefined
+                          }
+                          onRetry={() => void deviceTruth.refetch()}
+                        />
+                      )}
+                      <KdsDeviceTruthTimeline
+                        window={deviceTruthWindow}
+                        isLoading={deviceTruth.isLoading}
+                      />
+                    </div>
+                  </PanelSection>
 
-                  <div className="flex flex-col gap-2">
-                    <h2 className="text-sm font-semibold">Divergences</h2>
+                  <PanelSection label="Divergences">
                     <KdsDivergenceList
                       items={deviceTruthWindow?.items ?? []}
                       isLoading={deviceTruth.isLoading}
                     />
-                  </div>
-
-                  {deviceTruth.isError && (
-                    <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-                      Could not load the truth window:{" "}
-                      {deviceTruth.error instanceof Error
-                        ? deviceTruth.error.message
-                        : "unknown error"}
-                    </p>
-                  )}
-
-                  <p className="text-xs text-muted-foreground">
-                    Device events are reported on the POS heartbeat (60s) and
-                    kept for 30 days. A device lane entry can lag the server
-                    lane by up to one heartbeat.
-                  </p>
+                  </PanelSection>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-                  <Eye className="mb-3 h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm font-medium">Pick a KDS display</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    The timeline and divergence list are per display — choose
-                    one, or click a health card above.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
+                <PanelSection label="Routed vs seen">
+                  <CardGridEmpty
+                    title="Pick a KDS display"
+                    hint="The timeline and divergence list are per display — choose one above, or pick a health card."
+                  />
+                </PanelSection>
+              ))}
+          </Panel>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
 export default function KdsMirrorPage() {
   return (
-    <React.Suspense
-      fallback={
-        <div className="p-6">
-          <Skeleton className="h-64 w-full" />
-        </div>
-      }
-    >
+    <React.Suspense fallback={<KdsMirrorSkeleton />}>
       <KdsMirrorPageInner />
     </React.Suspense>
   );

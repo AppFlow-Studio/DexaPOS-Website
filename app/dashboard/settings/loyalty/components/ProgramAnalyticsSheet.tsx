@@ -80,7 +80,7 @@ export function ProgramAnalyticsSheet({
                   meta={`${analytics.active_this_month} active`}
                   icon={<Users />}
                 />
-                <StatTile
+                <StatTile showMetaOnMobile
                   label="Active rate"
                   value={`${analytics.active_rate.toFixed(1)}%`}
                   meta="This month"
@@ -134,7 +134,7 @@ export function ProgramAnalyticsSheet({
                 {/* `variant="data"` is the surface — a tinted rounded well with
                     borderless rows. Wrapping it in a bordered box would be a
                     box inside a box (§5.2). */}
-                <Table variant="data" className="text-xs">
+                <Table bounded={false} variant="data" className="text-xs">
                   <TableHeader className="[&_tr]:border-0">
                     <TableRow>
                       <TableHead className="text-xs font-normal text-muted-foreground">Customer</TableHead>

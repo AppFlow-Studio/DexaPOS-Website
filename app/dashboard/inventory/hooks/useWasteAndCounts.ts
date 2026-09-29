@@ -59,7 +59,9 @@ export function useLogWaste() {
   const { clerkOrgId, locationId } = useOrgContext();
 
   return useMutation({
-    mutationFn: (input: LogWasteInput) => {
+    // Typed explicitly, as in useCreateInventoryCount: the inferred union is
+    // otherwise collapsed or not depending on type-creation order.
+    mutationFn: (input: LogWasteInput): ReturnType<typeof LogWaste> => {
       if (!locationId || locationId === "all") {
         return Promise.resolve({
           error: "Please select a specific location to log waste",
@@ -113,7 +115,11 @@ export function useCreateInventoryCount() {
   const { clerkOrgId, locationId } = useOrgContext();
 
   return useMutation({
-    mutationFn: (input: CreateCountInput) => {
+    // Typed explicitly: left to inference, the result is a union of the
+    // early-return `{ error }` and the action's shape, and whether TypeScript
+    // collapses it depends on type-creation order elsewhere in the program —
+    // `res?.countId` in CountsTab broke when an unrelated file changed.
+    mutationFn: (input: CreateCountInput): ReturnType<typeof CreateInventoryCount> => {
       if (!locationId || locationId === "all") {
         return Promise.resolve({
           error: "Please select a specific location to create a count",

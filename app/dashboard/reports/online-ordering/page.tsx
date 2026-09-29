@@ -110,7 +110,7 @@ function PlatformOverviewCards({
     return (
       <Panel padded>
         <StatRow columns={4}>
-          {[1, 2, 3, 4].map((i) => <StatTile key={i} label="Unavailable" value="—" meta="Failed to load" />)}
+          {[1, 2, 3, 4].map((i) => <StatTile showMetaOnMobile key={i} label="Unavailable" value="—" meta="Failed to load" />)}
         </StatRow>
       </Panel>
     );
@@ -127,7 +127,7 @@ function PlatformOverviewCards({
         <StatTile label="Online Revenue" value={formatCurrency(totalRevenue)} meta="Across selected platforms" icon={<DollarSign />} />
         <StatTile label="Online Orders" value={totalOrders.toLocaleString()} meta="Total orders received" icon={<ShoppingCart />} />
         <StatTile label="Avg Order Value" value={formatCurrency(avgOrderValue)} meta="Per online order" icon={<TrendingUp />} />
-        <StatTile
+        <StatTile showMetaOnMobile={!topPlatform}
           label="Top Platform"
           value={topPlatform ? getPlatformLabel(topPlatform.platform) : "N/A"}
           meta={topPlatform ? `${formatCurrency(topPlatform.totalRevenue)} revenue` : "No data yet"}

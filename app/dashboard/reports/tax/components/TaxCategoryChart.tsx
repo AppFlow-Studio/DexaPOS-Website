@@ -30,6 +30,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** Category and the tax it collected are the point; the rest is supporting detail. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -126,9 +128,21 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
 
   const maxTax = Math.max(...(data ?? []).map((r) => r.taxCollected), 0);
 
+  // Page the sorted rows; the bar scale above uses every category.
+  const { pageRows, pagination, setPage } = useClientPagination(sorted, 10);
+
+  // New data (a period change) starts from the first page. `data` comes
+  // straight from React Query, so its identity only changes on new results.
+  const [prevData, setPrevData] = useState(data);
+  if (prevData !== data) {
+    setPrevData(data);
+    setPage(1);
+  }
+
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
+    setPage(1);
   }
 
   if (isLoading) {
@@ -293,7 +307,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((row) => {
+              {pageRows.map((row) => {
                 // Use the stable name-keyed map so the dot color always matches
                 // the bar in the chart above, even after the user re-sorts rows.
                 const color = colorByCategory[row.categoryName] ?? COLORS[0];
@@ -347,6 +361,12 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
               })}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="categories"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
     </div>

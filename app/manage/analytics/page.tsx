@@ -42,6 +42,8 @@ import {
 } from 'recharts'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
@@ -224,10 +226,16 @@ export default function AnalyticsPage() {
             return whaleSortDir === 'desc' ? Number(bVal) - Number(aVal) : Number(aVal) - Number(bVal)
         })
     }, [gpvData?.whaleList, whaleSortKey, whaleSortDir])
+    // Paged at 10 (§5.7) — replaces the old max-h-96 scroll well.
+    const whalePage = useClientPagination(sortedWhaleList, 10)
+    const setWhalePage = whalePage.setPage
+    // A new period is a new ranking — start it from the top.
+    useEffect(() => { setWhalePage(1) }, [revenueDays, setWhalePage])
 
     const handleWhaleSort = (key: typeof whaleSortKey) => {
         if (whaleSortKey === key) setWhaleSortDir(prev => prev === 'desc' ? 'asc' : 'desc')
         else { setWhaleSortKey(key); setWhaleSortDir('desc') }
+        setWhalePage(1)
     }
 
     /** A sortable column header — ghost pill, never bare text (§5.2). */
@@ -625,7 +633,7 @@ export default function AnalyticsPage() {
                                         ))}
                                     </div>
                                 ) : sortedWhaleList.length > 0 ? (
-                                    <div className="max-h-96 overflow-auto">
+                                    <>
                                         <Table variant="data" className="min-w-[620px]">
                                             <TableHeader className="[&_tr]:border-0">
                                                 <TableRow>
@@ -638,7 +646,7 @@ export default function AnalyticsPage() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {sortedWhaleList.map(whale => (
+                                                {whalePage.pageRows.map(whale => (
                                                     <TableRow key={whale.id}>
                                                         <TableCell>
                                                             <Link href={`/manage/merchants/${whale.id}`} className="font-medium hover:underline">{whale.name}</Link>
@@ -672,7 +680,12 @@ export default function AnalyticsPage() {
                                                 ))}
                                             </TableBody>
                                         </Table>
-                                    </div>
+                                        <PaginationBar
+                                            pagination={whalePage.pagination}
+                                            onPageChange={whalePage.setPage}
+                                            itemLabel="merchants"
+                                        />
+                                    </>
                                 ) : null}
                                 {sortedWhaleList.length > 0 && (
                                     <div className="mt-3 flex items-center justify-between pt-3 text-xs text-muted-foreground">

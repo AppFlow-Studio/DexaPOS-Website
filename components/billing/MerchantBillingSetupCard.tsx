@@ -7,7 +7,6 @@ import { AlertCircle, Building2, CheckCircle2, CreditCard, Loader2, MapPin, Plus
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -25,7 +24,7 @@ import {
   type MerchantBillingCardSetupRecord,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
-import { PageHeader } from '@/components/dashboard/shell'
+import { PageHeader, Panel, PanelSection } from '@/components/dashboard/shell'
 import { PassageCheckout } from '@/lib/payments/valor/passageClient'
 
 interface BillingLocationOption {
@@ -42,6 +41,11 @@ interface MerchantBillingSetupCardProps {
   /** Renders a ghost "Back to X" pill above the title (e.g. back to the merchant). */
   backHref?: string
   backLabel?: string
+  /**
+   * Rendered as a tab inside a page that already owns the `<h1>` (the HQ
+   * merchant workspace). Drops the `PageHeader` so the page keeps one title.
+   */
+  embedded?: boolean
 }
 
 const MERCHANT_WIDE_VALUE = '__merchant_wide__'
@@ -64,6 +68,7 @@ export function MerchantBillingSetupCard({
   locations,
   backHref,
   backLabel,
+  embedded = false,
 }: MerchantBillingSetupCardProps) {
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
@@ -226,16 +231,18 @@ export function MerchantBillingSetupCard({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Billing & payment method"
-        backHref={backHref}
-        backLabel={backLabel}
-        subtitle={
-          context === 'admin'
-            ? `Manage subscription billing details for ${merchantName || 'this merchant'}.`
-            : 'Manage your subscription billing payment method.'
-        }
-      />
+      {!embedded && (
+        <PageHeader showSubtitleOnMobile={context === 'admin'}
+          title="Billing & payment method"
+          backHref={backHref}
+          backLabel={backLabel}
+          subtitle={
+            context === 'admin'
+              ? `Manage subscription billing details for ${merchantName || 'this merchant'}.`
+              : 'Manage your subscription billing payment method.'
+          }
+        />
+      )}
 
       <Alert>
         <Shield className="h-4 w-4" />
@@ -245,62 +252,63 @@ export function MerchantBillingSetupCard({
         </AlertDescription>
       </Alert>
 
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle>Billing Profile Scope</CardTitle>
-          <CardDescription>
-            Choose Merchant-wide for the tier card, or a location for that location&apos;s subscription card. Before a merchant-wide card is configured, the tier uses the first location&apos;s card.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Billing Profile Scope"
+          caption="Choose Merchant-wide for the tier card, or a location for that location's subscription card. Before a merchant-wide card is configured, the tier uses the first location's card."
+        >
           <div className="space-y-2">
             <Label htmlFor="billing-scope">Profile Scope</Label>
             <Select value={selectedScope} onValueChange={setSelectedScope}>
-              <SelectTrigger id="billing-scope" className="w-full rounded-2xl border-border/70 bg-muted/40">
+              <SelectTrigger id="billing-scope" className="w-full">
                 <SelectValue placeholder="Select profile scope" />
               </SelectTrigger>
-              <SelectContent className="rounded-2xl border-border/70 p-1">
+              <SelectContent>
                 {locations.map((location) => (
-                  <SelectItem key={location.id} value={location.id} className="rounded-xl">
+                  <SelectItem key={location.id} value={location.id}>
                     {location.name}
                   </SelectItem>
                 ))}
-                <SelectItem value={MERCHANT_WIDE_VALUE} className="rounded-xl">
+                <SelectItem value={MERCHANT_WIDE_VALUE}>
                   Merchant-wide (legacy / shared)
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      <Card className="rounded-3xl">
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-          <div className="space-y-1.5">
-            <CardTitle>Payment methods</CardTitle>
-            <CardDescription>
+      <Panel>
+        <PanelSection
+          label="Payment methods"
+          // The scope is what the list is filtered by, so it stays on phones (§13.4).
+          showCaptionOnMobile
+          caption={
+            <>
               Cards used for subscription billing on{' '}
               <span className="font-medium text-foreground">{currentScopeLabel}</span>.
-            </CardDescription>
-          </div>
-          {!formOpen && canEdit ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setCardFormError('')
-                setFormOpen(true)
-              }}
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              {scopedProfiles.length ? 'Add card' : 'Add a card'}
-            </Button>
-          ) : null}
-        </CardHeader>
-        <CardContent className="space-y-4">
+            </>
+          }
+          action={
+            !formOpen && canEdit ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setCardFormError('')
+                  setFormOpen(true)
+                }}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                {scopedProfiles.length ? 'Add card' : 'Add a card'}
+              </Button>
+            ) : null
+          }
+        >
+        <div className="space-y-4">
           {!formOpen ? (
             scopedProfiles.length === 0 ? (
-              <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              <div className="rounded-2xl bg-muted/30 p-6 text-center text-sm text-muted-foreground">
                 No payment method on file for this scope yet.
                 {canEdit ? ' Add a card to start subscription billing.' : ''}
               </div>
@@ -345,8 +353,8 @@ export function MerchantBillingSetupCard({
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
-                        {profile.is_primary ? <Badge>Primary</Badge> : null}
-                        <Badge variant={profile.is_verified ? 'secondary' : 'outline'} className="gap-1">
+                        {profile.is_primary ? <Badge variant="outline">Primary</Badge> : null}
+                        <Badge variant="outline" className="gap-1">
                           {profile.is_verified ? <CheckCircle2 className="h-3 w-3" /> : null}
                           {profile.is_verified ? 'Verified' : 'Pending'}
                         </Badge>
@@ -360,7 +368,7 @@ export function MerchantBillingSetupCard({
             <div className="relative space-y-4">
               {isPending ? (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-background/70 backdrop-blur-sm">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <p className="text-sm font-medium">Saving your card…</p>
                 </div>
               ) : null}
@@ -394,7 +402,7 @@ export function MerchantBillingSetupCard({
               ) : null}
 
               {cardSetup.label ? (
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground inline-flex items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4" />
                   Card will be stored in <span className="font-medium text-foreground">{cardSetup.label}</span> for the selected scope.
                 </div>
@@ -480,8 +488,9 @@ export function MerchantBillingSetupCard({
               </AlertDescription>
             </Alert>
           )}
-        </CardContent>
-      </Card>
+        </div>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }

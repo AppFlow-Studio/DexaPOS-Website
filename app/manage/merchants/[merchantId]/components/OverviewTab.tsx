@@ -26,8 +26,10 @@ import { MerchantDetails } from '@/types/merchant'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { formatPhoneForDisplay } from '@/lib/phone'
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { Area, AreaChart, Pie, PieChart, Cell, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { CHART_GRID, CHART_TICK, ChartEmpty, isEmptySeries } from '@/components/dashboard/shell'
+import { AnalyticsTooltip, SERIES } from '@/app/manage/components/analytics-primitives'
 import {
     useAdminOrderAnalytics,
     useAdminFinancialKPIs,
@@ -44,16 +46,24 @@ interface OverviewTabProps {
 const chartConfig = {
     sales: {
         label: 'Sales',
-        color: 'hsl(var(--chart-1))',
+        color: 'var(--brand)',
     },
     orders: {
         label: 'Orders',
-        color: 'hsl(var(--chart-2))',
+        color: 'var(--chart-2)',
     },
     revenue: {
         label: 'Revenue',
-        color: 'hsl(var(--chart-3))',
+        color: 'var(--chart-3)',
     },
+}
+
+const CHART_HEIGHT = 300
+
+// Unknown is not zero (§4.9): a figure whose query returned nothing renders `—`.
+function formatCurrency(value: number | null | undefined, decimals = false) {
+    if (value == null) return '—'
+    return `$${value.toLocaleString(undefined, decimals ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : undefined)}`
 }
 
 export function OverviewTab({ merchantInfo }: OverviewTabProps) {
@@ -95,9 +105,9 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     const isLoading = analyticsLoading || kpisLoading || salesLoading || ordersLoading || todayLoading
 
     // Derivatives
-    const totalRevenue = financialKPIs?.summary?.net_sales ?? orderAnalytics?.totalRevenue ?? 0
-    const totalOrders = orderAnalytics?.totalOrders ?? 0
-    const avgOrderValue = orderAnalytics?.avgOrderValue ?? 0
+    const totalRevenue = financialKPIs?.summary?.net_sales ?? orderAnalytics?.totalRevenue ?? null
+    const totalOrders = orderAnalytics?.totalOrders ?? null
+    const avgOrderValue = orderAnalytics?.avgOrderValue ?? null
     const growth = orderAnalytics?.growthPercentage ?? 0
 
     // Sales Trend Data
@@ -113,19 +123,15 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     // Order Types for Pie Chart (Revenue by Category proxy)
     const orderTypeData = useMemo(() => {
         if (!orderAnalytics?.orderTypeBreakdown) return []
-        // Purple and yellow, alternating. Written as literal `oklch()` because
-        // the `--chart-*` tokens are already `oklch(...)` — wrapping one in
-        // `hsl()` yields invalid CSS and Recharts falls back to black (C2).
-        const colors = ['oklch(0.5854 0.2041 293.5)', 'oklch(0.7900 0.1580 85.0)']
-        // Filter BEFORE indexing: colouring first and filtering after lets an
-        // empty order type consume a colour, so two visible slices could land
-        // on the same one (`0` and `2` both map to purple).
+        // The HQ categorical palette (§6.1). Filter BEFORE indexing: colouring
+        // first and filtering after lets an empty order type consume a colour,
+        // so two visible slices could land on the same one.
         return Object.entries(orderAnalytics.orderTypeBreakdown)
             .filter(([, value]) => Number(value) > 0)
             .map(([type, value], index) => ({
                 name: type === 'qr_dine_in' ? 'QR Table' : type.replace(/_/g, ' '),
                 value,
-                color: colors[index % colors.length]
+                color: SERIES[index % SERIES.length]
             }))
     }, [orderAnalytics])
 
@@ -144,7 +150,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         </StatRow>
                     </PanelSection>
 
-                    <PanelSection label="Today" divider>
+                    <PanelSection label="Today">
                         <StatRow columns={3} className="mt-6">
                             {Array.from({ length: 3 }).map((_, i) => (
                                 <StatTile key={i} isLoading label={<Skeleton className="h-3.5 w-24" />} value={null} />
@@ -153,7 +159,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                     </PanelSection>
                 </Panel>
 
-                <PanelGrid columns={2}>
+                <PanelGrid columns={2} className="items-start">
                     {Array.from({ length: 2 }).map((_, i) => (
                         <Panel key={i}>
                             <PanelSection label={<Skeleton className="h-4 w-40" />}>
@@ -175,7 +181,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         <StatTile
                             label="Net Sales"
                             icon={<DollarSign />}
-                            value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            value={formatCurrency(totalRevenue, true)}
                             meta={
                                 growth !== 0 ? (
                                     <span className="flex flex-wrap items-center gap-1">
@@ -188,43 +194,43 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         <StatTile
                             label="Total Orders"
                             icon={<ShoppingCart />}
-                            value={totalOrders.toLocaleString()}
+                            value={totalOrders == null ? '—' : totalOrders.toLocaleString()}
                             meta="Captured orders"
                         />
                         <StatTile
                             label="Avg. Order Value"
                             icon={<Target />}
-                            value={`$${avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            value={formatCurrency(avgOrderValue, true)}
                             meta="Per transaction"
                         />
                         <StatTile
                             label="Refunds"
                             icon={<TrendingDown />}
-                            value={`$${(financialKPIs?.summary?.refunds_total || 0).toLocaleString()}`}
+                            value={formatCurrency(financialKPIs ? financialKPIs.summary?.refunds_total || 0 : null)}
                             meta="Total refunded"
                         />
                     </StatRow>
                 </PanelSection>
 
                 {/* Additional KPIs - Today's Snapshot */}
-                <PanelSection label="Today" divider>
+                <PanelSection label="Today">
                     <StatRow columns={3} className="mt-6">
                         <StatTile
                             label="Revenue Today"
                             icon={<Activity />}
-                            value={`$${(todaySummary?.netSales || 0).toLocaleString()}`}
+                            value={formatCurrency(todaySummary ? todaySummary.netSales || 0 : null)}
                             meta="Net sales for today"
                         />
                         <StatTile
                             label="Tips Collected"
                             icon={<TrendingUp />}
-                            value={`$${(todaySummary?.totalTips || 0).toLocaleString()}`}
+                            value={formatCurrency(todaySummary ? todaySummary.totalTips || 0 : null)}
                             meta="Tips for today"
                         />
                         <StatTile
                             label="Tax Collected"
                             icon={<DollarSign />}
-                            value={`$${(todaySummary?.totalTax || 0).toLocaleString()}`}
+                            value={formatCurrency(todaySummary ? todaySummary.totalTax || 0 : null)}
                             meta="Tax for today"
                         />
                     </StatRow>
@@ -232,28 +238,41 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
             </Panel>
 
             {/* Charts Section */}
-            <PanelGrid columns={2}>
+            <PanelGrid columns={2} className="items-start">
                 {/* Sales Trend Chart */}
                 <Panel>
                     <PanelSection label="Sales Trend (30 Days)" caption="Daily sales performance">
-                        {salesTrendData.length > 0 ? (
+                        {isEmptySeries(salesTrendData, (row) => Number(row.sales)) ? (
+                            <ChartEmpty
+                                height={CHART_HEIGHT}
+                                title="No sales in the last 30 days"
+                                hint="Daily sales will appear here once this merchant takes orders."
+                            />
+                        ) : (
                             <ChartContainer config={chartConfig} className="h-75 w-full">
                                 <AreaChart data={salesTrendData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} />
-                                    <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} />
-                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <CartesianGrid {...CHART_GRID} vertical={false} />
+                                    <XAxis dataKey="date" tick={CHART_TICK} tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} />
+                                    <YAxis tick={CHART_TICK} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} />
+                                    <ChartTooltip
+                                        content={
+                                            <AnalyticsTooltip
+                                                formatter={(v: number) =>
+                                                    `$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                }
+                                            />
+                                        }
+                                    />
                                     <Area
                                         type="monotone"
                                         dataKey="sales"
-                                        stroke="var(--primary)"
-                                        fill="var(--primary)"
+                                        name="Sales"
+                                        stroke="var(--brand)"
+                                        fill="var(--brand)"
                                         fillOpacity={0.2}
                                     />
                                 </AreaChart>
                             </ChartContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-75 text-muted-foreground">No data available</div>
                         )}
                     </PanelSection>
                 </Panel>
@@ -261,42 +280,50 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                 {/* Order Types */}
                 <Panel>
                     <PanelSection label="Order Sources" caption="Distribution by order type">
-                        {orderTypeData.length > 0 ? (
-                             <ChartContainer config={chartConfig} className="h-75 w-full">
-                                <PieChart>
-                                    <Pie
-                                        data={orderTypeData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {orderTypeData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <ChartTooltip content={<ChartTooltipContent />} />
-                                </PieChart>
-                            </ChartContainer>
+                        {orderTypeData.length === 0 ? (
+                            <ChartEmpty
+                                height={CHART_HEIGHT}
+                                title="No orders in the last 30 days"
+                                hint="Order sources will appear here once this merchant takes orders."
+                            />
                         ) : (
-                             <div className="flex items-center justify-center h-75 text-muted-foreground">No data available</div>
-                        )}
-                        <div className="flex flex-wrap justify-center gap-4 mt-4">
-                            {orderTypeData.map((type) => (
-                                <div key={type.name} className="flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
-                                    <span className="text-sm capitalize">{type.name} ({type.value})</span>
+                            <>
+                                <ChartContainer config={chartConfig} className="h-75 w-full">
+                                    <PieChart>
+                                        <Pie
+                                            data={orderTypeData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {orderTypeData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <ChartTooltip content={<AnalyticsTooltip />} />
+                                    </PieChart>
+                                </ChartContainer>
+                                <div className="mt-4 flex flex-wrap justify-center gap-4">
+                                    {orderTypeData.map((type) => (
+                                        <div key={type.name} className="flex items-center gap-2">
+                                            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: type.color }} />
+                                            <span className="text-xs capitalize text-muted-foreground tabular-nums">
+                                                {type.name} ({type.value})
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            </>
+                        )}
                     </PanelSection>
                 </Panel>
             </PanelGrid>
 
             {/* Bottom Section: Business Info and Recent Activity */}
-            <PanelGrid columns={2}>
+            <PanelGrid columns={2} className="items-start">
                 {/* Business Information — compact summary; full details + editing on the Business Info tab */}
                 <Panel>
                     <PanelSection
@@ -359,23 +386,23 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                     <PanelSection label="Recent Orders" caption="Latest transactions">
                         <div className="mt-4 space-y-4">
                             {recentOrders && recentOrders.length > 0 ? recentOrders.map((order: any) => (
-                                <div key={order.id} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-full flex items-center justify-center bg-muted text-muted-foreground">
+                                <div key={order.id} className="flex items-center justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
                                             <ShoppingCart className="h-4 w-4" />
                                         </div>
-                                        <div>
-                                            <div className="font-medium text-sm">Order #{order.order_number}</div>
-                                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-medium tabular-nums">Order #{order.order_number}</div>
+                                            <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
                                                 <Clock className="h-3 w-3" />
                                                 {format(new Date(order.created_at), 'MMM d, h:mm a')}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="font-medium">${Number(order.total_amount).toFixed(2)}</div>
+                                    <div className="shrink-0 text-right font-medium tabular-nums">${Number(order.total_amount).toFixed(2)}</div>
                                 </div>
                             )) : (
-                                <p className="text-muted-foreground text-sm">No recent orders found.</p>
+                                <p className="text-sm text-muted-foreground">No orders yet — this merchant&apos;s latest orders will appear here.</p>
                             )}
                         </div>
                     </PanelSection>

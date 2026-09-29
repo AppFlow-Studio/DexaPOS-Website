@@ -10,6 +10,11 @@ import type { LucideIcon } from 'lucide-react'
 interface ChartCardProps {
   title: string
   subtitle?: string
+  /**
+   * The subtitle is hidden below `sm` by default (UI-DESIGN-SYSTEM §13.4).
+   * Pass this when it states the chart's unit or basis rather than describing it.
+   */
+  showSubtitleOnMobile?: boolean
   icon?: LucideIcon
   isLoading?: boolean
   isEmpty?: boolean
@@ -31,6 +36,7 @@ interface ChartCardProps {
 export function ChartCard({
   title,
   subtitle,
+  showSubtitleOnMobile = false,
   icon: Icon,
   isLoading,
   isEmpty,
@@ -58,7 +64,14 @@ export function ChartCard({
             <span className="truncate">{title}</span>
           </CardTitle>
           {subtitle && (
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p
+              className={cn(
+                'text-sm text-muted-foreground',
+                !showSubtitleOnMobile && 'max-sm:hidden'
+              )}
+            >
+              {subtitle}
+            </p>
           )}
         </div>
         {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}

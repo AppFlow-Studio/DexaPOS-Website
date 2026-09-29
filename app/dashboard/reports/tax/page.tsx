@@ -27,7 +27,7 @@ import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRa
 import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
 import { PageShell } from "@/components/dashboard/shell";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 
 export default function TaxReportPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({

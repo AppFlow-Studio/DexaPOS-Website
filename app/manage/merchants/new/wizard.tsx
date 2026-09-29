@@ -403,7 +403,7 @@ export function CreateMerchantWizard() {
     <Form {...form}>
       <div className="space-y-6">
         <Panel>
-          <PanelSection
+          <PanelSection showCaptionOnMobile
             label={`Create New Merchant: Step ${step} of ${TOTAL_STEPS}`}
             caption={STEP_TITLES[step - 1]}
           >

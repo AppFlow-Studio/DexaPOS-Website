@@ -44,6 +44,8 @@ import {
 import { useCarrierOrganizations } from '../hooks/useCarrierOrganizations'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 
 
 /**
@@ -93,6 +95,8 @@ export default function OrganizationsPage() {
             org.clerk_org_id?.toLowerCase().includes(query)
         )
     }, [organizationsData, search])
+    // §5.7: 10 rows per page; the mobile card grid pages with the table.
+    const orgPage = useClientPagination(filteredOrganizations, 10)
     /* Shaped to the converted page (§2.3): one panel of stat tiles, then the
        tinted table well — so the skeleton promises the chrome that arrives. */
     if (isLoading) return (
@@ -263,7 +267,10 @@ export default function OrganizationsPage() {
                             placeholder="Search by name, domain, or organization ID"
                             className="h-9 w-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background sm:w-72"
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => {
+                                setSearch(e.target.value)
+                                orgPage.setPage(1)
+                            }}
                         />
                     </div>
                     {/* Column filter — mobile only. The desktop table shows every
@@ -335,7 +342,7 @@ export default function OrganizationsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredOrganizations.map((org) => (
+                            {orgPage.pageRows.map((org) => (
                                 <TableRow key={org.id} className='cursor-pointer' onClick={() => router.push(`/manage/organizations/${org.clerk_org_id}`)}>
                                     <TableCell className="font-medium">
                                         <div className="font-semibold">{org.name}</div>
@@ -452,7 +459,7 @@ export default function OrganizationsPage() {
                         previously had only the table, so narrow screens got a
                         horizontal scroll. */}
                     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-                        {filteredOrganizations.map((org) => (
+                        {orgPage.pageRows.map((org) => (
                             <div
                                 key={org.id}
                                 className="min-w-0 cursor-pointer rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted"
@@ -497,6 +504,12 @@ export default function OrganizationsPage() {
                             </div>
                         ))}
                     </div>
+
+                    <PaginationBar
+                        pagination={orgPage.pagination}
+                        onPageChange={orgPage.setPage}
+                        itemLabel="organizations"
+                    />
             </div>
         </PageShell>
     )

@@ -167,8 +167,10 @@ export function PlatformInvoiceDialog({
         onOpenChange(o)
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
+          the body scrolls; header and footer carry no rule (§5.5). */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+        <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
           <DialogTitle>New bill to merchant</DialogTitle>
           <DialogDescription>
             Dexa POS bills this merchant. They receive a pay link by email and can
@@ -176,12 +178,12 @@ export function PlatformInvoiceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
           {/* Line items */}
           <div className="space-y-1">
             <Label>Line items</Label>
             {items.length > 0 && (
-              <div className="rounded-md border px-3">
+              <div className="space-y-1 rounded-2xl bg-muted/20 p-1">
                 {items.map((item) => (
                   <LineItemRow
                     key={item.id}
@@ -239,7 +241,7 @@ export function PlatformInvoiceDialog({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 rounded-full"
                 onClick={addItem}
                 aria-label="Add line item"
               >
@@ -349,7 +351,7 @@ export function PlatformInvoiceDialog({
           </div>
 
           {/* Totals */}
-          <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
+          <div className="rounded-2xl bg-muted/60 px-4 py-3 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Subtotal</span>
               <span className="tabular-nums">${subtotal.toFixed(2)}</span>
@@ -366,14 +368,14 @@ export function PlatformInvoiceDialog({
                 <span className="tabular-nums">${taxAmount.toFixed(2)}</span>
               </div>
             )}
-            <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
+            <div className="mt-2 flex justify-between font-semibold">
               <span>Total</span>
               <span className="tabular-nums">${total.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter className="shrink-0 gap-2 px-6 pb-6 pt-4 sm:gap-2">
           <Button
             variant="outline"
             onClick={() => handleCreate(false)}

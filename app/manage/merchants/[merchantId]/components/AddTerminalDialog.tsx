@@ -29,9 +29,6 @@ interface AddTerminalDialogProps {
 
 const UNASSIGNED_STATION = '__unassigned__'
 
-const terminalTypeLabel = (type: TerminalType): string =>
-    type === 'valor' ? 'Valor' : type === 'codepay' ? 'CodePay' : 'Castles'
-
 export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, stations }: AddTerminalDialogProps) {
     // Form state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('')
@@ -103,51 +100,20 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[560px] max-h-[92vh] overflow-hidden gap-0 p-0">
-                <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-amber-50/60 px-6 pt-6 pb-4">
+            {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
+                the body scrolls; header and footer carry no rule (§5.5). */}
+            <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-[560px] sm:rounded-3xl">
+                <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
                     <DialogTitle className="text-xl">Add Payment Terminal</DialogTitle>
-                    <DialogDescription className="mt-1">
+                    <DialogDescription>
                         Connect a card terminal to a location and optionally link it to a station.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-5 overflow-y-auto px-6 py-5 max-h-[calc(92vh-176px)]">
-                    <div className="rounded-2xl border bg-slate-50/80 p-4">
-                        <div className="grid gap-1 sm:grid-cols-3 sm:gap-4">
-                            <div>
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Scope
-                                </p>
-                                <p className="text-sm font-medium text-slate-900">
-                                    {selectedLocationId
-                                        ? locations.find((location) => location.id === selectedLocationId)?.name || 'Selected location'
-                                        : 'Choose a location'}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Assignment
-                                </p>
-                                <p className="text-sm font-medium text-slate-900">
-                                    {selectedStationId === UNASSIGNED_STATION
-                                        ? 'Unassigned'
-                                        : filteredStations.find((station) => station.id === selectedStationId)?.station_name || 'Linked to station'}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Type
-                                </p>
-                                <p className="text-sm font-medium text-slate-900">
-                                    {terminalTypeLabel(terminalType)}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
+                <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-4">
                     <div className="space-y-4">
                     {/* Location & Station */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label>Location *</Label>
                             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
@@ -182,7 +148,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                     </div>
 
                     {/* Terminal Name & Type */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="terminal-name">Terminal Name *</Label>
                             <Input
@@ -258,7 +224,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                 </div>
                 </div>
 
-                <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
+                <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>

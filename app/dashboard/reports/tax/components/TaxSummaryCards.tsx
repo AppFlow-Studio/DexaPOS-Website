@@ -96,7 +96,7 @@ export function TaxSummaryCards({ summary, isLoading, isError }: TaxSummaryCards
     <Panel padded>
       <StatRow columns={3}>
       {CARDS.map((card) => (
-        <StatTile
+        <StatTile showMetaOnMobile={isError}
           key={card.key}
           label={card.title}
           value={isError ? "—" : card.format(s)}

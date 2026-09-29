@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -32,6 +32,8 @@ import {
 import { useTipDistributionHistory } from "../hooks/useTipDistribution";
 import { SHIFT_LABELS, formatMoney, formatDate } from "../lib/constants";
 import { cn } from "@/lib/utils";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 
 interface HistoryTableProps {
@@ -106,6 +108,13 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
     });
     return copy;
   }, [sessions, sortField, sortDir]);
+
+  const { pageRows, pagination, setPage } = useClientPagination(sorted, 10);
+
+  // A new filter, sort or location starts the list from the top.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, dateFrom, dateTo, sortField, sortDir, locationId, setPage]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -263,7 +272,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sorted.map((session) => {
+                {pageRows.map((session) => {
                   const poolSummary = getPoolSummary(session.config_snapshot);
                   const ruleSummary = getRuleSummary(session.config_snapshot);
 
@@ -376,7 +385,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
 
             {/* Phones and tablets: cards instead of a scrolling table. */}
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-              {sorted.map((session) => {
+              {pageRows.map((session) => {
                 const poolSummary = getPoolSummary(session.config_snapshot);
                 const variance =
                   session.total_tips_collected - session.total_distributed;
@@ -458,6 +467,12 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                 );
               })}
             </div>
+
+            <PaginationBar
+              pagination={pagination}
+              onPageChange={setPage}
+              itemLabel="sessions"
+            />
         </TooltipProvider>
       )}
     </div>

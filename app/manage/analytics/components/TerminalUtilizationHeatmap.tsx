@@ -133,7 +133,7 @@ function StationStatus({ station }: { station: Station }) {
 function StationDetailTable({ stations }: { stations: Station[] }) {
     const showLocation = new Set(stations.map(s => s.locationId)).size > 1
     return (
-        <Table variant="data" className="min-w-[560px]">
+        <Table bounded={false} variant="data" className="min-w-[560px]">
             <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                     <TableHead>Station</TableHead>
@@ -700,7 +700,6 @@ export default function TerminalUtilizationHeatmap({
                                 </div>
                             )}
                             <PaginationBar
-                                className="border-t-0 pt-0"
                                 pagination={pagination}
                                 onPageChange={setPage}
                                 itemLabel="merchants"

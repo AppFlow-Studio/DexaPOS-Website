@@ -48,7 +48,7 @@ export function KitchenSpeedHeatmap({
   )
 
   return (
-    <ChartCard
+    <ChartCard showSubtitleOnMobile
       title="Kitchen Speed Heatmap"
       subtitle="Average prep time by hour and day of week"
       icon={Flame}

@@ -9,9 +9,12 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import type { PaginationMeta } from "@/types/pagination";
 import {
   Table,
   TableBody,
@@ -695,6 +698,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    // §5.7: at most 10 rows per page. TanStack's default auto-reset sends the
+    // view back to page 1 whenever the search, filters, sort or data change.
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageIndex: 0, pageSize: 10 } },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
@@ -712,6 +719,15 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   });
 
   const visibleRows = table.getRowModel().rows;
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const pagination: PaginationMeta = {
+    page: pageIndex + 1,
+    pageSize,
+    total: table.getFilteredRowModel().rows.length,
+    totalPages: table.getPageCount() || 1,
+    hasNextPage: table.getCanNextPage(),
+    hasPreviousPage: table.getCanPreviousPage(),
+  };
 
   return (
     <div className="min-w-0 space-y-5">
@@ -1056,6 +1072,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           </div>
         )}
       </div>
+
+      <PaginationBar
+        pagination={pagination}
+        onPageChange={(p) => table.setPageIndex(p - 1)}
+        itemLabel="staff members"
+      />
 
       {/* Results count */}
       <div className="flex items-center justify-between text-xs text-muted-foreground sm:text-sm">

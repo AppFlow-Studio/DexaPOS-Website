@@ -1,16 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { format, parse, parseISO, subDays } from 'date-fns'
-import { AlertTriangle, CalendarIcon, Download, RefreshCcwDot, ShieldCheck } from 'lucide-react'
+import { format, parseISO, subDays } from 'date-fns'
+import { AlertTriangle, Download, RefreshCcwDot, ShieldCheck } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -19,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import {
   getPlatformMerchants,
   PlatformMerchant,
@@ -32,24 +30,50 @@ import {
 } from '@/lib/queries/use-platform-analytics'
 import { PermissionGate } from '@/components/admin/PermissionGate'
 import { ManualBatchoutDialog } from './ManualBatchoutDialog'
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  FilterDate,
+  FilterSelect,
+  LoadError,
+  RecordCard,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from './ledger-primitives'
 
 // Batch statuses for which a manual batchout is a no-op (already closed out).
 const SETTLED_BATCH_STATUSES = new Set(['settled', 'funded', 'closed'])
 
 const BATCH_STATUS_OPTIONS = ['open', 'closed', 'submitted', 'settled', 'funded'] as const
 
+const BATCH_PAGE_SIZE = 25
+const PAYMENT_PAGE_SIZE = 10
+const BATCH_COLUMN_COUNT = 12
+const PAYMENT_COLUMN_COUNT = 9
+
 function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function formatDateOnly(dateValue?: string): string {
-  if (!dateValue) return '-'
+  if (!dateValue) return '—'
   return format(parseISO(dateValue), 'MMM d, yyyy')
 }
 
 function formatDateTime(dateValue?: string): string {
-  if (!dateValue) return '-'
+  if (!dateValue) return '—'
   return format(new Date(dateValue), 'MMM d, yyyy h:mm a')
+}
+
+/** `under_review` → "Under review". */
+function formatLabel(value: string): string {
+  const words = value.replace(/_/g, ' ').toLowerCase()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function pluralize(count: number, singular: string, plural: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`
 }
 
 /**
@@ -64,42 +88,44 @@ function formatBatchLabel(batch: Pick<PlatformSettlementBatch, 'batch_number' | 
   return batch.batch_id
 }
 
-function getStatusBadge(status: string) {
-  const normalized = status.toLowerCase()
-
-  if (normalized === 'open') {
-    return <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">Open</Badge>
-  }
-  if (normalized === 'closed') {
-    return <Badge variant="outline" className="border-blue-300 bg-blue-100 text-blue-800">Closed</Badge>
-  }
-  if (normalized === 'submitted') {
-    return <Badge variant="outline" className="border-purple-300 bg-purple-100 text-purple-800">Submitted</Badge>
-  }
-  if (normalized === 'settled') {
-    return <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">Settled</Badge>
-  }
-  if (normalized === 'funded') {
-    return <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800">Funded</Badge>
-  }
-
-  return <Badge variant="outline">{status}</Badge>
-}
-
-// How the batch was settled — surfaces auto (Valor webhook / POS auto) vs manual.
-function getOriginBadge(origin?: string | null) {
+// How the batch was settled — auto (Valor webhook / POS auto) vs manual.
+function getOriginLabel(origin?: string | null): string | null {
   switch (origin) {
     case 'valor_webhook':
-      return <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">Auto · Webhook</Badge>
+      return 'Auto · Webhook'
     case 'pos_auto':
-      return <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">Auto</Badge>
+      return 'Auto'
     case 'hq_manual':
-      return <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">Manual · HQ</Badge>
+      return 'Manual · HQ'
     case 'pos_manual':
-      return <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">Manual</Badge>
+      return 'Manual'
     default:
       return null
   }
+}
+
+function formatPaymentFlags(payment: PlatformSettlementBatchPayment): string {
+  if (payment.is_voided && payment.is_returned) return 'Void / Returned'
+  if (payment.is_voided) return 'Void'
+  if (payment.is_returned) return 'Returned'
+  return '—'
+}
+
+/**
+ * The reconciliation alarm (UI-DESIGN-SYSTEM §3.5 use 4, HQ-2): the glyph is
+ * amber, the figure and the screen-reader word carry the meaning.
+ */
+function DiscrepancyValue({ batch }: { batch: PlatformSettlementBatch }) {
+  if (!batch.has_discrepancy) {
+    return <span className="font-normal text-muted-foreground">Matched</span>
+  }
+  return (
+    <span className="inline-flex items-center justify-end gap-1 font-medium tabular-nums">
+      <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
+      {formatCurrency(batch.discrepancy_amount)}
+      <span className="sr-only">discrepancy</span>
+    </span>
+  )
 }
 
 function buildBatchExportCsv(batch: PlatformSettlementBatch, rows: PlatformSettlementBatchPayment[]): string {
@@ -163,46 +189,16 @@ function downloadCsv(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-// Date filter using Popover + Calendar instead of a native <input type="date">.
-// The native picker's calendar popup renders off-screen on narrow viewports;
-// the Radix popover keeps itself inside the viewport via collision detection.
-// Value is the same `yyyy-MM-dd` string the rest of the filter logic expects.
-function DateField({
-  value,
-  onChange,
-  placeholder = 'dd/mm/yyyy',
-}: {
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
-}) {
-  const selected = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            'h-9 w-full justify-start px-3 text-left font-normal',
-            !value && 'text-muted-foreground'
-          )}
-        >
-          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          <span className="truncate">
-            {selected ? format(selected, 'MMM d, yyyy') : placeholder}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
-        <Calendar
-          mode="single"
-          initialFocus
-          selected={selected}
-          onSelect={(date) => onChange(date ? format(date, 'yyyy-MM-dd') : '')}
-        />
-      </PopoverContent>
-    </Popover>
-  )
+function batchErrorTitle(code: string): string {
+  if (code === '57014') return 'Batch reconciliation timed out'
+  if (code === 'PGRST202' || code === '42883') return 'Batch reconciliation is not installed on this database'
+  return 'Batch reconciliation could not load'
+}
+
+function batchErrorDetail(code: string): string {
+  if (code === '57014') return `Narrow the date range or filter to one merchant. Error ${code}`
+  if (code === 'PGRST202' || code === '42883') return `Apply the settlement batch migrations. Error ${code}`
+  return `Error ${code}`
 }
 
 // Bounded default window for the batch list so the reconciliation RPC never
@@ -243,7 +239,7 @@ export function BatchReconciliationSection({
     refetch: refetchBatches,
   } = usePlatformSettlementBatches(filters)
 
-  const batches = batchesResult?.data || []
+  const batches = useMemo(() => batchesResult?.data || [], [batchesResult])
   const batchErrorCode = batchesResult?.errorCode
 
   const selectedBatch = useMemo(
@@ -265,8 +261,29 @@ export function BatchReconciliationSection({
     !!selectedBatch
   )
 
-  const batchPayments = batchPaymentsResult?.data || []
+  const batchPayments = useMemo(() => batchPaymentsResult?.data || [], [batchPaymentsResult])
   const batchPaymentsErrorCode = batchPaymentsResult?.errorCode
+
+  // The batch list is capped at 250 server-side and paged here (§5.7).
+  const {
+    pageRows: batchPageRows,
+    pagination: batchPagination,
+    setPage: setBatchPage,
+  } = useClientPagination(batches, BATCH_PAGE_SIZE)
+  const {
+    pageRows: paymentPageRows,
+    pagination: paymentPagination,
+    setPage: setPaymentPage,
+  } = useClientPagination(batchPayments, PAYMENT_PAGE_SIZE)
+
+  // A new filter set starts on page 1; so does a newly selected batch's payments.
+  useEffect(() => {
+    setBatchPage(1)
+  }, [filters, setBatchPage])
+
+  useEffect(() => {
+    setPaymentPage(1)
+  }, [selectedBatchId, setPaymentPage])
 
   useEffect(() => {
     let active = true
@@ -296,6 +313,23 @@ export function BatchReconciliationSection({
       setSelectedBatchId(null)
     }
   }, [batches, selectedBatchId])
+
+  const merchantOptions = useMemo(
+    () => merchants.map((merchant) => ({ value: merchant.id, label: merchant.name })),
+    [merchants]
+  )
+  const statusOptions = useMemo(
+    () => BATCH_STATUS_OPTIONS.map((option) => ({ value: option, label: formatLabel(option) })),
+    []
+  )
+
+  // The default window is the last 7 days, open-ended, every status, every
+  // merchant (or the scoped one). "Clear filters" shows only when off it.
+  const filtersOffDefault =
+    (!scopedMerchantId && merchantId !== 'all') ||
+    status !== 'all' ||
+    dateFrom !== defaultDateFrom() ||
+    dateTo !== ''
 
   const clearFilters = () => {
     if (!scopedMerchantId) setMerchantId('all')
@@ -327,128 +361,99 @@ export function BatchReconciliationSection({
     downloadCsv(csv, filename)
   }
 
+  const showBatchEmpty = !batchesLoading && batches.length === 0
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-1">
-              Batch Reconciliation
-              <InfoIcon tip="A batch groups all card payments submitted to the processor in a single settlement run (usually daily). Each batch shows the gross amount, any refunds, and the net deposit — the amount actually sent to the merchant's bank. A discrepancy means the batch total doesn't match the sum of linked order payments." />
-            </CardTitle>
-            <CardDescription>
-              Compare settlement batches against linked order payments and flag mismatches.
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => void handleRefresh()} disabled={batchesFetching || batchPaymentsFetching}>
-              <RefreshCcwDot className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-            <Button variant="outline" onClick={handleBatchExport} disabled={!selectedBatch}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Selected
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className={scopedMerchantId ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4' : 'grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-5'}>
-          {!scopedMerchantId && (
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Merchant</span>
-              <select
-                className="h-9 rounded-md border bg-background px-2"
-                value={merchantId}
-                onChange={(event) => setMerchantId(event.target.value)}
-                disabled={loadingMerchants}
-              >
-                <option value="all">All merchants</option>
-                {merchants.map((merchant) => (
-                  <option key={merchant.id} value={merchant.id}>
-                    {merchant.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Batch Status</span>
-            <select
-              className="h-9 rounded-md border bg-background px-2"
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
-              <option value="all">All statuses</option>
-              {BATCH_STATUS_OPTIONS.map((statusOption) => (
-                <option key={statusOption} value={statusOption}>
-                  {statusOption}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Date From</span>
-            <DateField value={dateFrom} onChange={setDateFrom} />
-          </div>
-
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Date To</span>
-            <DateField value={dateTo} onChange={setDateTo} />
-          </div>
-
-          <div className="flex items-end">
-            <Button variant="ghost" onClick={clearFilters} className="w-full">
-              Clear Filters
-            </Button>
-          </div>
-        </div>
-
-        {batchErrorCode && (
-          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-            {batchErrorCode === '57014'
-              ? 'Batch reconciliation timed out. Narrow the date range or filter to a single merchant and try again.'
-              : batchErrorCode === 'PGRST202' || batchErrorCode === '42883'
-                ? 'Batch reconciliation RPC is not installed on this database. Apply the settlement batch migrations.'
-                : 'Batch reconciliation data is unavailable.'}
-            {` (Error: ${batchErrorCode})`}
-          </div>
+    <div className="min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {!scopedMerchantId && (
+          <FilterSelect
+            value={merchantId}
+            onValueChange={setMerchantId}
+            options={merchantOptions}
+            allLabel="All merchants"
+            ariaLabel="Merchant"
+            disabled={loadingMerchants}
+          />
         )}
+        <FilterSelect
+          value={status}
+          onValueChange={setStatus}
+          options={statusOptions}
+          allLabel="All statuses"
+          ariaLabel="Batch status"
+        />
+        <FilterDate value={dateFrom} onChange={setDateFrom} placeholder="From date" />
+        <FilterDate value={dateTo} onChange={setDateTo} placeholder="To date" />
+        {filtersOffDefault && (
+          <Button variant="ghost" size="sm" className="h-9 px-4" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-4"
+            onClick={() => void handleRefresh()}
+            disabled={batchesFetching || batchPaymentsFetching}
+          >
+            <RefreshCcwDot className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-4"
+            onClick={handleBatchExport}
+            disabled={!selectedBatch}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export selected
+          </Button>
+        </div>
+      </div>
 
-        <Table containerClassName="max-h-[42vh] overflow-auto rounded-md border">
-          <TableHeader className="sticky top-0 z-20 bg-card">
+      {batchErrorCode && (
+        <LoadError
+          title={batchErrorTitle(batchErrorCode)}
+          detail={batchErrorDetail(batchErrorCode)}
+          onRetry={() => void refetchBatches()}
+        />
+      )}
+
+      <div>
+        <Table variant="data" containerClassName="hidden 2xl:block" className="min-w-[1180px]">
+          <TableHeader>
             <TableRow>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Batch ID <InfoIcon tip="The settlement batch identifier, composed of acquirer prefix and batch number (e.g. TSYS-009)." side="bottom" /></span>
               </TableHead>
               <TableHead>Merchant</TableHead>
               <TableHead>
-                <span className="inline-flex items-center gap-1">Business Date <InfoIcon tip="The processing date the batch belongs to. Usually the calendar date of the settlement run." side="bottom" /></span>
+                <span className="inline-flex items-center gap-1">Business date <InfoIcon tip="The processing date the batch belongs to. Usually the calendar date of the settlement run." side="bottom" /></span>
               </TableHead>
               <TableHead>Opened</TableHead>
               <TableHead>Closed</TableHead>
-              <TableHead className="text-right">
+              <TableHead className="text-right tabular-nums">
                 <span className="inline-flex items-center justify-end gap-1">Txns <InfoIcon tip="Number of payment transactions included in this batch." side="bottom" /></span>
               </TableHead>
-              <TableHead className="text-right">
+              <TableHead className="text-right tabular-nums">
                 <span className="inline-flex items-center justify-end gap-1">Gross <InfoIcon tip="Total charged amount before refunds. This is what the processor submitted for settlement." side="bottom" /></span>
               </TableHead>
-              <TableHead className="text-right">
+              <TableHead className="text-right tabular-nums">
                 <span className="inline-flex items-center justify-end gap-1">Tip <InfoIcon tip="Total gratuity included in this batch." side="bottom" /></span>
               </TableHead>
-              <TableHead className="text-right">
+              <TableHead className="text-right tabular-nums">
                 <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
               </TableHead>
-              <TableHead className="text-right">
-                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
+              <TableHead className="text-right tabular-nums">
+                <span className="inline-flex items-center justify-end gap-1">Net deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
               </TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>
               </TableHead>
-              <TableHead className="text-right">
+              <TableHead className="text-right tabular-nums">
                 <span className="inline-flex items-center justify-end gap-1">Discrepancy <InfoIcon tip="The difference between the batch gross and the sum of linked order payments. A discrepancy indicates a payment was processed on the terminal but not found in the POS order system (or vice versa)." side="bottom" /></span>
               </TableHead>
             </TableRow>
@@ -457,173 +462,284 @@ export function BatchReconciliationSection({
             {batchesLoading ? (
               Array.from({ length: 6 }).map((_, idx) => (
                 <TableRow key={`batch-loading-${idx}`}>
-                  {Array.from({ length: 12 }).map((__, cellIdx) => (
+                  {Array.from({ length: BATCH_COLUMN_COUNT }).map((__, cellIdx) => (
                     <TableCell key={`batch-loading-${idx}-${cellIdx}`}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
                   ))}
                 </TableRow>
               ))
-            ) : batches.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={12} className="py-8 text-center text-muted-foreground">
-                  No settlement batches match current filters.
-                </TableCell>
-              </TableRow>
+            ) : showBatchEmpty ? (
+              <TableEmptyRow
+                colSpan={BATCH_COLUMN_COUNT}
+                title="No settlement batches in this range"
+                hint="Widen the dates or clear the filters."
+              />
             ) : (
-              batches.map((batch) => (
-                <TableRow
-                  key={batch.id}
-                  className={`cursor-pointer ${selectedBatchId === batch.id ? 'bg-muted/30' : ''}`}
-                  onClick={() => setSelectedBatchId(batch.id)}
-                >
-                  <TableCell className="font-mono text-xs">{formatBatchLabel(batch)}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{batch.merchant_name}</div>
-                    <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
-                  </TableCell>
-                  <TableCell>{formatDateOnly(batch.business_date)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(batch.opened_at)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(batch.closed_at)}</TableCell>
-                  <TableCell className="text-right font-mono">{batch.transaction_count.toLocaleString()}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(batch.gross_amount)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(batch.tip_amount)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(batch.refund_amount)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(batch.net_deposit)}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {getStatusBadge(batch.status)}
-                      {getOriginBadge(batch.origin)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {batch.has_discrepancy ? (
-                      <Badge variant="outline" className="border-red-300 bg-red-100 text-red-800">
-                        <AlertTriangle className="mr-1 h-3 w-3" />
-                        {formatCurrency(batch.discrepancy_amount)}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800">
-                        Matched
-                      </Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
+              batchPageRows.map((batch) => {
+                const isSelected = selectedBatchId === batch.id
+                const originLabel = getOriginLabel(batch.origin)
+                return (
+                  <TableRow
+                    key={batch.id}
+                    className="cursor-pointer"
+                    data-state={isSelected ? 'selected' : undefined}
+                    onClick={() => setSelectedBatchId(batch.id)}
+                  >
+                    <TableCell className="max-w-[9rem] truncate font-mono text-xs" title={formatBatchLabel(batch)}>
+                      {formatBatchLabel(batch)}
+                    </TableCell>
+                    <TableCell className="min-w-[9rem] whitespace-normal">
+                      <div className="font-medium">{batch.merchant_name}</div>
+                      <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
+                    </TableCell>
+                    <TableCell>{formatDateOnly(batch.business_date)}</TableCell>
+                    <TableCell className="whitespace-normal text-xs text-muted-foreground">{formatDateTime(batch.opened_at)}</TableCell>
+                    <TableCell className="whitespace-normal text-xs text-muted-foreground">{formatDateTime(batch.closed_at)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{batch.transaction_count.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(batch.gross_amount)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(batch.tip_amount)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(batch.refund_amount)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(batch.net_deposit)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline">{formatLabel(batch.status)}</Badge>
+                        {originLabel && <Badge variant="outline">{originLabel}</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DiscrepancyValue batch={batch} />
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>
 
-        {selectedBatch && (
-          <div className="space-y-3 rounded-md border p-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-medium">Selected batch:</span>
-              <Badge variant="outline" className="font-mono text-xs">{formatBatchLabel(selectedBatch)}</Badge>
-              <span className="text-muted-foreground">Linked payments:</span>
-              <span className="font-medium">{selectedBatch.linked_payment_count.toLocaleString()}</span>
-              <span className="text-muted-foreground">Linked amount:</span>
-              <span className="font-medium">{formatCurrency(selectedBatch.linked_payment_amount)}</span>
-              <span className="text-muted-foreground">Batch gross:</span>
-              <span className="font-medium">{formatCurrency(selectedBatch.gross_amount)}</span>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+          {batchesLoading ? (
+            <RecordCardSkeletons />
+          ) : showBatchEmpty ? (
+            <CardGridEmpty
+              title="No settlement batches in this range"
+              hint="Widen the dates or clear the filters."
+            />
+          ) : (
+            batchPageRows.map((batch) => {
+              const isSelected = selectedBatchId === batch.id
+              const originLabel = getOriginLabel(batch.origin)
+              return (
+                <RecordCard key={batch.id} selected={isSelected}>
+                  <button
+                    type="button"
+                    className="w-full min-w-0 text-left"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedBatchId(batch.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-sm font-medium">{formatBatchLabel(batch)}</p>
+                        <p className="truncate text-sm">{batch.merchant_name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{batch.location_name || 'No location'}</p>
+                      </div>
+                      <p className="shrink-0 text-sm text-muted-foreground">{formatLabel(batch.status)}</p>
+                    </div>
+                    <CardFields>
+                      <CardField label="Business date" value={formatDateOnly(batch.business_date)} />
+                      <CardField label="Transactions" value={batch.transaction_count.toLocaleString()} />
+                      <CardField label="Gross" value={formatCurrency(batch.gross_amount)} />
+                      <CardField label="Net deposit" value={formatCurrency(batch.net_deposit)} />
+                      <CardField label="Tip" value={formatCurrency(batch.tip_amount)} />
+                      <CardField label="Refund" value={formatCurrency(batch.refund_amount)} />
+                      <CardField label="Opened" value={formatDateTime(batch.opened_at)} />
+                      <CardField label="Closed" value={formatDateTime(batch.closed_at)} />
+                      <CardField label="Origin" value={originLabel ?? '—'} />
+                      <CardField label="Discrepancy" value={<DiscrepancyValue batch={batch} />} />
+                    </CardFields>
+                  </button>
+                </RecordCard>
+              )
+            })
+          )}
+        </div>
+
+        <PaginationBar
+          pagination={batchPagination}
+          onPageChange={setBatchPage}
+          itemLabel="batches"
+          isLoading={batchesFetching}
+        />
+        {!batchesLoading && batches.length > 0 && batches.length <= BATCH_PAGE_SIZE && (
+          <p className="mt-3 text-xs text-muted-foreground sm:text-sm tabular-nums">
+            {pluralize(batches.length, 'batch', 'batches')}
+          </p>
+        )}
+      </div>
+
+      {selectedBatch && (
+        <div className="space-y-3 rounded-2xl bg-muted/60 p-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span>
+              <span className="text-muted-foreground">Selected batch </span>
+              <span className="font-mono font-medium">{formatBatchLabel(selectedBatch)}</span>
+            </span>
+            <span>
+              <span className="text-muted-foreground">Linked payments </span>
+              <span className="font-medium tabular-nums">{selectedBatch.linked_payment_count.toLocaleString()}</span>
+            </span>
+            <span>
+              <span className="text-muted-foreground">Linked amount </span>
+              <span className="font-medium tabular-nums">{formatCurrency(selectedBatch.linked_payment_amount)}</span>
+            </span>
+            <span>
+              <span className="text-muted-foreground">Batch gross </span>
+              <span className="font-medium tabular-nums">{formatCurrency(selectedBatch.gross_amount)}</span>
+            </span>
+          </div>
+
+          <PermissionGate minLevel={10}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 px-4"
+                onClick={() => setManualBatchoutOpen(true)}
+                disabled={SETTLED_BATCH_STATUSES.has(selectedBatch.status.toLowerCase())}
+              >
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Manual batchout
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Super-admin only · marks this batch settled (reconciliation, not a terminal batchout).
+              </span>
             </div>
+          </PermissionGate>
 
-            <PermissionGate minLevel={10}>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setManualBatchoutOpen(true)}
-                  disabled={SETTLED_BATCH_STATUSES.has(selectedBatch.status.toLowerCase())}
-                >
-                  <ShieldCheck className="mr-2 h-4 w-4" />
-                  Manual Batchout
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  Super-admin only · marks this batch settled (reconciliation, not a terminal batchout).
-                </span>
-              </div>
-            </PermissionGate>
+          {batchPaymentsErrorCode && (
+            <LoadError
+              className="bg-card"
+              title="Batch payment details could not load"
+              detail={`Error ${batchPaymentsErrorCode}`}
+              onRetry={() => void refetchBatchPayments()}
+            />
+          )}
 
-            {batchPaymentsErrorCode && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-                Batch payment details unavailable. Error: {batchPaymentsErrorCode}
-              </div>
-            )}
-
-            {renderBatchPayments ? (
-              renderBatchPayments(selectedBatch)
-            ) : (
-            <Table containerClassName="max-h-[32vh] overflow-auto rounded-md border">
-              <TableHeader className="sticky top-0 z-20 bg-card">
-                <TableRow>
-                  <TableHead>Order #</TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Payment ID <InfoIcon tip="Internal payment record ID linked to this batch entry." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">
-                    <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full charge amount for this payment including tip." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead className="text-right">Tip</TableHead>
-                  <TableHead className="text-right">Refund</TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Flags <InfoIcon tip="Void = cancelled before settlement. Returned = reversed after capture." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>Captured</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {batchPaymentsLoading ? (
-                  Array.from({ length: 4 }).map((_, idx) => (
-                    <TableRow key={`payment-loading-${idx}`}>
-                      {Array.from({ length: 9 }).map((__, cellIdx) => (
-                        <TableCell key={`payment-loading-${idx}-${cellIdx}`}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : batchPayments.length === 0 ? (
+          {renderBatchPayments ? (
+            renderBatchPayments(selectedBatch)
+          ) : (
+            <div>
+              <Table variant="data" containerClassName="hidden 2xl:block" className="min-w-[960px]">
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
-                      No payments linked to this batch.
-                    </TableCell>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>
+                      <span className="inline-flex items-center gap-1">Payment ID <InfoIcon tip="Internal payment record ID linked to this batch entry." side="bottom" /></span>
+                    </TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right tabular-nums">
+                      <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full charge amount for this payment including tip." side="bottom" /></span>
+                    </TableHead>
+                    <TableHead className="text-right tabular-nums">Tip</TableHead>
+                    <TableHead className="text-right tabular-nums">Refund</TableHead>
+                    <TableHead>
+                      <span className="inline-flex items-center gap-1">Flags <InfoIcon tip="Void = cancelled before settlement. Returned = reversed after capture." side="bottom" /></span>
+                    </TableHead>
+                    <TableHead>Captured</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {batchPaymentsLoading ? (
+                    Array.from({ length: 4 }).map((_, idx) => (
+                      <TableRow key={`payment-loading-${idx}`}>
+                        {Array.from({ length: PAYMENT_COLUMN_COUNT }).map((__, cellIdx) => (
+                          <TableCell key={`payment-loading-${idx}-${cellIdx}`}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : batchPayments.length === 0 ? (
+                    <TableEmptyRow colSpan={PAYMENT_COLUMN_COUNT} title="No payments linked to this batch" />
+                  ) : (
+                    paymentPageRows.map((payment) => (
+                      <TableRow key={payment.payment_id}>
+                        <TableCell className="font-mono text-xs">{payment.order_number || '—'}</TableCell>
+                        <TableCell className="font-mono text-xs">{payment.payment_id}</TableCell>
+                        <TableCell>{formatLabel(payment.payment_method)}</TableCell>
+                        <TableCell>{formatLabel(payment.payment_status)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(payment.total_amount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(payment.tip_amount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(payment.refund_amount)}</TableCell>
+                        <TableCell className="text-xs">{formatPaymentFlags(payment)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDateTime(payment.captured_at || payment.initiated_at)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+
+              {/* Cards sit on the muted well, so they take the card fill. */}
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+                {batchPaymentsLoading ? (
+                  <RecordCardSkeletons count={2} />
+                ) : batchPayments.length === 0 ? (
+                  <CardGridEmpty title="No payments linked to this batch" />
                 ) : (
-                  batchPayments.map((payment) => (
-                    <TableRow key={payment.payment_id}>
-                      <TableCell className="font-mono text-xs">{payment.order_number || '-'}</TableCell>
-                      <TableCell className="font-mono text-xs">{payment.payment_id}</TableCell>
-                      <TableCell>{payment.payment_method}</TableCell>
-                      <TableCell>{payment.payment_status}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(payment.total_amount)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(payment.tip_amount)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(payment.refund_amount)}</TableCell>
-                      <TableCell className="text-xs">
-                        {payment.is_voided || payment.is_returned
-                          ? `${payment.is_voided ? 'Void' : ''}${payment.is_voided && payment.is_returned ? ' / ' : ''}${payment.is_returned ? 'Returned' : ''}`
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDateTime(payment.captured_at || payment.initiated_at)}
-                      </TableCell>
-                    </TableRow>
+                  paymentPageRows.map((payment) => (
+                    <RecordCard key={payment.payment_id} className="bg-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            Order <span className="font-mono">{payment.order_number || '—'}</span>
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{formatLabel(payment.payment_status)}</p>
+                        </div>
+                        <p className="shrink-0 text-sm font-medium tabular-nums">{formatCurrency(payment.total_amount)}</p>
+                      </div>
+                      <CardFields>
+                        <CardField label="Payment ID" value={payment.payment_id} mono />
+                        <CardField label="Method" value={formatLabel(payment.payment_method)} />
+                        <CardField label="Tip" value={formatCurrency(payment.tip_amount)} />
+                        <CardField label="Refund" value={formatCurrency(payment.refund_amount)} />
+                        <CardField label="Flags" value={formatPaymentFlags(payment)} />
+                        <CardField
+                          label="Captured"
+                          value={formatDateTime(payment.captured_at || payment.initiated_at)}
+                        />
+                      </CardFields>
+                    </RecordCard>
                   ))
                 )}
-              </TableBody>
-            </Table>
-            )}
-          </div>
-        )}
+              </div>
 
-        <ManualBatchoutDialog
-          batch={selectedBatch}
-          open={manualBatchoutOpen}
-          onOpenChange={setManualBatchoutOpen}
-          onSuccess={handleRefresh}
-        />
-      </CardContent>
-    </Card>
+              <PaginationBar
+                pagination={paymentPagination}
+                onPageChange={setPaymentPage}
+                itemLabel="payments"
+                isLoading={batchPaymentsFetching}
+              />
+              {!batchPaymentsLoading &&
+                batchPayments.length > 0 &&
+                batchPayments.length <= PAYMENT_PAGE_SIZE && (
+                  <p className="mt-3 text-xs text-muted-foreground sm:text-sm tabular-nums">
+                    {pluralize(batchPayments.length, 'payment', 'payments')}
+                  </p>
+                )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <ManualBatchoutDialog
+        batch={selectedBatch}
+        open={manualBatchoutOpen}
+        onOpenChange={setManualBatchoutOpen}
+        onSuccess={handleRefresh}
+      />
+    </div>
   )
 }

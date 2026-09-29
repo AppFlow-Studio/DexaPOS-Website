@@ -93,7 +93,12 @@ export function MerchantSearchSelect({
           variant="outline"
           role="combobox"
           disabled={disabled}
-          className={cn('h-9 justify-between font-normal', className)}
+          // A combobox trigger is a field, so it takes the muted, borderless
+          // material (UI-DESIGN-SYSTEM §4.2), not outline-button chrome.
+          className={cn(
+            'h-9 justify-between border-0 bg-muted/60 px-3 text-[0.8125rem] font-normal shadow-none hover:bg-muted dark:bg-muted/60',
+            className
+          )}
         >
           <span className={cn('truncate', value === 'all' && 'text-muted-foreground')}>
             {triggerLabel}
@@ -113,7 +118,10 @@ export function MerchantSearchSelect({
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      {/* `w-[var(…)]`: Tailwind v4 reads `w-[--x]` as a literal, not a variable.
+          `rounded-2xl` at the call site because popover.tsx has no data-slot for
+          the global overlay rule to reach (§4.6). */}
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-2xl p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={placeholder}

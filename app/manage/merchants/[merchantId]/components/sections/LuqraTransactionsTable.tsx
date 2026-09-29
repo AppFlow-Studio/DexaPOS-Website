@@ -30,6 +30,8 @@ import {
     useSyncLuqra,
 } from '@/lib/queries/use-luqra'
 import type { CachedTxnRow } from '@/app/manage/actions/admin-merchant/luqra-sync'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import type { PaginationMeta } from '@/types/pagination'
 
 const POS_ENTRY: Record<string, string> = {
     '1': 'Swipe',
@@ -138,6 +140,20 @@ export function LuqraTransactionsTable({
 
     const isDrilldown = !!(fixedDepositId || fixedBatchId)
 
+    const pagination: PaginationMeta = {
+        page,
+        pageSize: count,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / count)),
+        hasNextPage: page * count < total,
+        hasPreviousPage: page > 1,
+    }
+
+    const cardLabel = (r: CachedTxnRow) =>
+        `${(r.card_type && CARD_TYPE[r.card_type]) || r.card_type || '—'}${r.account_last4 ? ` ****${r.account_last4}` : ''}`
+    const entryLabel = (r: CachedTxnRow) =>
+        (r.pos_entry_mode && POS_ENTRY[r.pos_entry_mode]) || r.pos_entry_mode || '—'
+
     return (
         <div className="space-y-4">
             {!isDrilldown && (
@@ -150,7 +166,7 @@ export function LuqraTransactionsTable({
                             setPage(1)
                         }}
                     >
-                        <SelectTrigger className="h-9 w-56">
+                        <SelectTrigger className="h-9 w-full min-w-0 text-[0.8125rem] sm:w-56">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -181,7 +197,7 @@ export function LuqraTransactionsTable({
                         min={1}
                         max={2500}
                         placeholder="optional"
-                        className="h-9 w-28 tabular-nums"
+                        className="h-9 w-28 text-[0.8125rem] tabular-nums"
                         value={maxRowsInput}
                         onChange={(e) => setMaxRowsInput(e.target.value.replace(/\D/g, ''))}
                     />
@@ -190,14 +206,18 @@ export function LuqraTransactionsTable({
                 <div className="ml-auto flex items-center gap-2">
                     <Button
                         variant="outline"
-                        size="sm"
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                         onClick={() => void refetch()}
                         disabled={isFetching || sync.isPending}
                     >
                         <RefreshCcwDot className="h-3.5 w-3.5" />
                         Refresh
                     </Button>
-                    <Button size="sm" onClick={handleSync} disabled={sync.isPending}>
+                    <Button
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
+                        onClick={handleSync}
+                        disabled={sync.isPending}
+                    >
                         <Download className="h-3.5 w-3.5" />
                         {sync.isPending ? 'Syncing…' : 'Sync from Luqra'}
                     </Button>
@@ -206,137 +226,191 @@ export function LuqraTransactionsTable({
             )}
 
             {!isDrilldown && (
-                <div className="text-[11.5px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                     Reading from local cache. To sync, set a <strong>date range</strong> or a{' '}
                     <strong>max row count</strong> — Luqra returns slowly when neither is set.
-                </div>
+                </p>
             )}
 
-            <Table containerClassName="overflow-auto rounded-md border">
-                <TableHeader className="sticky top-0 z-20 bg-card">
-                    <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Terminal</TableHead>
-                        <TableHead>Card</TableHead>
-                        <TableHead>Entry</TableHead>
-                        <TableHead>Batch</TableHead>
-                        <TableHead>Auth</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead>Reconciled</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoading ? (
-                        Array.from({ length: 6 }).map((_, idx) => (
-                            <TableRow key={`luqra-loading-${idx}`}>
-                                {Array.from({ length: 9 }).map((__, cellIdx) => (
-                                    <TableCell key={`luqra-loading-${idx}-${cellIdx}`}>
-                                        <Skeleton className="h-4 w-full" />
-                                    </TableCell>
-                                ))}
+            <div>
+                <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead>Terminal</TableHead>
+                            <TableHead>Card</TableHead>
+                            <TableHead>Entry</TableHead>
+                            <TableHead>Batch</TableHead>
+                            <TableHead>Auth</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Reconciled</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            Array.from({ length: 6 }).map((_, idx) => (
+                                <TableRow key={`luqra-loading-${idx}`}>
+                                    {Array.from({ length: 9 }).map((__, cellIdx) => (
+                                        <TableCell key={`luqra-loading-${idx}-${cellIdx}`}>
+                                            <Skeleton className="h-4 w-full" />
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : rows.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                                    {EMPTY_TEXT}
+                                </TableCell>
                             </TableRow>
+                        ) : (
+                            rows.map((r) => (
+                                <TableRow key={r.id}>
+                                    <TableCell className="whitespace-nowrap tabular-nums">
+                                        {formatDate(r.original_transaction_date)}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {r.location_name ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-xs">{r.terminal_id ?? '—'}</TableCell>
+                                    <TableCell>
+                                        <span className="font-medium">
+                                            {(r.card_type && CARD_TYPE[r.card_type]) || r.card_type || '—'}
+                                        </span>
+                                        {r.account_last4 && (
+                                            <span className="ml-1 text-muted-foreground tabular-nums">
+                                                ****{r.account_last4}
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {(r.pos_entry_mode && POS_ENTRY[r.pos_entry_mode]) || (
+                                            <span className="font-mono text-muted-foreground">
+                                                {r.pos_entry_mode ?? '—'}
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-xs">{r.batch_id}</TableCell>
+                                    <TableCell className="font-mono text-xs">
+                                        {r.authorization_number}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                        {formatMoney(r.amount_dollars)}
+                                    </TableCell>
+                                    <TableCell>
+                                        {r.reconciled_payment_id && r.reconciled_order_id ? (
+                                            <Link
+                                                href={`/manage/transactions?orderId=${r.reconciled_order_id}`}
+                                                className="inline-flex items-center gap-1"
+                                                title="Open linked order_payment"
+                                            >
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="w-fit gap-1 rounded-full border-0 px-2.5 text-xs font-medium"
+                                                >
+                                                    <CheckCircle2 className="h-3 w-3" />
+                                                    {r.reconciled_order_number ?? 'Matched'}
+                                                </Badge>
+                                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </Link>
+                                        ) : (
+                                            <Badge
+                                                variant="secondary"
+                                                className="w-fit gap-1 rounded-full border-0 px-2.5 text-xs font-medium text-muted-foreground"
+                                            >
+                                                <CircleAlert className="h-3 w-3" />
+                                                Unmatched
+                                            </Badge>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                    {isLoading ? (
+                        Array.from({ length: 4 }).map((_, idx) => (
+                            <div key={`luqra-card-loading-${idx}`} className="space-y-3 rounded-2xl border-0 bg-muted/45 p-4">
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-2/3" />
+                            </div>
                         ))
                     ) : rows.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                                No transactions in the local cache for this filter. Click{' '}
-                                <strong>Sync from Luqra</strong> to fetch.
-                            </TableCell>
-                        </TableRow>
+                        <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 text-center text-sm text-muted-foreground">
+                            {EMPTY_TEXT}
+                        </div>
                     ) : (
                         rows.map((r) => (
-                            <TableRow key={r.id}>
-                                <TableCell className="whitespace-nowrap text-[12px]">
-                                    {formatDate(r.original_transaction_date)}
-                                </TableCell>
-                                <TableCell className="text-[12px] text-muted-foreground">
-                                    {r.location_name ?? '—'}
-                                </TableCell>
-                                <TableCell className="font-mono text-[11.5px]">{r.terminal_id ?? '—'}</TableCell>
-                                <TableCell className="text-[12px]">
-                                    <span className="font-medium">
-                                        {(r.card_type && CARD_TYPE[r.card_type]) || r.card_type || '—'}
-                                    </span>
-                                    {r.account_last4 && (
-                                        <span className="ml-1 text-muted-foreground">
-                                            ****{r.account_last4}
-                                        </span>
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-[12px]">
-                                    {(r.pos_entry_mode && POS_ENTRY[r.pos_entry_mode]) || (
-                                        <span className="font-mono text-muted-foreground">
-                                            {r.pos_entry_mode ?? '—'}
-                                        </span>
-                                    )}
-                                </TableCell>
-                                <TableCell className="font-mono text-[11.5px]">{r.batch_id}</TableCell>
-                                <TableCell className="font-mono text-[11.5px]">
-                                    {r.authorization_number}
-                                </TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">
-                                    {formatMoney(r.amount_dollars)}
-                                </TableCell>
-                                <TableCell>
-                                    {r.reconciled_payment_id && r.reconciled_order_id ? (
-                                        <Link
-                                            href={`/manage/transactions?orderId=${r.reconciled_order_id}`}
-                                            className="inline-flex items-center gap-1"
-                                            title="Open linked order_payment"
-                                        >
-                                            <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-200">
-                                                <CheckCircle2 className="h-3 w-3" />
+                            <div key={r.id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="truncate font-medium">{cardLabel(r)}</p>
+                                        <p className="text-xs text-muted-foreground tabular-nums">
+                                            {formatDate(r.original_transaction_date)}
+                                        </p>
+                                    </div>
+                                    <p className="shrink-0 font-medium tabular-nums">{formatMoney(r.amount_dollars)}</p>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                    <CardField label="Location" value={r.location_name ?? '—'} />
+                                    <CardField label="Terminal" value={r.terminal_id ?? '—'} />
+                                    <CardField label="Entry" value={entryLabel(r)} />
+                                    <CardField label="Batch" value={r.batch_id} />
+                                    <CardField label="Auth" value={r.authorization_number} />
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-muted-foreground">Reconciled</p>
+                                        {r.reconciled_payment_id && r.reconciled_order_id ? (
+                                            <Link
+                                                href={`/manage/transactions?orderId=${r.reconciled_order_id}`}
+                                                className="block truncate font-medium underline-offset-4 hover:underline"
+                                            >
                                                 {r.reconciled_order_number ?? 'Matched'}
-                                            </Badge>
-                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                                        </Link>
-                                    ) : (
-                                        <Badge variant="outline" className="text-muted-foreground">
-                                            <CircleAlert className="h-3 w-3" />
-                                            Unmatched
-                                        </Badge>
-                                    )}
-                                </TableCell>
-                            </TableRow>
+                                            </Link>
+                                        ) : (
+                                            <p className="truncate font-medium">Unmatched</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         ))
                     )}
-                </TableBody>
-            </Table>
-
-            <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-                <span>
-                    Page {page} · {rows.length} of {total} cached
-                </span>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={page <= 1 || isFetching}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                        Previous
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={rows.length < count || isFetching}
-                        onClick={() => setPage((p) => p + 1)}
-                    >
-                        Next
-                    </Button>
                 </div>
             </div>
+
+            <PaginationBar
+                pagination={pagination}
+                onPageChange={setPage}
+                isLoading={isFetching}
+                itemLabel="cached transactions"
+            />
+            {!isLoading && rows.length > 0 && total <= count && (
+                <p className="text-xs text-muted-foreground tabular-nums sm:text-sm">
+                    {total.toLocaleString()} cached transaction{total === 1 ? '' : 's'}
+                </p>
+            )}
+        </div>
+    )
+}
+
+const EMPTY_TEXT = 'No transactions in the local cache for this filter. Sync from Luqra to fetch them.'
+
+function CardField({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="truncate font-medium tabular-nums">{value}</p>
         </div>
     )
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-1">
-            <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                {label}
-            </span>
+        <div className="min-w-0 space-y-1">
+            <span className="block text-xs text-muted-foreground">{label}</span>
             {children}
         </div>
     )

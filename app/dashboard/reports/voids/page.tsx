@@ -50,6 +50,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** The two logs are independent tables, so each carries its own column set. */
 const VOID_COLUMNS: ReportColumn[] = [
@@ -131,11 +133,13 @@ export default function VoidsReportPage() {
   function handleVoidSort(key: VoidSort) {
     if (key === voidSort) setVoidDir(d => d === "asc" ? "desc" : "asc");
     else { setVoidSort(key); setVoidDir("desc"); }
+    setVoidPage(1);
   }
 
   function handleRefundSort(key: RefundSort) {
     if (key === refundSort) setRefundDir(d => d === "asc" ? "desc" : "asc");
     else { setRefundSort(key); setRefundDir("desc"); }
+    setRefundPage(1);
   }
 
   const filteredVoids = useMemo(() => {
@@ -164,6 +168,27 @@ export default function VoidsReportPage() {
     }
     return sortItems(rows, refundSort, refundDir);
   }, [data?.refunds, search, refundSort, refundDir]);
+
+  // Page the sorted/filtered logs; the KPI totals above use every row.
+  const {
+    pageRows: pagedVoids,
+    pagination: voidPagination,
+    setPage: setVoidPage,
+  } = useClientPagination(filteredVoids, 10);
+  const {
+    pageRows: pagedRefunds,
+    pagination: refundPagination,
+    setPage: setRefundPage,
+  } = useClientPagination(filteredRefunds, 10);
+
+  // A new search or date range starts both logs from the first page.
+  const filterSig = `${search}|${queryDateRange.from.getTime()}|${queryDateRange.to.getTime()}`;
+  const [prevFilterSig, setPrevFilterSig] = useState(filterSig);
+  if (prevFilterSig !== filterSig) {
+    setPrevFilterSig(filterSig);
+    setVoidPage(1);
+    setRefundPage(1);
+  }
 
   const kpis = [
     {
@@ -215,7 +240,7 @@ export default function VoidsReportPage() {
       <Panel padded>
         <StatRow columns={4}>
         {kpis.map((kpi) => (
-          <StatTile
+          <StatTile showMetaOnMobile={isError}
             key={kpi.label}
             label={kpi.label}
             value={kpi.value ?? ""}
@@ -321,7 +346,7 @@ export default function VoidsReportPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredVoids.map((item, i) => (
+                pagedVoids.map((item, i) => (
                   <TableRow key={i} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                     <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(item.voided_at), "MMM d, h:mm a")}
@@ -364,6 +389,12 @@ export default function VoidsReportPage() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={voidPagination}
+            onPageChange={setVoidPage}
+            itemLabel="items"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
 
@@ -440,7 +471,7 @@ export default function VoidsReportPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredRefunds.map((item, i) => (
+                pagedRefunds.map((item, i) => (
                   <TableRow key={i} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                     <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(item.refunded_at), "MMM d, h:mm a")}
@@ -475,6 +506,12 @@ export default function VoidsReportPage() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={refundPagination}
+            onPageChange={setRefundPage}
+            itemLabel="refunds"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
     </PageShell>

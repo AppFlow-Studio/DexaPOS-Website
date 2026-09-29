@@ -45,6 +45,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { useAdminMerchantLocationDetails, useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { formatPhoneForDisplay, normalizePhone } from '@/lib/phone'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -55,10 +57,10 @@ interface BusinessInfoTabProps {
     merchantInfo: MerchantDetails
 }
 
-// One neutral status pill for the locations table (D-03): foreground text on a
-// muted fill. The word carries the state; colour is reserved for real severity.
+// The borderless cell pill (§5.2, §4.6b): the word carries the state; colour is
+// reserved for real alarms.
 const LOCATION_STATUS_BADGE =
-    'w-fit shrink-0 rounded-full border-0 bg-muted px-2.5 text-xs font-medium text-foreground'
+    'w-fit rounded-full border-0 px-2.5 text-xs font-medium'
 
 // Business type options. Keys MUST match the merchants_business_type_check DB
 // constraint (lowercase / snake_case); the label is display-only.
@@ -108,6 +110,8 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     const locationsList = merchantInfo.locations || []
 
     const locationsLoading = false
+    const { pageRows: locationPageRows, pagination: locationPagination, setPage: setLocationPage } =
+        useClientPagination(locationsList, 10)
 
     // Read business info from merchant columns directly
     const legalBusinessName = merchantInfo?.business_legal_name || 'Not provided'
@@ -305,14 +309,23 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
     return (
         <Tabs defaultValue="legal" className="w-full">
-            {/* Overridden locally rather than in `ui/tabs`: that strip is shared
-                app-wide. `rounded-full` on both the strip and the active pill
-                matches the panel radius; the active pill keeps the neutral
-                `bg-background` fill. */}
-            <TabsList className="grid h-10 w-full grid-cols-2 rounded-full p-1">
-                <TabsTrigger value="legal" className="rounded-full">Legal Information</TabsTrigger>
-                <TabsTrigger value="locations" className="rounded-full">Locations</TabsTrigger>
-            </TabsList>
+            {/* DS-CTL-05 pill rail (§4.5), classes literal per C7. */}
+            <div className="w-full min-w-0 overflow-x-auto pb-1">
+                <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                    <TabsTrigger
+                        value="legal"
+                        className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                    >
+                        Legal Information
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="locations"
+                        className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                    >
+                        Locations
+                    </TabsTrigger>
+                </TabsList>
+            </div>
 
             {/* Legal Information Tab */}
             <TabsContent value="legal" className="mt-6">
@@ -499,9 +512,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Status</div>
-                                    <Badge variant="secondary" className={LOCATION_STATUS_BADGE}>
-                                        {merchantInfo?.onboarding_status || 'Unknown'}
-                                    </Badge>
+                                    <div>
+                                        <Badge variant="outline" className="capitalize">
+                                            {merchantInfo?.onboarding_status || 'Unknown'}
+                                        </Badge>
+                                    </div>
                                 </div>
                         </div>
                     </PanelSection>
@@ -527,7 +542,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                         {locationsLoading ? (
                             <div className="space-y-3">
                                 {[1, 2, 3].map((i) => (
-                                    <Skeleton key={i} className="h-16 w-full" />
+                                    <Skeleton key={i} className="h-16 w-full rounded-2xl" />
                                 ))}
                             </div>
                         ) : locationsList.length === 0 ? (
@@ -551,8 +566,8 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 </EmptyContent>
                             </Empty>
                         ) : (
-                            <div className="overflow-x-auto">
-                            <Table variant="data" className="rounded-3xl" containerClassName="hidden lg:block">
+                            <>
+                            <Table variant="data" containerClassName="hidden lg:block">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>
@@ -562,12 +577,12 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {locationsList.map((location) => (
+                                    {locationPageRows.map((location) => (
                                         <TableRow key={location.id}>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
-                                                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                        <Store className="h-5 w-5 text-primary" />
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                                                        <Store className="h-5 w-5" />
                                                     </div>
                                                     <div>
                                                         <div className="font-medium">{location.name}</div>
@@ -584,8 +599,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                {/* Neutral status pill (D-03): black text on a shaded
-                                                    fill, so the column does not read as a row of alarms. */}
                                                 <Badge variant="secondary" className={LOCATION_STATUS_BADGE}>
                                                     {location.is_accepting_orders ? 'Online' : 'Offline'}
                                                 </Badge>
@@ -606,44 +619,58 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
                             {/* Mirrors the table's `hidden lg:block` (§5.3). */}
                             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-                                {locationsList.map((location: any) => (
+                                {locationPageRows.map((location: any) => (
                                     <button
                                         key={location.id}
                                         type="button"
                                         onClick={() => handleViewLocationDetails(location.id)}
                                         className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left transition-colors hover:bg-muted"
                                     >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                                    <Store className="h-5 w-5 text-muted-foreground" />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="truncate font-semibold">{location.name}</p>
-                                                    <p className="truncate text-xs text-muted-foreground">
-                                                        {formatAddress(location) || 'No address'}
-                                                    </p>
-                                                </div>
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            {/* The plate drops on phones (§13.4). */}
+                                            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground sm:flex">
+                                                <Store className="h-5 w-5" />
                                             </div>
-                                            <Badge variant="secondary" className={LOCATION_STATUS_BADGE}>
-                                                {location.is_accepting_orders ? 'Online' : 'Offline'}
-                                            </Badge>
+                                            <div className="min-w-0">
+                                                <p className="truncate font-semibold">{location.name}</p>
+                                                <p className="truncate text-xs text-muted-foreground">
+                                                    {formatAddress(location) || 'No address'}
+                                                </p>
+                                            </div>
                                         </div>
 
-                                        <Badge variant="secondary" className={`mt-3 ${LOCATION_STATUS_BADGE}`}>
-                                            {location.is_active ? 'Active' : 'Inactive'}
-                                        </Badge>
+                                        {/* Plain text, not pills, on the muted card (§3.5). */}
+                                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                            <div className="min-w-0">
+                                                <p className="text-xs text-muted-foreground">Status</p>
+                                                <p className="truncate font-medium">
+                                                    {location.is_accepting_orders ? 'Online' : 'Offline'}
+                                                </p>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs text-muted-foreground">Location status</p>
+                                                <p className="truncate font-medium">
+                                                    {location.is_active ? 'Active' : 'Inactive'}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </button>
                                 ))}
                             </div>
-                            </div>
+
+                            <PaginationBar
+                                pagination={locationPagination}
+                                onPageChange={setLocationPage}
+                                itemLabel="locations"
+                            />
+                            </>
                         )}
                         </div>
                     </PanelSection>
 
                     {/* Location Statistics */}
                     {locationsList.length > 0 && (
-                        <PanelSection label="Location Summary" divider>
+                        <PanelSection label="Location Summary">
                             <StatRow columns={3} className="mt-6">
                                 <StatTile
                                     label="Total Locations"
@@ -681,15 +708,15 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     the rounded corner. Padding moves onto the header/body/footer
                     so the scrollbar sits flush at the panel edge. `grid-rows` keeps
                     the header and footer fixed while the body scrolls. */}
-                <DialogContent className="sm:max-w-3xl max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-0">
-                    <DialogHeader className="px-6 pt-6">
+                <DialogContent className="h-dvh max-h-dvh w-screen max-w-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-3xl sm:rounded-3xl">
+                    <DialogHeader className="shrink-0 px-6 pt-6">
                         <DialogTitle>Edit Business Information</DialogTitle>
                         <DialogDescription>
                             Update the legal and registration details for this merchant.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="min-h-0 overflow-y-auto px-6">
+                    <div className="thin-scrollbar min-h-0 overflow-y-auto px-6">
                     <div className="grid gap-4 py-4 md:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="legal_business_name">Legal Business Name</Label>
@@ -903,7 +930,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     </div>
                     </div>
 
-                    <DialogFooter className="px-6 pb-6">
+                    <DialogFooter className="shrink-0 px-6 pb-6">
                         <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                             Cancel
                         </Button>

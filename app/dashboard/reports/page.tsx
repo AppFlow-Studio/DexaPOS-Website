@@ -326,7 +326,7 @@ export default function ReportsPage() {
       <Panel padded>
         <StatRow columns={4}>
           {kpiCards.map((kpi) => (
-            <StatTile
+            <StatTile showMetaOnMobile={isAnyError}
               key={kpi.label}
               label={kpi.label}
               icon={<kpi.icon />}

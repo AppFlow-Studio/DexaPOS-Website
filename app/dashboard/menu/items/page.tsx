@@ -49,6 +49,8 @@ import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleto
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Empty } from "@/components/ui/empty";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
@@ -1614,6 +1616,19 @@ export default function MenuItemsPage() {
     return filtered;
   }, [itemsList, searchTerm, selectedCategoryId]);
 
+  // Table view pages at 10 rows (UI-DESIGN-SYSTEM §5.7). The grid and
+  // category views are unaffected; category view keeps drag-to-reorder.
+  const {
+    pageRows: itemTableRows,
+    pagination: itemTablePagination,
+    setPage: setItemTablePage,
+  } = useClientPagination(filteredItems, 10);
+
+  // A new search or category filter starts the table back on page 1.
+  useEffect(() => {
+    setItemTablePage(1);
+  }, [searchTerm, selectedCategoryId, setItemTablePage]);
+
   // Group items by category for category view
   const itemsByCategory = useMemo(() => {
     const groups = new Map<
@@ -2636,8 +2651,9 @@ export default function MenuItemsPage() {
             </div>
           ) : (
             // Table View
+            <>
             <ItemTable
-              items={filteredItems}
+              items={itemTableRows}
               onEditItem={handleQuickEdit}
               onViewItem={handleViewDetails}
               onDeleteItem={(item) => setDeletingItem(item)}
@@ -2648,6 +2664,12 @@ export default function MenuItemsPage() {
               selectedItemIds={selectedItemIds}
               onToggleSelect={toggleItemSelected}
             />
+            <PaginationBar
+              pagination={itemTablePagination}
+              onPageChange={setItemTablePage}
+              itemLabel="items"
+            />
+            </>
           )}
         </div>
       </Panel>

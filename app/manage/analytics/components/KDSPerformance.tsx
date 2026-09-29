@@ -338,7 +338,6 @@ export function KDSPerformance() {
               </TableBody>
             </Table>
             <PaginationBar
-              className="border-t-0 pt-0"
               pagination={itemPage.pagination}
               onPageChange={itemPage.setPage}
               itemLabel="items"
@@ -419,7 +418,6 @@ export function KDSPerformance() {
             </TableBody>
           </Table>
           <PaginationBar
-            className="border-t-0 pt-0"
             pagination={merchantPage.pagination}
             onPageChange={merchantPage.setPage}
             itemLabel="merchants"

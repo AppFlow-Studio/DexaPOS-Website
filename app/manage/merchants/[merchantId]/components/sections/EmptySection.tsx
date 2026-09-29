@@ -1,6 +1,10 @@
 import { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 
+/**
+ * The §4.9 empty (or error) sentence for a merchant-detail section. Sits inside
+ * the tab's `PanelSection` as a neutral well — never its own bordered box.
+ */
 export function EmptySection({
     icon: Icon,
     title,
@@ -13,11 +17,11 @@ export function EmptySection({
     cta?: ReactNode
 }) {
     return (
-        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed bg-card px-6 py-16 text-center">
-            <Icon className="mb-3 h-7 w-7 text-muted-foreground/60" />
-            <p className="text-[13px] font-medium text-foreground">{title}</p>
-            <p className="mt-1 max-w-sm text-[12px] text-muted-foreground">{body}</p>
-            {cta && <div className="mt-4">{cta}</div>}
+        <div className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-muted/30 px-4 py-10 text-center">
+            <Icon className="mb-2 h-6 w-6 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">{title}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{body}</p>
+            {cta && <div className="mt-3">{cta}</div>}
         </div>
     )
 }

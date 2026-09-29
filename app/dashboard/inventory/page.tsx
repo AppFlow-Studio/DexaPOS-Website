@@ -763,7 +763,7 @@ export default function InventoryPage() {
             icon={<Package />}
           isLoading={isLoadingStats}
           />
-          <StatTile
+          <StatTile showMetaOnMobile
             label="Low stock"
           value={stats?.lowStock || 0}
             meta={
@@ -776,7 +776,7 @@ export default function InventoryPage() {
             icon={<AlertTriangle />}
           isLoading={isLoadingStats}
           />
-          <StatTile
+          <StatTile showMetaOnMobile
             label="Out of stock"
           value={stats?.outOfStock || 0}
             meta={

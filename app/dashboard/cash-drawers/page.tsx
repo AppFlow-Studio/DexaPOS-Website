@@ -47,6 +47,8 @@ import {
   type CashDrawerListItem,
 } from '@/lib/queries/use-cash-drawers'
 import { useGatedLocation, useGatedLocationId } from '@/stores/location-store'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 
 import { CashDrawerCard } from './components/CashDrawerCard'
 import { CashDrawerFormDialog } from './components/CashDrawerFormDialog'
@@ -69,6 +71,12 @@ export default function CashDrawersPage() {
     error,
   } = useCashDrawers(clerkOrgId, selectedLocationId)
   const updateMutation = useUpdateCashDrawer()
+  const { pageRows, pagination, setPage } = useClientPagination(drawers, 10)
+
+  // A location switch starts the registry from the top.
+  useEffect(() => {
+    setPage(1)
+  }, [selectedLocationId, setPage])
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingDrawer, setEditingDrawer] = useState<CashDrawerListItem | null>(null)
@@ -134,7 +142,7 @@ export default function CashDrawersPage() {
   if (isError) {
     return (
       <PageShell>
-        <PageHeader
+        <PageHeader showSubtitleOnMobile
           title="Cash Drawers"
           subtitle="Drawer sessions could not be loaded."
           indicator={
@@ -268,7 +276,7 @@ export default function CashDrawersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {drawers.map((drawer) => (
+                  {pageRows.map((drawer) => (
                     <CashDrawerCard
                       key={`drawer-row-${drawer.id}`}
                       drawer={drawer}
@@ -280,7 +288,7 @@ export default function CashDrawersPage() {
               </Table>
 
               <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-                {drawers.map((drawer) => (
+                {pageRows.map((drawer) => (
                   <CashDrawerCard
                     key={`drawer-card-${drawer.id}`}
                     drawer={drawer}
@@ -289,6 +297,12 @@ export default function CashDrawersPage() {
                   />
                 ))}
               </div>
+
+              <PaginationBar
+                pagination={pagination}
+                onPageChange={setPage}
+                itemLabel="drawers"
+              />
             </div>
           )}
         </div>

@@ -206,7 +206,7 @@ export function NotificationsTab({
         </div>
       </PanelSection>
 
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={History}
         label="Recent notifications"
         caption="The last 50 transactional notification attempts for this merchant."

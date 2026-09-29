@@ -1,4 +1,5 @@
 import { requireAdminAuth } from '@/lib/admin/auth'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { DeadLetterQueueTable } from './DeadLetterQueueTable'
 
 export const dynamic = 'force-dynamic'
@@ -15,15 +16,13 @@ export default async function DeadLetterQueuePage() {
   const canMutate = auth.hasPermission('hq.merchant.update')
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dead Letter Queue</h1>
-        <p className="text-muted-foreground">
-          Webhook payloads that failed processing. Retry after fixing the root
-          cause (merchant onboarding, menu link, etc) or abandon if stale.
-        </p>
-      </div>
+    /* `as="div"`: app/manage/layout.tsx already owns this surface's <main> (§14.1). */
+    <PageShell as="div">
+      <PageHeader
+        title="Dead Letter Queue"
+        subtitle="Webhook payloads that failed processing. Retry after fixing the root cause (merchant onboarding, menu link, etc) or abandon if stale."
+      />
       <DeadLetterQueueTable canMutate={canMutate} />
-    </div>
+    </PageShell>
   )
 }

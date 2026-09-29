@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Loader2, Settings2, Clock } from 'lucide-react'
+import { Loader2, Clock } from 'lucide-react'
 import { useAdminUpdateTerminal } from '@/lib/queries/use-admin-stations'
 import type { PaymentTerminal, UpdatePaymentTerminalInput } from '@/app/manage/actions/admin-merchant/payment-terminals'
 import { toast } from 'sonner'
@@ -93,22 +93,17 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[520px] max-h-[92vh] overflow-hidden gap-0 p-0">
-                <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-blue-50/60 px-6 pt-6 pb-4">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 text-blue-700">
-                            <Settings2 className="h-6 w-6" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <DialogTitle className="text-xl">Edit Terminal</DialogTitle>
-                            <DialogDescription className="mt-1">
-                                {terminal ? `${terminal.terminal_name} · ${terminal.location_name || ''}` : ''}
-                            </DialogDescription>
-                        </div>
-                    </div>
+            {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
+                the body scrolls; header and footer carry no rule (§5.5). */}
+            <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-[520px] sm:rounded-3xl">
+                <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
+                    <DialogTitle className="text-xl">Edit Terminal</DialogTitle>
+                    <DialogDescription>
+                        {terminal ? `${terminal.terminal_name} · ${terminal.location_name || ''}` : ''}
+                    </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-5 overflow-y-auto px-6 py-5 max-h-[calc(92vh-176px)]">
+                <div className="thin-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
                     {/* Identity */}
                     <div className="space-y-2">
                         <Label htmlFor="edit-terminal-name">Terminal Name</Label>
@@ -126,6 +121,7 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
                             className="font-mono"
                             placeholder="Printed on the terminal"
                             value={serialNumber}
+                            aria-invalid={serialMismatch ? true : undefined}
                             onChange={(e) => {
                                 setSerialNumber(e.target.value)
                                 if (serialMismatch) setSerialMismatch(null)
@@ -134,20 +130,19 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
                         <p className="text-xs text-muted-foreground">
                             Uniquely identifies this physical terminal. Must be unique within the location.
                         </p>
+                        {/* Neutral callout (§3.5): the words and the invalid field
+                            carry the warning, not a red box. */}
                         {serialMismatch && (
-                            <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
-                                <p className="text-xs font-semibold text-red-700">
-                                    Different device detected
-                                </p>
-                                <p className="text-xs text-red-700">{serialMismatch}</p>
-                                <p className="text-xs text-red-700">
+                            <div className="space-y-2 rounded-2xl bg-muted/60 px-4 py-3">
+                                <p className="text-sm font-medium">Different device detected</p>
+                                <p className="text-xs text-muted-foreground">{serialMismatch}</p>
+                                <p className="text-xs text-muted-foreground">
                                     Recommended: close this dialog and register the replacement as a new terminal so its settlement batches stay separate.
                                 </p>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    className="border-red-300 text-red-700 hover:bg-red-100"
                                     disabled={updateMutation.isPending}
                                     onClick={() => handleSubmit(true)}
                                 >
@@ -174,7 +169,7 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
                     )}
 
                     {/* Auto-settle */}
-                    <div className="rounded-2xl border bg-slate-50/80 p-4 space-y-4">
+                    <div className="space-y-4 pt-2">
                         <div className="flex items-start justify-between gap-4">
                             <div className="space-y-0.5">
                                 <Label htmlFor="edit-auto-settle" className="text-sm font-semibold">Auto-Settle</Label>
@@ -190,7 +185,7 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
                         {autoSettle && (
                             <div className="space-y-2">
                                 <Label htmlFor="edit-settle-time" className="flex items-center gap-1.5">
-                                    <Clock className="h-3.5 w-3.5" />
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                                     Settle Time (location time)
                                 </Label>
                                 <Input
@@ -198,7 +193,7 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
                                     type="time"
                                     value={settleTime}
                                     onChange={(e) => setSettleTime(e.target.value)}
-                                    className="w-40"
+                                    className="w-40 tabular-nums"
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Leave empty to clear. Interpreted in the location&apos;s timezone.
@@ -208,7 +203,7 @@ export function EditTerminalDialog({ open, onOpenChange, merchantId, terminal }:
                     </div>
                 </div>
 
-                <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
+                <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>

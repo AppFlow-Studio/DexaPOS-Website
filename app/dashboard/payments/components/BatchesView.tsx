@@ -596,7 +596,7 @@ function BatchPaymentsTable({
   }
 
   return (
-    <Table variant="data" className="min-w-[480px] text-xs">
+    <Table bounded={false} variant="data" className="min-w-[480px] text-xs">
       <TableHeader className="[&_tr]:border-0">
         <TableRow className="border-0 hover:bg-transparent">
           <TableHead className="text-xs font-medium text-muted-foreground">Order #</TableHead>

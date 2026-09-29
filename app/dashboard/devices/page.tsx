@@ -434,7 +434,7 @@ export default function MerchantDevicesPage() {
             icon={<AlertTriangle />}
             isLoading={devicesQuery.isLoading}
           />
-          <StatTile
+          <StatTile showMetaOnMobile
             label="Warranty watch"
             value={summary.warranty}
             meta="Expired or within 60 days"

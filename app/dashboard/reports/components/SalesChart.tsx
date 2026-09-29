@@ -52,7 +52,7 @@ export function SalesChart({ data, isLoading }: SalesChartProps) {
   if (!data || data.length === 0) {
     return (
       <Panel>
-        <PanelSection
+        <PanelSection showCaptionOnMobile
           icon={TrendingUp}
           label="Performance over time"
           caption="No activity was found for the selected period."

@@ -45,6 +45,8 @@ import {
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 
 /** Time and the collected total identify the row; the rest are optional on mobile. */
 const TABLE_COLUMNS: ReportColumn[] = [
@@ -105,6 +107,7 @@ export default function CashManagementPage() {
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("desc"); }
+    setPage(1);
   }
 
   const processed = useMemo(() => {
@@ -124,6 +127,17 @@ export default function CashManagementPage() {
       return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
   }, [cashTransactions, search, sortKey, sortDir]);
+
+  // Page the sorted/filtered rows; KPI totals and the bar scale use every row.
+  const { pageRows, pagination, setPage } = useClientPagination(processed, 10);
+
+  // A new search or date range starts from the first page.
+  const filterSig = `${search}|${queryDateRange.from.getTime()}|${queryDateRange.to.getTime()}`;
+  const [prevFilterSig, setPrevFilterSig] = useState(filterSig);
+  if (prevFilterSig !== filterSig) {
+    setPrevFilterSig(filterSig);
+    setPage(1);
+  }
 
   const kpis = [
     {
@@ -176,7 +190,7 @@ export default function CashManagementPage() {
       <Panel padded>
         <StatRow columns={4}>
         {kpis.map((kpi) => (
-          <StatTile
+          <StatTile showMetaOnMobile={isError}
             key={kpi.label}
             label={kpi.label}
             value={kpi.value ?? ""}
@@ -293,7 +307,7 @@ export default function CashManagementPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                processed.map((item, index) => {
+                pageRows.map((item, index) => {
                   const barPct = maxTotal > 0 ? (item.total_amount / maxTotal) * 100 : 0;
                   return (
                     <TableRow key={index} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
@@ -349,6 +363,12 @@ export default function CashManagementPage() {
               )}
             </TableBody>
           </Table>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="transactions"
+            className="px-5 pb-5"
+          />
         </CardContent>
       </Card>
     </PageShell>

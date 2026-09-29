@@ -2,17 +2,12 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { format, parse } from 'date-fns'
-import { AlertTriangle, CalendarIcon, ChevronDown, ChevronUp, RefreshCcwDot, ShieldAlert } from 'lucide-react'
+import { format } from 'date-fns'
+import { AlertTriangle, RefreshCcwDot } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -21,9 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { cn } from '@/lib/utils'
+import type { PaginationMeta } from '@/types/pagination'
 import {
   getPlatformMerchants,
   PlatformChargebackFilters,
+  PlatformChargebackRow,
   PlatformMerchant,
 } from '@/app/manage/actions/hq-platform/transactions'
 import {
@@ -31,17 +30,36 @@ import {
   type PlatformChargebackStatus,
 } from '@/app/manage/actions/hq-platform/transactions-shared'
 import { usePlatformChargebacks } from '@/lib/queries/use-platform-analytics'
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  FilterDate,
+  FilterSelect,
+  LoadError,
+  RecordCard,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from './ledger-primitives'
 
 const PAGE_SIZE = 25
 const CARD_NETWORK_OPTIONS = ['visa', 'mastercard', 'amex', 'discover', 'other'] as const
 const OPEN_CHARGEBACK_STATUSES = new Set(['notified', 'under_review', 'defended'])
+
+const CARD_NETWORK_LABELS: Record<string, string> = {
+  visa: 'Visa',
+  mastercard: 'Mastercard',
+  amex: 'Amex',
+  discover: 'Discover',
+  other: 'Other',
+}
 
 function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function formatDateTime(value?: string): string {
-  if (!value) return '-'
+  if (!value) return '—'
   return format(new Date(value), 'MMM d, yyyy h:mm a')
 }
 
@@ -52,59 +70,39 @@ function formatStatusLabel(value: string): string {
     .join(' ')
 }
 
-function getStatusBadge(status: string) {
-  const normalized = status.toLowerCase()
-
-  if (normalized === 'notified') {
-    return <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">Notified</Badge>
-  }
-  if (normalized === 'under_review') {
-    return <Badge variant="outline" className="border-blue-300 bg-blue-100 text-blue-800">Under Review</Badge>
-  }
-  if (normalized === 'defended') {
-    return <Badge variant="outline" className="border-purple-300 bg-purple-100 text-purple-800">Defended</Badge>
-  }
-  if (normalized === 'won') {
-    return <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">Won</Badge>
-  }
-  if (normalized === 'lost') {
-    return <Badge variant="outline" className="border-red-300 bg-red-100 text-red-800">Lost</Badge>
-  }
-  if (normalized === 'expired') {
-    return <Badge variant="outline" className="border-gray-300 bg-gray-100 text-gray-700">Expired</Badge>
-  }
-
-  return <Badge variant="outline">{formatStatusLabel(status)}</Badge>
+function formatNetwork(network?: string): string {
+  if (!network) return '—'
+  return CARD_NETWORK_LABELS[network.toLowerCase()] ?? network.toUpperCase()
 }
 
-function getDefendableBadge(defendable: boolean) {
-  if (defendable) {
-    return <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">Yes</Badge>
-  }
-  return <Badge variant="outline" className="border-gray-300 bg-gray-100 text-gray-700">No</Badge>
+function pluralize(count: number, singular: string, plural: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`
 }
 
-function getDeadlineBadge(deadline?: string, status?: string) {
+/**
+ * The defense deadline. Overdue and due-within-72h are real alarms
+ * (UI-DESIGN-SYSTEM §3.5 use 4, HQ-2): the glyph takes red or amber, the
+ * words say it too. Spans only, so it can sit inside a card field's <p>.
+ */
+function renderDeadline(deadline?: string, status?: string) {
   if (!deadline) {
-    return <span className="text-muted-foreground">-</span>
+    return <span className="text-muted-foreground">—</span>
   }
 
-  const deadlineDate = new Date(deadline)
-  const now = Date.now()
-  const diffMs = deadlineDate.getTime() - now
+  const diffMs = new Date(deadline).getTime() - Date.now()
   const isOpen = status ? OPEN_CHARGEBACK_STATUSES.has(status.toLowerCase()) : true
-
   const dateLabel = formatDateTime(deadline)
 
   if (!isOpen) {
-    return <span className="text-xs text-muted-foreground">{dateLabel}</span>
+    return <span className="text-muted-foreground">{dateLabel}</span>
   }
 
   if (diffMs <= 0) {
     return (
-      <Badge variant="outline" className="border-red-300 bg-red-100 text-red-800">
+      <span className="inline-flex items-center gap-1 font-medium">
+        <AlertTriangle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" aria-hidden />
         Overdue
-      </Badge>
+      </span>
     )
   }
 
@@ -112,65 +110,116 @@ function getDeadlineBadge(deadline?: string, status?: string) {
     const hoursLeft = Math.ceil(diffMs / (60 * 60 * 1000))
     const relative = hoursLeft < 24 ? `${hoursLeft}h left` : `${Math.ceil(hoursLeft / 24)}d left`
     return (
-      <div className="flex flex-col gap-1">
-        <Badge variant="outline" className="w-fit border-amber-300 bg-amber-100 text-amber-800">
+      <span className="flex flex-col gap-0.5">
+        <span className="inline-flex items-center gap-1 font-medium tabular-nums">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
           {relative}
-        </Badge>
-        <span className="text-xs text-muted-foreground">{dateLabel}</span>
-      </div>
+        </span>
+        <span className="text-xs font-normal text-muted-foreground">{dateLabel}</span>
+      </span>
     )
   }
 
-  return <span className="text-xs">{dateLabel}</span>
+  return <span>{dateLabel}</span>
 }
 
-// Date filter using Popover + Calendar instead of a native <input type="date">.
-// The native picker's calendar popup renders off-screen on narrow viewports;
-// the Radix popover keeps itself inside the viewport via collision detection.
-// Value is the same `yyyy-MM-dd` string the rest of the filter logic expects.
-function DateField({
-  value,
-  onChange,
-  placeholder = 'dd/mm/yyyy',
-}: {
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
-}) {
-  const selected = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined
+function DetailLine({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            'h-9 w-full justify-start px-3 text-left font-normal',
-            !value && 'text-muted-foreground'
-          )}
+    <div className="flex min-w-0 items-baseline justify-between gap-3">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right tabular-nums">{children}</span>
+    </div>
+  )
+}
+
+/**
+ * The expanded chargeback. The table row and the phone card render this same
+ * component (§5.3), so the two views cannot drift apart. The tiles take the
+ * card fill: they sit on a selected row or a selected (muted) card.
+ */
+function ChargebackDetail({ row, className }: { row: PlatformChargebackRow; className?: string }) {
+  return (
+    <div className={cn('grid min-w-0 gap-3 lg:grid-cols-3', className)}>
+      <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
+        <h4 className="text-sm font-semibold">Original payment</h4>
+        {row.original_payment ? (
+          <div className="space-y-1 text-sm">
+            <DetailLine label="Payment ID">
+              <span className="font-mono text-xs">{row.original_payment.payment_id}</span>
+            </DetailLine>
+            <DetailLine label="Order #">{row.original_payment.order_number || '—'}</DetailLine>
+            <DetailLine label="Customer">{row.original_payment.customer_name || 'Walk-in'}</DetailLine>
+            <DetailLine label="Method">{row.original_payment.payment_method || '—'}</DetailLine>
+            <DetailLine label="Status">{row.original_payment.payment_status || '—'}</DetailLine>
+            <DetailLine label="Amount">{formatCurrency(row.original_payment.total_amount)}</DetailLine>
+            <DetailLine label="Card last 4">
+              {row.original_payment.card_last_four ? `****${row.original_payment.card_last_four}` : '—'}
+            </DetailLine>
+            <DetailLine label="Auth code">{row.original_payment.authorization_code || '—'}</DetailLine>
+            <DetailLine label="Reference #">{row.original_payment.reference_number || '—'}</DetailLine>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Original payment details unavailable.</p>
+        )}
+        <Link
+          href={`/manage/transactions?search=${encodeURIComponent(row.original_payment_id)}`}
+          className="inline-block text-xs font-medium underline-offset-2 hover:underline"
         >
-          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          <span className="truncate">
-            {selected ? format(selected, 'MMM d, yyyy') : placeholder}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
-        <Calendar
-          mode="single"
-          initialFocus
-          selected={selected}
-          onSelect={(date) => onChange(date ? format(date, 'yyyy-MM-dd') : '')}
-        />
-      </PopoverContent>
-    </Popover>
+          View in payments
+        </Link>
+      </div>
+
+      <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
+        <h4 className="text-sm font-semibold">Defense documents</h4>
+        {row.defense_documents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No defense documents attached.</p>
+        ) : (
+          <div className="space-y-3">
+            {row.defense_documents.map((doc, index) => (
+              <div key={`${row.id}-doc-${index}`} className="min-w-0 text-sm">
+                <div className="truncate font-medium">{doc.name}</div>
+                {doc.url ? (
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs underline-offset-2 hover:underline"
+                  >
+                    Open document
+                  </a>
+                ) : (
+                  <div className="text-xs text-muted-foreground">No URL provided</div>
+                )}
+                {doc.uploaded_at && (
+                  <div className="text-xs text-muted-foreground">
+                    Uploaded {formatDateTime(doc.uploaded_at)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
+        <h4 className="text-sm font-semibold">Resolution</h4>
+        <div className="space-y-1 text-sm">
+          <DetailLine label="PSP reference">{row.dispute_psp_reference || '—'}</DetailLine>
+          <DetailLine label="Defense submitted">{formatDateTime(row.defense_submitted_at)}</DetailLine>
+          <DetailLine label="Resolved">{formatDateTime(row.resolved_at)}</DetailLine>
+          <DetailLine label="Resolution">{row.resolution || '—'}</DetailLine>
+          <DetailLine label="Resolution amount">
+            {row.resolution_amount ? formatCurrency(row.resolution_amount) : '—'}
+          </DetailLine>
+        </div>
+      </div>
+    </div>
   )
 }
 
 export function ChargebacksSection({
   scopedMerchantId,
-  defaultOpen = false,
-}: { scopedMerchantId?: string; defaultOpen?: boolean } = {}) {
-  const [open, setOpen] = useState(defaultOpen)
+}: { scopedMerchantId?: string } = {}) {
   const [merchantId, setMerchantId] = useState(scopedMerchantId ?? 'all')
   const [status, setStatus] = useState<'all' | PlatformChargebackStatus>('all')
   const [cardNetwork, setCardNetwork] = useState('all')
@@ -232,14 +281,41 @@ export function ChargebacksSection({
   const urgentCount = chargebacksResult?.urgentCount || 0
   const errorCode = chargebacksResult?.errorCode
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
-  const showingTo = total === 0 ? 0 : Math.min((page - 1) * PAGE_SIZE + rows.length, total)
+
+  const pagination: PaginationMeta = {
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+  }
 
   useEffect(() => {
     if (page > totalPages) {
       setPage(totalPages)
     }
   }, [page, totalPages])
+
+  const merchantOptions = useMemo(
+    () => merchants.map((merchant) => ({ value: merchant.id, label: merchant.name })),
+    [merchants]
+  )
+  const statusOptions = useMemo(
+    () => PLATFORM_CHARGEBACK_STATUSES.map((value) => ({ value, label: formatStatusLabel(value) })),
+    []
+  )
+  const networkOptions = useMemo(
+    () => CARD_NETWORK_OPTIONS.map((value) => ({ value, label: CARD_NETWORK_LABELS[value] })),
+    []
+  )
+
+  const filtersOffDefault =
+    (!scopedMerchantId && merchantId !== 'all') ||
+    status !== 'all' ||
+    cardNetwork !== 'all' ||
+    dateFrom !== '' ||
+    dateTo !== ''
 
   const clearFilters = () => {
     if (!scopedMerchantId) setMerchantId('all')
@@ -251,321 +327,267 @@ export function ChargebacksSection({
     setExpandedId(null)
   }
 
+  const toggleExpanded = (id: string) =>
+    setExpandedId((current) => (current === id ? null : id))
+
+  const columnCount = scopedMerchantId ? 9 : 10
+  const showLoading = isLoading || isFetching
+  const showEmpty = !showLoading && rows.length === 0
+
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4" />
-                Chargebacks
-                <InfoIcon tip="A chargeback is when a customer disputes a charge with their bank. The bank reverses the transaction and the merchant must defend it or lose the funds. Each dispute has a deadline — missing it forfeits the right to contest." />
-              </CardTitle>
-              <CardDescription>
-                Review disputes, deadlines, and defense status across merchants.
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1">
-                <Badge variant="outline">{pendingCount.toLocaleString()} pending/notified</Badge>
-                <InfoIcon tip="Chargebacks that are awaiting action — either just received (Notified) or actively being reviewed. These require attention before their defense deadline." side="left" />
-              </span>
-              <Badge variant="outline">{total.toLocaleString()} total</Badge>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm">
-                  {open ? (
-                    <>
-                      Hide
-                      <ChevronUp className="ml-2 h-4 w-4" />
-                    </>
-                  ) : (
-                    <>
-                      Show
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-          </div>
-        </CardHeader>
+    <div className="min-w-0 space-y-4">
+      {chargebacksResult ? (
+        <div className="flex items-center gap-1">
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {pendingCount.toLocaleString()} pending or notified · {total.toLocaleString()} total
+          </p>
+          <InfoIcon tip="Chargebacks that are awaiting action — either just received (Notified) or actively being reviewed. These require attention before their defense deadline." side="bottom" />
+        </div>
+      ) : (
+        <Skeleton className="h-5 w-56" />
+      )}
 
-        <CollapsibleContent>
-          <CardContent className="space-y-4">
-            {urgentCount > 0 && (
-              <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-                <div className="flex items-center gap-2 font-medium">
-                  <AlertTriangle className="h-4 w-4" />
-                  {urgentCount.toLocaleString()} chargeback deadline(s) due within 72 hours.
-                </div>
-              </div>
-            )}
+      {urgentCount > 0 && (
+        <div role="status" className="flex items-center gap-2 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden />
+          <span className="font-medium tabular-nums">
+            {urgentCount === 1
+              ? '1 chargeback deadline is due within 72 hours'
+              : `${urgentCount.toLocaleString()} chargeback deadlines are due within 72 hours`}
+          </span>
+        </div>
+      )}
 
-            <div className={scopedMerchantId ? 'grid gap-3 grid-cols-2 lg:grid-cols-5' : 'grid gap-3 grid-cols-2 lg:grid-cols-6'}>
-              {!scopedMerchantId && (
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-muted-foreground">Merchant</span>
-                  <select
-                    className="h-9 rounded-md border bg-background px-2"
-                    value={merchantId}
-                    onChange={(event) => setMerchantId(event.target.value)}
-                    disabled={loadingMerchants}
-                  >
-                    <option value="all">All merchants</option>
-                    {merchants.map((merchant) => (
-                      <option key={merchant.id} value={merchant.id}>
-                        {merchant.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+      <div className="flex flex-wrap items-center gap-2">
+        {!scopedMerchantId && (
+          <FilterSelect
+            value={merchantId}
+            onValueChange={setMerchantId}
+            options={merchantOptions}
+            allLabel="All merchants"
+            ariaLabel="Merchant"
+            disabled={loadingMerchants}
+          />
+        )}
+        <FilterSelect
+          value={status}
+          onValueChange={(value) => setStatus(value as 'all' | PlatformChargebackStatus)}
+          options={statusOptions}
+          allLabel="All statuses"
+          ariaLabel="Status"
+        />
+        <FilterSelect
+          value={cardNetwork}
+          onValueChange={setCardNetwork}
+          options={networkOptions}
+          allLabel="All networks"
+          ariaLabel="Card network"
+        />
+        <FilterDate value={dateFrom} onChange={setDateFrom} placeholder="Received from" />
+        <FilterDate value={dateTo} onChange={setDateTo} placeholder="Received to" />
+        {filtersOffDefault && (
+          <Button variant="ghost" size="sm" className="h-9 px-4" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 px-4"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCcwDot className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
 
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Status</span>
-                <select
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value as 'all' | PlatformChargebackStatus)}
-                >
-                  <option value="all">All statuses</option>
-                  {PLATFORM_CHARGEBACK_STATUSES.map((statusValue) => (
-                    <option key={statusValue} value={statusValue}>
-                      {formatStatusLabel(statusValue)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+      {errorCode && (
+        <LoadError
+          title="Chargebacks could not load"
+          detail={`Check table access and schema. Error ${errorCode}`}
+          onRetry={() => void refetch()}
+        />
+      )}
 
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Card Network</span>
-                <select
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={cardNetwork}
-                  onChange={(event) => setCardNetwork(event.target.value)}
-                >
-                  <option value="all">All networks</option>
-                  {CARD_NETWORK_OPTIONS.map((network) => (
-                    <option key={network} value={network}>
-                      {network.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Received From</span>
-                <DateField value={dateFrom} onChange={setDateFrom} />
-              </div>
-
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Received To</span>
-                <DateField value={dateTo} onChange={setDateTo} />
-              </div>
-
-              <div className="flex items-end gap-2 col-span-2 lg:col-span-1">
-                <Button variant="outline" className="w-full" onClick={() => void refetch()} disabled={isFetching}>
-                  <RefreshCcwDot className="mr-2 h-4 w-4" />
-                  Refresh
-                </Button>
-                <Button variant="ghost" className="w-full" onClick={clearFilters}>
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            {errorCode && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                Chargeback data unavailable. Check table access and schema. {`Error: ${errorCode}`}
-              </div>
-            )}
-
-            <Table containerClassName="max-h-[44vh] overflow-auto rounded-md border">
-              <TableHeader className="sticky top-0 z-20 bg-card">
-                <TableRow>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Chargeback ID <InfoIcon tip="The ID of the original payment being disputed. Click to view that transaction in the payments table." side="bottom" /></span>
-                  </TableHead>
-                  {!scopedMerchantId && <TableHead>Merchant</TableHead>}
-                  <TableHead className="text-right">
-                    <span className="inline-flex items-center justify-end gap-1">Amount <InfoIcon tip="The amount being disputed by the cardholder." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Reason Code <InfoIcon tip="The card network's standardized code for the dispute type (e.g. 4853 = Cardholder Dispute, 4837 = No Cardholder Authorization)." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>Reason Description</TableHead>
-                  <TableHead>Card Network</TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Notified: bank has filed the dispute. Under Review: being investigated. Defended: merchant submitted evidence. Won: merchant kept funds. Lost: funds reversed to cardholder." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Defendable <InfoIcon tip="Whether there is enough evidence (receipt, EMV data, cardholder signature) to submit a defense before the deadline." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>
-                    <span className="inline-flex items-center gap-1">Defense Deadline <InfoIcon tip="The final date to submit defense evidence to the card network. Missing this date permanently forfeits the merchant's right to contest the dispute." side="bottom" /></span>
-                  </TableHead>
-                  <TableHead>Received</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading || isFetching ? (
-                  Array.from({ length: 6 }).map((_, rowIndex) => (
-                    <TableRow key={`chargeback-loading-${rowIndex}`}>
-                      {Array.from({ length: scopedMerchantId ? 9 : 10 }).map((__, cellIndex) => (
-                        <TableCell key={`chargeback-loading-${rowIndex}-${cellIndex}`}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={scopedMerchantId ? 9 : 10} className="py-8 text-center text-muted-foreground">
-                      No chargebacks found for current filters.
+      <div>
+        <Table
+          variant="data"
+          containerClassName="hidden 2xl:block"
+          className={scopedMerchantId ? 'min-w-[1000px]' : 'min-w-[1120px]'}
+        >
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Chargeback ID <InfoIcon tip="The ID of the original payment being disputed. Click to view that transaction in the payments table." side="bottom" /></span>
+              </TableHead>
+              {!scopedMerchantId && <TableHead>Merchant</TableHead>}
+              <TableHead className="text-right tabular-nums">
+                <span className="inline-flex items-center justify-end gap-1">Amount <InfoIcon tip="The amount being disputed by the cardholder." side="bottom" /></span>
+              </TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Reason code <InfoIcon tip="The card network's standardized code for the dispute type (e.g. 4853 = Cardholder Dispute, 4837 = No Cardholder Authorization)." side="bottom" /></span>
+              </TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Network</TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Notified: bank has filed the dispute. Under Review: being investigated. Defended: merchant submitted evidence. Won: merchant kept funds. Lost: funds reversed to cardholder." side="bottom" /></span>
+              </TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Defendable <InfoIcon tip="Whether there is enough evidence (receipt, EMV data, cardholder signature) to submit a defense before the deadline." side="bottom" /></span>
+              </TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Defense deadline <InfoIcon tip="The final date to submit defense evidence to the card network. Missing this date permanently forfeits the merchant's right to contest the dispute." side="bottom" /></span>
+              </TableHead>
+              <TableHead>Received</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {showLoading ? (
+              Array.from({ length: 6 }).map((_, rowIndex) => (
+                <TableRow key={`chargeback-loading-${rowIndex}`}>
+                  {Array.from({ length: columnCount }).map((__, cellIndex) => (
+                    <TableCell key={`chargeback-loading-${rowIndex}-${cellIndex}`}>
+                      <Skeleton className="h-4 w-full" />
                     </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row) => {
-                    const isExpanded = expandedId === row.id
+                  ))}
+                </TableRow>
+              ))
+            ) : showEmpty ? (
+              <TableEmptyRow
+                colSpan={columnCount}
+                title="No chargebacks match these filters"
+                hint={filtersOffDefault ? 'Clear the filters to widen the results.' : undefined}
+              />
+            ) : (
+              rows.map((row) => {
+                const isExpanded = expandedId === row.id
 
-                    return (
-                      <Fragment key={row.id}>
-                        <TableRow
-                          className={`cursor-pointer ${isExpanded ? 'bg-muted/30' : ''}`}
-                          onClick={() => setExpandedId((current) => (current === row.id ? null : row.id))}
+                return (
+                  <Fragment key={row.id}>
+                    <TableRow
+                      className="cursor-pointer"
+                      data-state={isExpanded ? 'selected' : undefined}
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleExpanded(row.id)}
+                    >
+                      <TableCell className="max-w-[10rem] truncate font-mono text-xs">
+                        <Link
+                          href={`/manage/transactions?search=${encodeURIComponent(row.original_payment_id)}`}
+                          className="underline-offset-2 hover:underline"
+                          title={row.original_payment_id}
+                          onClick={(event) => event.stopPropagation()}
                         >
-                          <TableCell className="font-mono text-xs">
-                            <Link
-                              href={`/manage/transactions?search=${encodeURIComponent(row.original_payment_id)}`}
-                              className="underline-offset-2 hover:underline"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {row.original_payment_id}
-                            </Link>
-                          </TableCell>
-                          {!scopedMerchantId && (
-                            <TableCell>{row.merchant_name || row.merchant_id}</TableCell>
-                          )}
-                          <TableCell className="text-right font-mono">{formatCurrency(row.amount)}</TableCell>
-                          <TableCell className="font-mono text-xs">{row.reason_code}</TableCell>
-                          <TableCell className="max-w-[280px] truncate">{row.reason_description || '-'}</TableCell>
-                          <TableCell>{row.card_network ? row.card_network.toUpperCase() : '-'}</TableCell>
-                          <TableCell>{getStatusBadge(row.status)}</TableCell>
-                          <TableCell>{getDefendableBadge(row.defendable)}</TableCell>
-                          <TableCell>{getDeadlineBadge(row.defense_deadline, row.status)}</TableCell>
-                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                            {formatDateTime(row.received_at)}
-                          </TableCell>
-                        </TableRow>
+                          {row.original_payment_id}
+                        </Link>
+                      </TableCell>
+                      {!scopedMerchantId && (
+                        <TableCell className="min-w-[8rem] whitespace-normal">
+                          {row.merchant_name || row.merchant_id}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.amount)}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.reason_code}</TableCell>
+                      <TableCell className="max-w-[14rem] truncate" title={row.reason_description || undefined}>
+                        {row.reason_description || '—'}
+                      </TableCell>
+                      <TableCell>{formatNetwork(row.card_network)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{formatStatusLabel(row.status)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{row.defendable ? 'Yes' : 'No'}</Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        {renderDeadline(row.defense_deadline, row.status)}
+                      </TableCell>
+                      <TableCell className="whitespace-normal text-xs text-muted-foreground">
+                        {formatDateTime(row.received_at)}
+                      </TableCell>
+                    </TableRow>
 
-                        {isExpanded && (
-                          <TableRow className="bg-muted/10">
-                            <TableCell colSpan={scopedMerchantId ? 9 : 10}>
-                              <div className="grid gap-4 lg:grid-cols-3">
-                                <div className="space-y-2 rounded-md border p-3">
-                                  <h4 className="text-sm font-semibold">Original Payment</h4>
-                                  {row.original_payment ? (
-                                    <div className="space-y-1 text-sm">
-                                      <div><span className="text-muted-foreground">Payment ID:</span> <span className="font-mono text-xs">{row.original_payment.payment_id}</span></div>
-                                      <div><span className="text-muted-foreground">Order #:</span> {row.original_payment.order_number || '-'}</div>
-                                      <div><span className="text-muted-foreground">Customer:</span> {row.original_payment.customer_name || 'Walk-in'}</div>
-                                      <div><span className="text-muted-foreground">Method:</span> {row.original_payment.payment_method || '-'}</div>
-                                      <div><span className="text-muted-foreground">Status:</span> {row.original_payment.payment_status || '-'}</div>
-                                      <div><span className="text-muted-foreground">Amount:</span> {formatCurrency(row.original_payment.total_amount)}</div>
-                                      <div><span className="text-muted-foreground">Card Last 4:</span> {row.original_payment.card_last_four ? `****${row.original_payment.card_last_four}` : '-'}</div>
-                                      <div><span className="text-muted-foreground">Auth Code:</span> {row.original_payment.authorization_code || '-'}</div>
-                                      <div><span className="text-muted-foreground">Reference #:</span> {row.original_payment.reference_number || '-'}</div>
-                                    </div>
-                                  ) : (
-                                    <div className="text-sm text-muted-foreground">
-                                      Original payment details unavailable.
-                                    </div>
-                                  )}
-                                </div>
+                    {isExpanded && (
+                      <TableRow data-state="selected">
+                        <TableCell colSpan={columnCount} className="whitespace-normal">
+                          <ChargebackDetail row={row} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
 
-                                <div className="space-y-2 rounded-md border p-3">
-                                  <h4 className="text-sm font-semibold">Defense Documents</h4>
-                                  {row.defense_documents.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">No defense documents attached.</p>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      {row.defense_documents.map((doc, index) => (
-                                        <div key={`${row.id}-doc-${index}`} className="rounded border p-2 text-sm">
-                                          <div className="font-medium">{doc.name}</div>
-                                          {doc.url ? (
-                                            <a
-                                              href={doc.url}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="text-xs text-blue-700 underline-offset-2 hover:underline"
-                                            >
-                                              Open document
-                                            </a>
-                                          ) : (
-                                            <div className="text-xs text-muted-foreground">No URL provided</div>
-                                          )}
-                                          {doc.uploaded_at && (
-                                            <div className="text-xs text-muted-foreground">
-                                              Uploaded: {formatDateTime(doc.uploaded_at)}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="space-y-2 rounded-md border p-3">
-                                  <h4 className="text-sm font-semibold">Resolution</h4>
-                                  <div className="space-y-1 text-sm">
-                                    <div><span className="text-muted-foreground">PSP Reference:</span> {row.dispute_psp_reference || '-'}</div>
-                                    <div><span className="text-muted-foreground">Defense Submitted:</span> {formatDateTime(row.defense_submitted_at)}</div>
-                                    <div><span className="text-muted-foreground">Resolved At:</span> {formatDateTime(row.resolved_at)}</div>
-                                    <div><span className="text-muted-foreground">Resolution:</span> {row.resolution || '-'}</div>
-                                    <div><span className="text-muted-foreground">Resolution Amount:</span> {row.resolution_amount ? formatCurrency(row.resolution_amount) : '-'}</div>
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+          {showLoading ? (
+            <RecordCardSkeletons />
+          ) : showEmpty ? (
+            <CardGridEmpty
+              title="No chargebacks match these filters"
+              hint={filtersOffDefault ? 'Clear the filters to widen the results.' : undefined}
+            />
+          ) : (
+            rows.map((row) => {
+              const isExpanded = expandedId === row.id
+              return (
+                <RecordCard
+                  key={row.id}
+                  selected={isExpanded}
+                  className={isExpanded ? 'sm:col-span-2' : undefined}
+                >
+                  <button
+                    type="button"
+                    className="w-full min-w-0 text-left"
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleExpanded(row.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-medium tabular-nums">{formatCurrency(row.amount)}</p>
+                        {!scopedMerchantId && (
+                          <p className="truncate text-sm text-muted-foreground">
+                            {row.merchant_name || row.merchant_id}
+                          </p>
                         )}
-                      </Fragment>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
+                      </div>
+                      <p className="shrink-0 text-sm text-muted-foreground">{formatStatusLabel(row.status)}</p>
+                    </div>
+                    <CardFields>
+                      <CardField label="Chargeback ID" value={row.original_payment_id} mono />
+                      <CardField label="Reason code" value={row.reason_code} mono />
+                      <CardField label="Reason" value={row.reason_description || '—'} />
+                      <CardField label="Network" value={formatNetwork(row.card_network)} />
+                      <CardField label="Defendable" value={row.defendable ? 'Yes' : 'No'} />
+                      <CardField
+                        label="Defense deadline"
+                        value={renderDeadline(row.defense_deadline, row.status)}
+                      />
+                      <CardField label="Received" value={formatDateTime(row.received_at)} />
+                    </CardFields>
+                  </button>
+                  {isExpanded && <ChargebackDetail row={row} className="mt-4" />}
+                </RecordCard>
+              )
+            })
+          )}
+        </div>
 
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-              <span>
-                Showing {showingFrom.toLocaleString()}-{showingTo.toLocaleString()} of {total.toLocaleString()}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                >
-                  Previous
-                </Button>
-                <span>
-                  Page {page.toLocaleString()} of {totalPages.toLocaleString()}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+        <PaginationBar
+          pagination={pagination}
+          onPageChange={setPage}
+          itemLabel="chargebacks"
+          isLoading={isFetching}
+        />
+        {total > 0 && total <= PAGE_SIZE && (
+          <p className="mt-3 text-xs text-muted-foreground sm:text-sm tabular-nums">
+            {pluralize(total, 'chargeback', 'chargebacks')}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }

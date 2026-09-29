@@ -155,7 +155,6 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
           label="Feature Adoption"
           caption="Share of merchants using each feature"
           captionClassName="hidden sm:block"
-          divider
         >
           <StatRow columns={3}>
             <StatTile

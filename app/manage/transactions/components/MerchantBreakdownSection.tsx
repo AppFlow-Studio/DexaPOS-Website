@@ -1,13 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { ArrowDown, ArrowUp, ArrowUpDown, Building2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -18,10 +15,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
+import {
   PlatformMerchantBreakdown,
   PlatformMerchantBreakdownFilters,
 } from '@/app/manage/actions/hq-platform/transactions'
 import { usePlatformMerchantBreakdown } from '@/lib/queries/use-platform-analytics'
+import { LoadError, TableEmptyRow } from './ledger-primitives'
 
 type MerchantBreakdownSortKey =
   | 'merchant_name'
@@ -37,6 +44,25 @@ type MerchantBreakdownSortKey =
 
 type SortDirection = 'asc' | 'desc'
 
+/**
+ * A comparison table — the columns are the point, so phones get a column
+ * picker rather than cards (UI-DESIGN-SYSTEM §5.8). Merchant, volume, revenue
+ * and void rate are what a phone user compares; the rest start hidden.
+ */
+const COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'locations', label: 'Locations', defaultHidden: true },
+  { id: 'transactions', label: 'Transactions' },
+  { id: 'cardRevenue', label: 'Card revenue', defaultHidden: true },
+  { id: 'cashRevenue', label: 'Cash revenue', defaultHidden: true },
+  { id: 'totalRevenue', label: 'Total revenue' },
+  { id: 'avgTicket', label: 'Avg ticket', defaultHidden: true },
+  { id: 'tipTotal', label: 'Tip total', defaultHidden: true },
+  { id: 'voidCount', label: 'Void count', defaultHidden: true },
+  { id: 'voidRate', label: 'Void rate' },
+  { id: 'trend', label: 'Trend', defaultHidden: true },
+]
+
 function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
@@ -45,7 +71,11 @@ function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`
 }
 
-function formatRangeLabel(filters: PlatformMerchantBreakdownFilters): string {
+/**
+ * The period the breakdown covers, in words. Exported so the host section can
+ * carry it as its caption — the component no longer renders a heading.
+ */
+export function formatBreakdownRangeLabel(filters: PlatformMerchantBreakdownFilters): string {
   const from = filters.dateFrom
   const to = filters.dateTo
 
@@ -54,7 +84,7 @@ function formatRangeLabel(filters: PlatformMerchantBreakdownFilters): string {
   }
 
   if (from && to) {
-    return `${format(parseISO(from), 'MMM d, yyyy')} - ${format(parseISO(to), 'MMM d, yyyy')}`
+    return `${format(parseISO(from), 'MMM d, yyyy')} – ${format(parseISO(to), 'MMM d, yyyy')}`
   }
 
   if (from) {
@@ -91,7 +121,7 @@ function getSortValue(row: PlatformMerchantBreakdown, key: MerchantBreakdownSort
 
 function Sparkline({ points }: { points: Array<{ date: string; revenue: number }> }) {
   if (!points || points.length < 2) {
-    return <span className="text-xs text-muted-foreground">-</span>
+    return <span className="text-muted-foreground">—</span>
   }
 
   const width = 120
@@ -114,7 +144,8 @@ function Sparkline({ points }: { points: Array<{ date: string; revenue: number }
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-      <path d={path} fill="none" stroke="hsl(var(--chart-2))" strokeWidth="2" strokeLinecap="round" />
+      {/* Single series → the brand token, which follows the theme (§6.1, C2). */}
+      <path d={path} fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -124,9 +155,14 @@ interface MerchantBreakdownSectionProps {
 }
 
 export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionProps) {
+  const bodyId = useId()
   const [open, setOpen] = useState(false)
   const [sortBy, setSortBy] = useState<MerchantBreakdownSortKey>('total_revenue')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const isMobile = useIsMobile()
+  const [hidden, setHidden] = useState<Set<string>>(() => initialHiddenColumns(COLUMNS))
+  const showCol = (id: string) => !isMobile || !hidden.has(id)
+  const visibleColumnCount = COLUMNS.filter((column) => showCol(column.id)).length
 
   const {
     data: breakdown,
@@ -134,8 +170,10 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
     isFetching,
     isError,
     error,
+    refetch,
   } = usePlatformMerchantBreakdown(filters)
 
+  // Rank before slicing (§5.7): page 1 always holds the top of the sort.
   const sortedRows = useMemo(() => {
     const rows = [...(breakdown || [])]
 
@@ -155,7 +193,8 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
     return rows
   }, [breakdown, sortBy, sortDirection])
 
-  const rangeLabel = useMemo(() => formatRangeLabel(filters), [filters])
+  const { pageRows, pagination, setPage } = useClientPagination(sortedRows, 10)
+
   const hasActiveFilters =
     Boolean(filters.dateFrom) ||
     Boolean(filters.dateTo) ||
@@ -164,6 +203,8 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
     Boolean(filters.paymentStatuses && filters.paymentStatuses.length > 0)
 
   const toggleSort = (key: MerchantBreakdownSortKey) => {
+    setPage(1)
+
     if (sortBy === key) {
       setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
       return
@@ -176,189 +217,185 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
   const totalRevenue = sortedRows.reduce((sum, row) => sum + row.total_revenue, 0)
   const totalTransactions = sortedRows.reduce((sum, row) => sum + row.transaction_count, 0)
 
+  const sortButton = (key: MerchantBreakdownSortKey, label: string) => (
+    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort(key)}>
+      {label}
+      {getSortIndicator(sortBy === key, sortDirection)}
+    </Button>
+  )
+
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Merchant Breakdown
-                <InfoIcon tip="Side-by-side performance comparison across all merchants for the selected date range. Click any column header to sort. Use this to spot top performers, high void rates, or merchants with unusual tip patterns." />
-              </CardTitle>
-              <CardDescription>
-                Compare merchant volume and revenue for {rangeLabel}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{sortedRows.length.toLocaleString()} merchants</Badge>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm">
-                  {open ? (
-                    <>
-                      Hide
-                      <ChevronUp className="ml-2 h-4 w-4" />
-                    </>
-                  ) : (
-                    <>
-                      Show
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-          </div>
-        </CardHeader>
+    <div className="min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {isLoading || isError
+            ? '—'
+            : `${sortedRows.length.toLocaleString()} merchants · Total revenue ${formatCurrency(totalRevenue)} · ${totalTransactions.toLocaleString()} transactions`}
+        </p>
+        <div className="flex items-center gap-2">
+          {open && <MobileColumnsButton columns={COLUMNS} hidden={hidden} onChange={setHidden} />}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 gap-1.5 px-4"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => setOpen((current) => !current)}
+          >
+            {open ? 'Hide breakdown' : 'Show breakdown'}
+            <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+          </Button>
+        </div>
+      </div>
 
-        <CollapsibleContent>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-              <span>Total revenue: {formatCurrency(totalRevenue)}</span>
-              <span>Total transactions: {totalTransactions.toLocaleString()}</span>
-            </div>
+      {isError && (
+        <LoadError
+          title="Merchant breakdown is unavailable"
+          detail={error instanceof Error ? error.message : 'Unknown error.'}
+          onRetry={() => void refetch()}
+        />
+      )}
 
-            {isError && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                Merchant breakdown is unavailable right now.
-                {` ${error instanceof Error ? error.message : 'Unknown error.'}`}
-              </div>
-            )}
-
-            <Table containerClassName="max-h-[46vh] overflow-auto rounded-md border">
-              <TableHeader className="sticky top-0 z-20 bg-card">
-                <TableRow>
-                  <TableHead>
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('merchant_name')}>
-                      Merchant
-                      {getSortIndicator(sortBy === 'merchant_name', sortDirection)}
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('location_count')}>
-                      Locations
-                      {getSortIndicator(sortBy === 'location_count', sortDirection)}
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('transaction_count')}>
-                      Transactions
-                      {getSortIndicator(sortBy === 'transaction_count', sortDirection)}
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('card_revenue')}>
-                      Card Revenue
-                      {getSortIndicator(sortBy === 'card_revenue', sortDirection)}
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('cash_revenue')}>
-                      Cash Revenue
-                      {getSortIndicator(sortBy === 'cash_revenue', sortDirection)}
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('total_revenue')}>
-                      Total Revenue
-                      {getSortIndicator(sortBy === 'total_revenue', sortDirection)}
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">
+      {open && (
+        <div id={bodyId} className="min-w-0">
+          <Table variant="data" className={cn(!isMobile && 'min-w-[1100px]')}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{sortButton('merchant_name', 'Merchant')}</TableHead>
+                {showCol('locations') && (
+                  <TableHead className="text-right tabular-nums">{sortButton('location_count', 'Locations')}</TableHead>
+                )}
+                {showCol('transactions') && (
+                  <TableHead className="text-right tabular-nums">{sortButton('transaction_count', 'Transactions')}</TableHead>
+                )}
+                {showCol('cardRevenue') && (
+                  <TableHead className="text-right tabular-nums">{sortButton('card_revenue', 'Card revenue')}</TableHead>
+                )}
+                {showCol('cashRevenue') && (
+                  <TableHead className="text-right tabular-nums">{sortButton('cash_revenue', 'Cash revenue')}</TableHead>
+                )}
+                {showCol('totalRevenue') && (
+                  <TableHead className="text-right tabular-nums">{sortButton('total_revenue', 'Total revenue')}</TableHead>
+                )}
+                {showCol('avgTicket') && (
+                  <TableHead className="text-right tabular-nums">
                     <span className="inline-flex items-center justify-end gap-1">
-                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('avg_ticket')}>
-                        Avg Ticket
-                        {getSortIndicator(sortBy === 'avg_ticket', sortDirection)}
-                      </Button>
+                      {sortButton('avg_ticket', 'Avg ticket')}
                       <InfoIcon tip="Mean transaction value (total revenue ÷ transaction count) for this merchant. A useful proxy for order size." side="bottom" />
                     </span>
                   </TableHead>
-                  <TableHead className="text-right">
+                )}
+                {showCol('tipTotal') && (
+                  <TableHead className="text-right tabular-nums">
                     <span className="inline-flex items-center justify-end gap-1">
-                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('tip_total')}>
-                        Tip Total
-                        {getSortIndicator(sortBy === 'tip_total', sortDirection)}
-                      </Button>
+                      {sortButton('tip_total', 'Tip total')}
                       <InfoIcon tip="Sum of all tips collected by this merchant in the selected period." side="bottom" />
                     </span>
                   </TableHead>
-                  <TableHead className="text-right">
+                )}
+                {showCol('voidCount') && (
+                  <TableHead className="text-right tabular-nums">
                     <span className="inline-flex items-center justify-end gap-1">
-                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('void_count')}>
-                        Void Count
-                        {getSortIndicator(sortBy === 'void_count', sortDirection)}
-                      </Button>
+                      {sortButton('void_count', 'Void count')}
                       <InfoIcon tip="Number of transactions cancelled before settlement. A high void count may indicate staff errors or system issues." side="bottom" />
                     </span>
                   </TableHead>
-                  <TableHead className="text-right">
+                )}
+                {showCol('voidRate') && (
+                  <TableHead className="text-right tabular-nums">
                     <span className="inline-flex items-center justify-end gap-1">
-                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('void_rate_pct')}>
-                        Void Rate %
-                        {getSortIndicator(sortBy === 'void_rate_pct', sortDirection)}
-                      </Button>
+                      {sortButton('void_rate_pct', 'Void rate %')}
                       <InfoIcon tip="Voids as a percentage of total transactions. Industry average is under 2%. Consistently above 5% warrants investigation." side="bottom" />
                     </span>
                   </TableHead>
+                )}
+                {showCol('trend') && (
                   <TableHead>
                     <span className="inline-flex items-center gap-1">
                       Trend
                       <InfoIcon tip="Daily revenue sparkline for the selected period. Rising line = growing revenue, flat = stable, falling = declining." side="bottom" />
                     </span>
                   </TableHead>
-                </TableRow>
-              </TableHeader>
+                )}
+              </TableRow>
+            </TableHeader>
 
-              <TableBody>
-                {isLoading || isFetching ? (
-                  Array.from({ length: 5 }).map((_, rowIndex) => (
-                    <TableRow key={`merchant-breakdown-loading-${rowIndex}`}>
-                      {Array.from({ length: 11 }).map((__, cellIndex) => (
-                        <TableCell key={`merchant-breakdown-loading-${rowIndex}-${cellIndex}`}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : sortedRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
-                      {hasActiveFilters
-                        ? 'No merchant data for the current filters/date range.'
-                        : 'No merchant data available for this period.'}
-                    </TableCell>
+            <TableBody>
+              {isLoading || isFetching ? (
+                Array.from({ length: 5 }).map((_, rowIndex) => (
+                  <TableRow key={`merchant-breakdown-loading-${rowIndex}`}>
+                    {Array.from({ length: visibleColumnCount }).map((__, cellIndex) => (
+                      <TableCell key={`merchant-breakdown-loading-${rowIndex}-${cellIndex}`}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
                   </TableRow>
-                ) : (
-                  sortedRows.map((row) => (
-                    <TableRow key={row.merchant_id}>
-                      <TableCell className="font-medium">{row.merchant_name}</TableCell>
-                      <TableCell className="text-right font-mono">
+                ))
+              ) : sortedRows.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={visibleColumnCount}
+                  title={
+                    hasActiveFilters
+                      ? 'No merchant activity matches these filters'
+                      : 'No merchant activity in this period'
+                  }
+                  hint={
+                    hasActiveFilters
+                      ? 'Clear the filters to widen the results.'
+                      : 'Merchants appear here once they take payments in the selected period.'
+                  }
+                />
+              ) : (
+                pageRows.map((row) => (
+                  <TableRow key={row.merchant_id}>
+                    <TableCell className="font-medium">{row.merchant_name}</TableCell>
+                    {showCol('locations') && (
+                      <TableCell className="text-right tabular-nums">
                         {row.active_locations !== undefined &&
                         row.total_locations !== undefined &&
                         row.active_locations !== row.total_locations
                           ? `${row.active_locations.toLocaleString()} / ${row.total_locations.toLocaleString()}`
                           : row.location_count.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right font-mono">{row.transaction_count.toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(row.card_revenue)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(row.cash_revenue)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold">{formatCurrency(row.total_revenue)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(row.avg_ticket)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(row.tip_total)}</TableCell>
-                      <TableCell className="text-right font-mono">{row.void_count.toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono">{formatPercent(row.void_rate_pct)}</TableCell>
+                    )}
+                    {showCol('transactions') && (
+                      <TableCell className="text-right tabular-nums">{row.transaction_count.toLocaleString()}</TableCell>
+                    )}
+                    {showCol('cardRevenue') && (
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.card_revenue)}</TableCell>
+                    )}
+                    {showCol('cashRevenue') && (
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.cash_revenue)}</TableCell>
+                    )}
+                    {showCol('totalRevenue') && (
+                      <TableCell className="text-right font-medium tabular-nums">{formatCurrency(row.total_revenue)}</TableCell>
+                    )}
+                    {showCol('avgTicket') && (
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.avg_ticket)}</TableCell>
+                    )}
+                    {showCol('tipTotal') && (
+                      <TableCell className="text-right tabular-nums">{formatCurrency(row.tip_total)}</TableCell>
+                    )}
+                    {showCol('voidCount') && (
+                      <TableCell className="text-right tabular-nums">{row.void_count.toLocaleString()}</TableCell>
+                    )}
+                    {showCol('voidRate') && (
+                      <TableCell className="text-right tabular-nums">{formatPercent(row.void_rate_pct)}</TableCell>
+                    )}
+                    {showCol('trend') && (
                       <TableCell>
                         <Sparkline points={row.daily_revenue_trend} />
                       </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+                    )}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="merchants" />
+        </div>
+      )}
+    </div>
   )
 }

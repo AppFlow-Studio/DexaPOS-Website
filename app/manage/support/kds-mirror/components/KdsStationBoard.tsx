@@ -3,10 +3,8 @@
 import * as React from "react";
 import {
   AlertTriangle,
-  Ban,
   Clock,
   Flame,
-  RotateCcw,
   ShoppingBag,
   User,
 } from "lucide-react";
@@ -19,6 +17,8 @@ import type {
   KdsMirrorModifier,
   KdsMirrorTicket,
 } from "@/app/manage/actions/kds-mirror";
+import { CardGridEmpty } from "@/app/manage/transactions/components/ledger-primitives";
+import { PillRail } from "./kds-primitives";
 
 // ---------------------------------------------------------------------------
 // Faithful station layout.
@@ -38,9 +38,13 @@ import type {
 //                       show_allergy_flags column despite that column existing.
 //   column count      - kds_displays.columns, default 4.
 //
+// What is ported is the arrangement and the content, not the palette: rush,
+// allergens, voids and refunds are carried by words and weight here
+// (UI-DESIGN-SYSTEM §3.5; decided 2026-09-29).
+//
 // NOT ported, on purpose:
 //   alert_minutes / warning_minutes - stored and plumbed into the POS config
-//     object but consumed by no tablet rendering today. Colouring tickets by
+//     object but consumed by no tablet rendering today. Flagging tickets by
 //     them here would show HQ something the kitchen cannot see, which is the
 //     one thing this tool must never do.
 //   the done-tab time window - the tablet re-filters done tickets to 60
@@ -82,38 +86,20 @@ function matchesTypeFilter(
   return t === "dine_in" || t === "dine in" || t === "" || !ticket.order_type;
 }
 
-const ALLERGEN_KEYWORDS: Record<string, { label: string; className: string }> = {
-  shellfish: {
-    label: "SHELLFISH",
-    className: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
-  },
-  dairy: {
-    label: "DAIRY",
-    className:
-      "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  },
-  nuts: {
-    label: "NUTS",
-    className:
-      "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
-  },
-  gluten: {
-    label: "GLUTEN",
-    className:
-      "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  },
-  soy: {
-    label: "SOY",
-    className:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-  },
+/** Allergen keywords, matched against modifier names; the value is the word shown. */
+const ALLERGEN_KEYWORDS: Record<string, string> = {
+  shellfish: "SHELLFISH",
+  dairy: "DAIRY",
+  nuts: "NUTS",
+  gluten: "GLUTEN",
+  soy: "SOY",
 };
 
 function detectAllergen(modifierName: string | null | undefined) {
   if (!modifierName) return null;
   const lower = modifierName.toLowerCase();
-  for (const [keyword, meta] of Object.entries(ALLERGEN_KEYWORDS)) {
-    if (lower.includes(keyword)) return meta;
+  for (const [keyword, label] of Object.entries(ALLERGEN_KEYWORDS)) {
+    if (lower.includes(keyword)) return label;
   }
   return null;
 }
@@ -180,6 +166,15 @@ export function distributeRoundRobin<T>(items: T[], columnCount: number): T[][] 
   return columns;
 }
 
+/** A small uppercase word beside an item or modifier: rush, void, allergen. */
+function FlagWord({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[0.7em] font-semibold uppercase tracking-wide text-foreground">
+      {children}
+    </span>
+  );
+}
+
 function ModifierLine({ modifier }: { modifier: KdsMirrorModifier }) {
   const allergen = detectAllergen(modifier.modifier_name);
   const label = modifier.is_no
@@ -188,19 +183,11 @@ function ModifierLine({ modifier }: { modifier: KdsMirrorModifier }) {
 
   return (
     <span className="inline-flex items-center gap-1">
-      <span className={cn(modifier.is_no && "text-red-600 dark:text-red-400")}>
+      {/* "No X" is already said in words; weight makes it hard to skim past. */}
+      <span className={cn(modifier.is_no && "font-medium text-foreground")}>
         {label}
       </span>
-      {allergen && (
-        <span
-          className={cn(
-            "rounded px-1 py-px text-[0.6em] font-bold tracking-wide",
-            allergen.className
-          )}
-        >
-          {allergen.label}
-        </span>
-      )}
+      {allergen && <FlagWord>{allergen}</FlagWord>}
     </span>
   );
 }
@@ -208,27 +195,37 @@ function ModifierLine({ modifier }: { modifier: KdsMirrorModifier }) {
 function StationItemRow({ item }: { item: KdsMirrorItem }) {
   return (
     <li className="flex items-start gap-2 py-[0.2em]">
-      <span className="min-w-[1.6em] shrink-0 text-right font-bold tabular-nums">
+      <span className="min-w-[1.6em] shrink-0 text-right font-semibold tabular-nums">
         {item.quantity}
       </span>
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1">
-          <span className={cn(item.is_voided && "line-through opacity-60")}>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span
+            className={cn(
+              item.is_voided && "text-muted-foreground line-through"
+            )}
+          >
             {item.name ?? "Unnamed item"}
           </span>
-          {item.rush && <Flame className="h-[0.9em] w-[0.9em] text-orange-500" />}
+          {item.rush && (
+            <span className="inline-flex items-center gap-0.5">
+              <Flame className="h-[0.9em] w-[0.9em] text-muted-foreground" />
+              <FlagWord>Rush</FlagWord>
+            </span>
+          )}
           {item.is_to_go && (
-            <ShoppingBag className="h-[0.9em] w-[0.9em] opacity-60" />
+            <ShoppingBag
+              className="h-[0.9em] w-[0.9em] text-muted-foreground"
+              aria-label="To go"
+            />
           )}
-          {item.is_voided && <Ban className="h-[0.9em] w-[0.9em] text-red-500" />}
-          {item.is_refunded && (
-            <RotateCcw className="h-[0.9em] w-[0.9em] text-red-500" />
-          )}
+          {item.is_voided && <FlagWord>Void</FlagWord>}
+          {item.is_refunded && <FlagWord>Refunded</FlagWord>}
         </div>
 
         {item.modifiers.length > 0 && (
-          <div className="mt-[0.1em] flex flex-wrap gap-x-2 text-[0.85em] opacity-80">
+          <div className="mt-[0.1em] flex flex-wrap gap-x-2 text-[0.85em] text-muted-foreground">
             {item.modifiers.map((modifier, index) => (
               <ModifierLine key={index} modifier={modifier} />
             ))}
@@ -236,7 +233,7 @@ function StationItemRow({ item }: { item: KdsMirrorItem }) {
         )}
 
         {item.special_instructions && (
-          <div className="mt-[0.1em] text-[0.85em] italic text-amber-700 dark:text-amber-400">
+          <div className="mt-[0.1em] text-[0.85em] font-medium italic text-foreground">
             {item.special_instructions}
           </div>
         )}
@@ -265,36 +262,48 @@ export function StationTicketCard({
   return (
     <div
       className={cn(
-        "rounded-lg border-2 bg-card p-[0.6em] shadow-sm",
-        isRush
-          ? "border-orange-500"
-          : "border-border",
-        hint && "border-amber-500",
-        isHighlighted && "ring-2 ring-violet-400/70"
+        // The record-card material (§5.3). The linked order is the selected
+        // state — a ring, not a coloured border — and says so in words below.
+        "min-w-0 rounded-2xl bg-muted/45 p-[0.75em]",
+        isHighlighted && "bg-muted ring-1 ring-border"
       )}
     >
-      <div className="flex items-start justify-between gap-2 border-b pb-[0.4em]">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate font-bold">
-            #{ticket.display_number ?? ticket.order_number ?? "--"}
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span className="truncate font-semibold tabular-nums">
+              #{ticket.display_number ?? ticket.order_number ?? "--"}
+            </span>
+            {isRush && (
+              <span className="inline-flex items-center gap-0.5">
+                <Flame className="h-[0.9em] w-[0.9em] text-muted-foreground" />
+                <FlagWord>Rush</FlagWord>
+              </span>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-2 text-[0.8em] opacity-70">
+          <div className="flex flex-wrap items-center gap-x-2 text-[0.8em] text-muted-foreground">
             {ticket.table_name && <span>Table {ticket.table_name}</span>}
             {ticket.order_type && <span>{ticket.order_type}</span>}
             {ticket.course_number > 1 && <span>C{ticket.course_number}</span>}
           </div>
         </div>
 
-        <span className="flex shrink-0 items-center gap-1 font-semibold tabular-nums">
-          <Clock className="h-[0.9em] w-[0.9em]" />
+        <span className="flex shrink-0 items-center gap-1 font-medium tabular-nums">
+          <Clock className="h-[0.9em] w-[0.9em] text-muted-foreground" />
           {elapsed(ticket.start_time, now)}
         </span>
       </div>
 
+      {isHighlighted && (
+        <p className="mt-[0.3em] text-[0.75em] font-medium text-foreground">
+          Linked order
+        </p>
+      )}
+
       {/* server_name is already NULL when the display has show_server_name
           off -- get_kds_tickets_v3 applies that server-side. */}
       {(ticket.server_name || ticket.customer_name) && (
-        <div className="flex items-center gap-1 pt-[0.3em] text-[0.8em] opacity-70">
+        <div className="flex items-center gap-1 pt-[0.3em] text-[0.8em] text-muted-foreground">
           <User className="h-[0.9em] w-[0.9em]" />
           <span className="truncate">
             {ticket.customer_name ?? ticket.server_name}
@@ -302,55 +311,26 @@ export function StationTicketCard({
         </div>
       )}
 
-      <ul className="pt-[0.3em]">
+      <ul className="pt-[0.4em]">
         {ticket.items.map((item) => (
           <StationItemRow key={item.id} item={item} />
         ))}
       </ul>
 
       {showOrderNotes && ticket.order_notes && (
-        <div className="mt-[0.4em] rounded bg-muted/70 px-[0.5em] py-[0.3em] text-[0.85em] italic">
+        <p className="mt-[0.4em] text-[0.85em] italic text-muted-foreground">
           {ticket.order_notes}
-        </div>
+        </p>
       )}
 
+      {/* Not an HQ-2 alarm: marked by weight and words, never a tinted wash. */}
       {hint && (
-        <div className="mt-[0.4em] flex items-start gap-1 rounded bg-amber-50 px-[0.5em] py-[0.3em] text-[0.8em] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-          <AlertTriangle className="mt-[0.15em] h-[0.9em] w-[0.9em] shrink-0" />
+        <div className="mt-[0.5em] flex items-start gap-1 text-[0.8em] font-medium text-foreground">
+          <AlertTriangle className="mt-[0.15em] h-[0.9em] w-[0.9em] shrink-0 text-muted-foreground" />
           <span>{hint}</span>
         </div>
       )}
     </div>
-  );
-}
-
-function TabButton({
-  label,
-  count,
-  isActive,
-  onClick,
-}: {
-  label: string;
-  count?: number;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-        isActive
-          ? "bg-primary text-primary-foreground"
-          : "bg-muted text-muted-foreground hover:bg-muted/70"
-      )}
-    >
-      {label}
-      {count !== undefined && (
-        <span className="ml-1.5 tabular-nums opacity-80">{count}</span>
-      )}
-    </button>
   );
 }
 
@@ -419,84 +399,100 @@ export function KdsStationBoard({
     [activeTickets, columnCount]
   );
 
+  const activeStatusLabel =
+    STATUS_TABS.find((t) => t.key === activeStatus)?.label ?? activeStatus;
+  const activeTypeLabel =
+    TYPE_TABS.find((t) => t.key === activeType)?.label ?? activeType;
+
+  const renderCard = (ticket: KdsMirrorTicket) => (
+    <StationTicketCard
+      key={ticket.ticket_id}
+      ticket={ticket}
+      now={now}
+      showOrderNotes={showOrderNotes}
+      // The one thing on this board the kitchen does not see, and the reason
+      // the tool exists: a ticket parked in Served that was never bumped, or
+      // one sitting in Pending untouched. Without it the mirror is a pretty
+      // screenshot.
+      showStaleHint
+      isHighlighted={!!highlightOrderId && ticket.order_id === highlightOrderId}
+    />
+  );
+
   return (
-    <div className={cn("space-y-3", className)}>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {visibleStatusTabs.map((tab) => (
-            <TabButton
-              key={tab.key}
-              label={tab.label}
-              count={
-                byStatus[tab.key].filter((t) => matchesTypeFilter(t, activeType))
-                  .length
-              }
-              isActive={activeStatus === tab.key}
-              onClick={() => setActiveStatus(tab.key)}
-            />
-          ))}
-        </div>
+    <div className={cn("min-w-0 space-y-4", className)}>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <PillRail
+          ariaLabel="Ticket status"
+          value={activeStatus}
+          onValueChange={setActiveStatus}
+          options={visibleStatusTabs.map((tab) => ({
+            key: tab.key,
+            label: tab.label,
+            count: byStatus[tab.key].filter((t) =>
+              matchesTypeFilter(t, activeType)
+            ).length,
+          }))}
+        />
+        <PillRail
+          ariaLabel="Order type"
+          value={activeType}
+          onValueChange={setActiveType}
+          options={TYPE_TABS}
+        />
 
-        <div className="flex flex-wrap gap-1.5">
-          {TYPE_TABS.map((tab) => (
-            <TabButton
-              key={tab.key}
-              label={tab.label}
-              isActive={activeType === tab.key}
-              onClick={() => setActiveType(tab.key)}
-            />
-          ))}
-        </div>
-
-        <span className="ml-auto text-xs text-muted-foreground">
-          {columnCount} column{columnCount === 1 ? "" : "s"}
+        <span className="text-xs text-muted-foreground lg:ml-auto">
+          <span className="tabular-nums">{columnCount}</span> column
+          {columnCount === 1 ? "" : "s"}
           {fontScale !== 1 && ` · ${fontScale}x type`}
           {isTwoStep && " · 2-step workflow"}
+          <span className="lg:hidden"> · stacked in the tablet&apos;s order</span>
         </span>
       </div>
 
       {isLoading ? (
-        <div className="flex gap-2">
-          {Array.from({ length: columnCount }).map((_, i) => (
-            <div key={i} className="flex-1 space-y-2">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="space-y-2 lg:hidden">
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+          </div>
+          <div className="hidden gap-2 lg:flex">
+            {Array.from({ length: columnCount }).map((_, i) => (
+              <div key={i} className="flex-1 space-y-2">
+                <Skeleton className="h-32 w-full rounded-2xl" />
+                <Skeleton className="h-24 w-full rounded-2xl" />
+              </div>
+            ))}
+          </div>
+        </>
       ) : activeTickets.length === 0 ? (
-        <div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-          {activeStatus === "done"
-            ? "No done tickets"
-            : `No ${activeStatus} tickets`}
-        </div>
+        <CardGridEmpty
+          title={`No ${activeStatusLabel.toLowerCase()} tickets${
+            activeType === "all" ? "" : ` for ${activeTypeLabel}`
+          }`}
+          hint={
+            activeType === "all"
+              ? "Tickets appear here as the server routes them to this station."
+              : "Switch the order type to All to see every ticket in this status."
+          }
+        />
       ) : (
-        <div
-          className="flex items-start gap-2"
-          // font_scale is applied once here and every card sizes in em, so the
-          // whole station scales the way the tablet's s() helper scales it.
-          style={{ fontSize: `${14 * fontScale}px` }}
-        >
-          {columns.map((columnTickets, index) => (
-            <div key={index} className="flex min-w-0 flex-1 flex-col gap-2">
-              {columnTickets.map((ticket) => (
-                <StationTicketCard
-                  key={ticket.ticket_id}
-                  ticket={ticket}
-                  now={now}
-                  showOrderNotes={showOrderNotes}
-                  // The one thing on this board the kitchen does not see, and
-                  // the reason the tool exists: a ticket parked in Served that
-                  // was never bumped, or one sitting in Pending untouched.
-                  // Without it the mirror is a pretty screenshot.
-                  showStaleHint
-                  isHighlighted={
-                    !!highlightOrderId && ticket.order_id === highlightOrderId
-                  }
-                />
-              ))}
-            </div>
-          ))}
+        // font_scale is applied once here and every card sizes in em, so the
+        // whole station scales the way the tablet's s() helper scales it.
+        <div style={{ fontSize: `${14 * fontScale}px` }}>
+          {/* Below `lg` a tablet's 4–8 columns would be ~80–180px each. One
+              column in list order keeps the kitchen's reading order: a
+              round-robin board read row by row is exactly the list order. */}
+          <div className="flex flex-col gap-2 lg:hidden">
+            {activeTickets.map(renderCard)}
+          </div>
+          <div className="hidden items-start gap-2 lg:flex">
+            {columns.map((columnTickets, index) => (
+              <div key={index} className="flex min-w-0 flex-1 flex-col gap-2">
+                {columnTickets.map(renderCard)}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

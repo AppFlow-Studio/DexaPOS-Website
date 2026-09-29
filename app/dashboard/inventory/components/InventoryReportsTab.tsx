@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   CHART_GRID,
@@ -42,6 +42,9 @@ import {
   useWasteAnalytics,
 } from "../hooks/useInventoryReports";
 import type { DateRange } from "../../actions/inventory-reports";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
+import { useLocationStore } from "@/stores/location-store";
 
 const BLUE = "#3B82F6";
 const LIGHT_BLUE = "#93C5FD";
@@ -109,6 +112,15 @@ export function InventoryReportsTab({
   const { data: cogsRes, isLoading: cogsLoading } = useCogsReport(range);
   const { data: foodRes, isLoading: foodLoading } = useFoodCostAnalysis(range);
   const { data: wasteRes, isLoading: wasteLoading } = useWasteAnalytics(range);
+
+  const categoryPage = useClientPagination(foodRes?.data?.by_category ?? [], 10);
+
+  // A new period or location starts the category table from the top.
+  const selectedLocationId = useLocationStore((s) => s.selectedLocationId);
+  const setCategoryPage = categoryPage.setPage;
+  useEffect(() => {
+    setCategoryPage(1);
+  }, [range, selectedLocationId, setCategoryPage]);
 
   if (isAllLocations) {
     return (
@@ -232,7 +244,7 @@ export function InventoryReportsTab({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(food?.by_category ?? []).map((row) => (
+                  {categoryPage.pageRows.map((row) => (
                     <TableRow key={row.category}>
                       <TableCell className="font-medium">{row.category}</TableCell>
                       <TableCell className="text-right">
@@ -259,6 +271,11 @@ export function InventoryReportsTab({
                 </TableBody>
             </Table>
           )}
+          <PaginationBar
+            pagination={categoryPage.pagination}
+            onPageChange={categoryPage.setPage}
+            itemLabel="categories"
+          />
       </Panel>
 
       {/* Item-level COGS drill-down */}

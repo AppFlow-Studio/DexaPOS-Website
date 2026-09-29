@@ -30,6 +30,12 @@ type DataPageSkeletonProps = {
    * their own breadcrumb pass `false` and get the breadcrumb line instead. */
   showHeader?: boolean
   /**
+   * Mirrors `PageHeader`'s `showSubtitleOnMobile`. The subtitle line is hidden
+   * below `sm` by default, as the page's is; a route whose subtitle carries
+   * scope (a location or record name) keeps it so nothing shifts on load.
+   */
+  showSubtitleOnMobile?: boolean
+  /**
    * Mirrors `PageShell`'s own `width`. Routes that render inside
    * `PageShell width="narrow"` — profile, the support thread — must say so,
    * or the skeleton spans the full width and the page visibly narrows the
@@ -65,12 +71,20 @@ function LoadingBlock({ className }: { className?: string }) {
   )
 }
 
-function HeaderSkeleton({ action = true }: { action?: boolean }) {
+function HeaderSkeleton({
+  action = true,
+  subtitleOnMobile = false,
+}: {
+  action?: boolean
+  subtitleOnMobile?: boolean
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 space-y-2">
         <LoadingBlock className="h-9 w-52 max-w-[72vw]" />
-        <LoadingBlock className="h-4 w-72 max-w-[84vw] rounded-full" />
+        <LoadingBlock
+          className={cn('h-4 w-72 max-w-[84vw] rounded-full', !subtitleOnMobile && 'max-sm:hidden')}
+        />
       </div>
       {/* Pages whose PageHeader takes no `actions` must not promise a button
           here — it vanishes on load and drags the header's height with it. */}
@@ -650,7 +664,8 @@ function PanelHeadingSkeleton({ action = false }: { action?: boolean }) {
           <LoadingBlock className="h-[1.125rem] w-[1.125rem] shrink-0 rounded-md" />
           <LoadingBlock className="h-5 w-44 max-w-full" />
         </div>
-        <LoadingBlock className="h-4 w-64 max-w-full rounded-full" />
+        {/* PanelSection hides its caption below `sm`, so the placeholder does too. */}
+        <LoadingBlock className="h-4 w-64 max-w-full rounded-full max-sm:hidden" />
       </div>
       {action && <LoadingBlock className="h-6 w-12 shrink-0 rounded-full" />}
     </div>
@@ -894,6 +909,7 @@ export function DataPageSkeleton({
   // These two render inside `PageShell width="narrow"`, so they default to it
   // rather than making every caller remember.
   width = variant === 'profile' || variant === 'thread' ? 'narrow' : 'full',
+  showSubtitleOnMobile = false,
   report,
 }: DataPageSkeletonProps) {
   // Rendered as an element, not assigned to a capitalised variable and used
@@ -916,7 +932,9 @@ export function DataPageSkeleton({
       className="min-w-0 space-y-6"
     >
       <span className="sr-only">{label}</span>
-      {showHeader ? <HeaderSkeleton action={variant !== 'profile'} /> : null}
+      {showHeader ? (
+        <HeaderSkeleton action={variant !== 'profile'} subtitleOnMobile={showSubtitleOnMobile} />
+      ) : null}
       {body}
     </div>
   )

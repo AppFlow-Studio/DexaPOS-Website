@@ -60,7 +60,7 @@ export default function OrdersPage() {
   const page = Number.isFinite(requestedPage)
     ? Math.max(1, Math.floor(requestedPage))
     : 1;
-  const pageSize = 25;
+  const pageSize = 10;
   const [orderSearch, setOrderSearch] = useState("");
   const debouncedOrderSearch = useDebounce(orderSearch, 300);
   const [orderSorting, setOrderSorting] = useState<SortingState>([

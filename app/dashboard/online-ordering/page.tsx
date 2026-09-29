@@ -208,7 +208,7 @@ function StatusCard({
   if (status === "pending_review") {
     return (
       <Panel>
-        <PanelSection
+        <PanelSection showCaptionOnMobile
           icon={Clock3}
           label="Team Is Reviewing Your Request"
           caption={`HQ is reviewing the online-store request for ${locationName}. No additional branch-side setup is needed right now.`}
@@ -228,7 +228,7 @@ function StatusCard({
   if (status === "approved") {
     return (
       <Panel>
-        <PanelSection
+        <PanelSection showCaptionOnMobile
           icon={CheckCircle2}
           label="Request Approved"
           caption={`HQ approved the request for ${locationName}. Store setup is now in progress and branch-side controls will unlock after HQ finishes setup.`}
@@ -248,7 +248,7 @@ function StatusCard({
   if (status === "rejected") {
     return (
       <Panel className="border-destructive/35">
-        <PanelSection
+        <PanelSection showCaptionOnMobile
           icon={Ban}
           label="Request Rejected"
           caption={`HQ rejected the online-store request for ${locationName}. Update the branch packet and submit the request again.`}
@@ -1431,7 +1431,7 @@ export default function OnlineOrderingPage() {
           indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
         <Panel>
-          <PanelSection
+          <PanelSection showCaptionOnMobile
             icon={Building2}
             label="Select a specific location"
             caption="Online-store requests and settings are managed per location. Choose a branch from the location selector first."
@@ -1455,7 +1455,7 @@ export default function OnlineOrderingPage() {
       <PageShell>
         <PageHeader title="Online Ordering" />
         <Panel>
-          <PanelSection
+          <PanelSection showCaptionOnMobile
             icon={Building2}
             label="Location unavailable"
             caption="Select a location to manage online ordering."
@@ -1479,7 +1479,7 @@ export default function OnlineOrderingPage() {
           indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
         />
         <Panel>
-          <PanelSection
+          <PanelSection showCaptionOnMobile
             icon={AlertTriangle}
             label="Settings unavailable"
             caption="Failed to load online-store settings for this branch."

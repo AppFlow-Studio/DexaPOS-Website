@@ -979,7 +979,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
 
   return (
     <PageShell width="narrow">
-      <PageHeader
+      <PageHeader showSubtitleOnMobile
         title="Kiosk"
         subtitle={data.location.name}
         backHref="/dashboard/kiosk"

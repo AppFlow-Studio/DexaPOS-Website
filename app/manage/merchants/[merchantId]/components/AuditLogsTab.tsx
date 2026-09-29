@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -34,7 +34,6 @@ import {
   MapPin,
   RefreshCw,
   Download,
-  GitCompare,
   ChevronDown,
   ChevronUp,
   Info,
@@ -53,11 +52,12 @@ import { cn } from "@/lib/utils";
 import { AuditCategory, AuditSeverity } from "@/types/audit-log";
 import { DateRange } from "react-day-picker";
 import { MerchantInfoModel } from "@/types/db-modles";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import type { PaginationMeta } from "@/types/pagination";
 
-// One neutral pill for every severity (D-03): foreground text on a faded fill.
-// The per-severity icon in SEVERITY_ICONS still distinguishes them at a glance,
-// so the colour was saying the same thing a second time.
-const SEVERITY_BADGE = "bg-muted text-foreground";
+// The borderless cell pill (§5.2, §4.6b) for every category and severity: the
+// word carries the meaning; the merchant-detail page raises no alarms (§14.3).
+const CELL_BADGE = "w-fit gap-1.5 rounded-full border-0 px-2.5 text-xs font-medium";
 
 const SEVERITY_ICONS = {
   info: <Info className="h-3 w-3" />,
@@ -112,9 +112,9 @@ const RenderObject = ({
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
               {formatKey(key)}
             </span>
-            <div className="text-sm font-mono bg-muted/30 px-3 py-2 rounded-md break-all border border-muted/20 text-foreground/90">
+            <div className="break-all rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-foreground/90">
               {typeof value === "object" ? (
-                <div className="pl-2 border-l-2 border-muted mt-1">
+                <div className="mt-1 pl-2">
                   <RenderObject data={value} className="grid-cols-1 gap-y-2" />
                 </div>
               ) : (
@@ -265,7 +265,7 @@ const RenderDiff = ({
   if (keys.length === 0) return null;
 
   return (
-    <div className="divide-y divide-border/60">
+    <div>
       {keys.map((key) => {
         const from = before?.[key];
         const to = after?.[key];
@@ -295,9 +295,6 @@ const RenderDiff = ({
   );
 };
 
-// One neutral pill for every category (D-03), same as SEVERITY_BADGE: the
-// CATEGORY_ICONS glyph below already distinguishes them, and an 11-colour map
-// made the column read as a rainbow rather than as data.
 /**
  * The expanded detail for one audit entry. Shared by the desktop table row and
  * the mobile card so the two views cannot drift apart.
@@ -360,8 +357,6 @@ const AuditLogDetail = ({ log }: { log: any }) => (
     )}
 </div>
 );
-const CATEGORY_BADGE = "bg-muted text-foreground";
-
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   menu: <FileText className="h-3.5 w-3.5" />,
   staff: <User className="h-3.5 w-3.5" />,
@@ -402,8 +397,13 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
   });
 
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  // §5.7: a data table shows at most 10 rows per page.
+  const pageSize = 10;
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  // A new date range is a new result set — start it from the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [dateRange]);
   const [isExporting, setIsExporting] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useAuditLogs(
@@ -500,576 +500,577 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     filters.severity ||
     filters.actor_user_id;
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pagination: PaginationMeta = {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+  };
+
   if (!merchantInfo?.clerk_org_id) {
-      return <div>Loading merchant configuration...</div>;
+    return (
+      <Panel>
+        <PanelSection icon={Activity} label="Audit Logs">
+          <p className="text-sm text-muted-foreground">
+            Loading merchant configuration…
+          </p>
+        </PanelSection>
+      </Panel>
+    );
   }
 
+  const columnCount = isAllLocations ? 7 : 6;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* This tab renders inside the merchant detail page, which already owns
-          the page `<h1>` via `MerchantHeaderBar`. The section heading is a
-          `PanelSection` label, not a second page title. */}
-      <Panel>
-        <PanelSection
-          icon={Activity}
-          label="Audit Logs"
-          caption={`Track all administrative actions for ${merchantInfo.name}`}
-          action={
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge
-                variant="outline"
-                className="h-9 px-3 text-sm font-normal gap-2"
-              >
-                <Activity className="h-3.5 w-3.5 text-emerald-500" />
-                {total} logs
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isFetching}
-                className="h-9"
-              >
-                <RefreshCw
-                  className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")}
-                />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExport}
-                disabled={isExporting || logs.length === 0}
-                className="h-9"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export CSV'}</span>
-                <span className="sm:hidden">Export</span>
-              </Button>
-            </div>
-          }
-        />
-      </Panel>
-
-      {/* Filters */}
-      <Panel className="p-3 sm:p-6">
-          <div className="flex flex-col gap-4">
-            {/* Top row - Search and Date Range */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search actions, actors..."
-                  className="pl-10 h-11 bg-background/50"
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange("search", e.target.value)}
-                />
-              </div>
-
-              {/* Date Range Picker */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "h-10 justify-start text-left font-normal bg-background/50 w-full min-w-0 truncate",
-                      !dateRange && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate text-sm">
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yyyy")}`
-                      ) : (
-                        format(dateRange.from, "MMM d, yyyy")
-                      )
-                    ) : (
-                      "Select date range"
-                    )}
-                    </span>
-                  </Button>
-                </PopoverTrigger>
-                {/* Matches `app/manage/components/DateRangePicker`: one panel,
-                    a single month in range mode. The old two-month layout had
-                    no collision padding, so the second month overflowed the
-                    viewport. `collisionPadding` keeps it off the edge and the
-                    panel is sized to the space between those gutters, which
-                    leaves Radix no room to favour a side. */}
-                <PopoverContent
-                  className="w-auto rounded-xl border p-0 shadow-lg"
-                  align="end"
-                  collisionPadding={16}
-                >
-                  <div className="w-[calc(100vw-2rem)] space-y-3 p-4 sm:w-[19rem]">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <label className="text-sm font-medium text-foreground">
-                        Select range
-                      </label>
-                      <span className="text-xs tabular-nums text-muted-foreground">
-                        {dateRange?.from
-                          ? `${format(dateRange.from, 'MMM d')} - ${
-                              dateRange.to ? format(dateRange.to, 'MMM d') : '…'
-                            }`
-                          : 'Pick a start date'}
-                      </span>
-                    </div>
-                    <Calendar
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      numberOfMonths={1}
-                      className="p-0"
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() =>
-                          setDateRange({
-                            from: subDays(new Date(), 7),
-                            to: new Date(),
-                          })
-                        }
-                      >
-                        Last 7 days
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() =>
-                          setDateRange({
-                            from: subDays(new Date(), 30),
-                            to: new Date(),
-                          })
-                        }
-                      >
-                        Last 30 days
-                      </Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Bottom row - Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              {/* Location Filter */}
-              <Select
-                value={filters.location_id}
-                onValueChange={(val) => handleFilterChange("location_id", val)}
-              >
-                <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <SelectValue placeholder="All Locations" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Locations</SelectItem>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Category Filter */}
-              <Select
-                value={filters.action_category}
-                onValueChange={(val) =>
-                  handleFilterChange(
-                    "action_category",
-                    val === "all_categories" ? "" : val,
-                  )
-                }
-              >
-                <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_categories">All Categories</SelectItem>
-                  <SelectItem value="menu">Menu & Items</SelectItem>
-                  <SelectItem value="staff">Staff & Access</SelectItem>
-                  <SelectItem value="order">Orders & Payments</SelectItem>
-                  <SelectItem value="inventory">Inventory</SelectItem>
-                  <SelectItem value="merchant">Merchant</SelectItem>
-                  <SelectItem value="user_management">User Management</SelectItem>
-                  <SelectItem value="device">Device</SelectItem>
-                  <SelectItem value="notes">Notes</SelectItem>
-                  <SelectItem value="settings">Settings</SelectItem>
-                  <SelectItem value="authentication">Authentication</SelectItem>
-                  <SelectItem value="purchase_order">
-                    Purchase Orders
-                  </SelectItem>
-                  <SelectItem value="expense">Expenses</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Severity Filter */}
-              <Select
-                value={filters.severity}
-                onValueChange={(val) =>
-                  handleFilterChange(
-                    "severity",
-                    val === "all_severities" ? "" : val,
-                  )
-                }
-              >
-                <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <SelectValue placeholder="All Severities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_severities">All Severities</SelectItem>
-                  <SelectItem value="info">Info</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Actor Filter */}
-              <Select
-                value={filters.actor_user_id}
-                onValueChange={(val) =>
-                  handleFilterChange(
-                    "actor_user_id",
-                    val === "all_actors" ? "" : val,
-                  )
-                }
-              >
-                <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <SelectValue placeholder="All Staff" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_actors">All Staff</SelectItem>
-                  {uniqueActors.map((actor) => (
-                    <SelectItem key={actor.id} value={actor.id}>
-                      {actor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Active Filters */}
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2 pt-2">
-                <span className="text-xs text-muted-foreground">
-                  Active filters:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {filters.search && (
-                    <Badge variant="secondary" className="gap-1 pr-1">
-                      Search: {filters.search}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() => handleFilterChange("search", "")}
-                        aria-label="Clear search filter"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                  {filters.action_category && (
-                    <Badge
-                      variant="secondary"
-                      className="gap-1 pr-1 capitalize"
-                    >
-                      {filters.action_category.replace("_", " ")}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() =>
-                          handleFilterChange("action_category", "")
-                        }
-                        aria-label="Clear category filter"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                  {filters.severity && (
-                    <Badge
-                      variant="secondary"
-                      className="gap-1 pr-1 capitalize"
-                    >
-                      {filters.severity}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() => handleFilterChange("severity", "")}
-                        aria-label="Clear severity filter"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={clearFilters}
-                >
-                  Clear all
-                </Button>
-              </div>
-            )}
+    // This tab renders inside the merchant detail page, which already owns the
+    // page `<h1>`. The section heading is a `PanelSection` label, and the
+    // toolbar, table and pager share that one section (§5.2).
+    <Panel>
+      <PanelSection
+        icon={Activity}
+        label="Audit Logs"
+        caption={`Track all administrative actions for ${merchantInfo.name}`}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground tabular-nums">
+              {total.toLocaleString()} logs
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            >
+              <RefreshCw
+                className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")}
+              />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExport}
+              disabled={isExporting || logs.length === 0}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+              <span className="sm:hidden">Export</span>
+            </Button>
           </div>
-      </Panel>
+        }
+      >
+        {/* Filters */}
+        <div className="flex flex-col gap-3">
+          {/* Top row - Search and Date Range */}
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 [&>*]:min-w-0">
+            {/* Search */}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                placeholder="Search actions, actors..."
+                className="h-10 pl-10"
+                value={filters.search}
+                onChange={(e) => handleFilterChange("search", e.target.value)}
+              />
+            </div>
 
-      {/* Logs Table */}
-      <Panel>
-        <div className="overflow-x-auto">
-        <Table variant="data" className="min-w-[640px]" containerClassName="hidden lg:block">
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="w-45">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5" />
-                  Timestamp
+            {/* Date Range Picker */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-10 w-full min-w-0 justify-start truncate rounded-full px-4 text-left text-[0.8125rem] font-medium shadow-sm",
+                    !dateRange && "text-muted-foreground",
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate tabular-nums">
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yyyy")}`
+                    ) : (
+                      format(dateRange.from, "MMM d, yyyy")
+                    )
+                  ) : (
+                    "Select date range"
+                  )}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              {/* Matches `app/manage/components/DateRangePicker`: one panel,
+                  a single month in range mode. The old two-month layout had
+                  no collision padding, so the second month overflowed the
+                  viewport. `collisionPadding` keeps it off the edge and the
+                  panel is sized to the space between those gutters, which
+                  leaves Radix no room to favour a side. */}
+              <PopoverContent
+                className="w-auto rounded-2xl p-0"
+                align="end"
+                collisionPadding={16}
+              >
+                <div className="w-[calc(100vw-2rem)] space-y-3 p-4 sm:w-[19rem]">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <label className="text-sm font-medium text-foreground">
+                      Select range
+                    </label>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {dateRange?.from
+                        ? `${format(dateRange.from, 'MMM d')} - ${
+                            dateRange.to ? format(dateRange.to, 'MMM d') : '…'
+                          }`
+                        : 'Pick a start date'}
+                    </span>
+                  </div>
+                  <Calendar
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={1}
+                    className="p-0"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() =>
+                        setDateRange({
+                          from: subDays(new Date(), 7),
+                          to: new Date(),
+                        })
+                      }
+                    >
+                      Last 7 days
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() =>
+                        setDateRange({
+                          from: subDays(new Date(), 30),
+                          to: new Date(),
+                        })
+                      }
+                    >
+                      Last 30 days
+                    </Button>
+                  </div>
                 </div>
-              </TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Actor</TableHead>
-              {isAllLocations && <TableHead>Location</TableHead>}
-              <TableHead>Severity</TableHead>
-              <TableHead className="w-12.5"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-48" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-20 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-32" />
-                  </TableCell>
-                  {isAllLocations && (
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Bottom row - Filters */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
+            {/* Location Filter */}
+            <Select
+              value={filters.location_id}
+              onValueChange={(val) => handleFilterChange("location_id", val)}
+            >
+              <SelectTrigger className="h-10 w-full min-w-0">
+                <SelectValue placeholder="All Locations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {locations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Category Filter */}
+            <Select
+              value={filters.action_category}
+              onValueChange={(val) =>
+                handleFilterChange(
+                  "action_category",
+                  val === "all_categories" ? "" : val,
+                )
+              }
+            >
+              <SelectTrigger className="h-10 w-full min-w-0">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all_categories">All Categories</SelectItem>
+                <SelectItem value="menu">Menu & Items</SelectItem>
+                <SelectItem value="staff">Staff & Access</SelectItem>
+                <SelectItem value="order">Orders & Payments</SelectItem>
+                <SelectItem value="inventory">Inventory</SelectItem>
+                <SelectItem value="merchant">Merchant</SelectItem>
+                <SelectItem value="user_management">User Management</SelectItem>
+                <SelectItem value="device">Device</SelectItem>
+                <SelectItem value="notes">Notes</SelectItem>
+                <SelectItem value="settings">Settings</SelectItem>
+                <SelectItem value="authentication">Authentication</SelectItem>
+                <SelectItem value="purchase_order">
+                  Purchase Orders
+                </SelectItem>
+                <SelectItem value="expense">Expenses</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Severity Filter */}
+            <Select
+              value={filters.severity}
+              onValueChange={(val) =>
+                handleFilterChange(
+                  "severity",
+                  val === "all_severities" ? "" : val,
+                )
+              }
+            >
+              <SelectTrigger className="h-10 w-full min-w-0">
+                <SelectValue placeholder="All Severities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all_severities">All Severities</SelectItem>
+                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="warning">Warning</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Actor Filter */}
+            <Select
+              value={filters.actor_user_id}
+              onValueChange={(val) =>
+                handleFilterChange(
+                  "actor_user_id",
+                  val === "all_actors" ? "" : val,
+                )
+              }
+            >
+              <SelectTrigger className="h-10 w-full min-w-0">
+                <SelectValue placeholder="All Staff" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all_actors">All Staff</SelectItem>
+                {uniqueActors.map((actor) => (
+                  <SelectItem key={actor.id} value={actor.id}>
+                    {actor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Active Filters */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-xs text-muted-foreground">
+                Active filters:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {filters.search && (
+                  <Badge variant="outline" className="gap-1 pr-1">
+                    Search: {filters.search}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 hover:bg-transparent"
+                      onClick={() => handleFilterChange("search", "")}
+                      aria-label="Clear search filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {filters.action_category && (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 pr-1 capitalize"
+                  >
+                    {filters.action_category.replace("_", " ")}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 hover:bg-transparent"
+                      onClick={() =>
+                        handleFilterChange("action_category", "")
+                      }
+                      aria-label="Clear category filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {filters.severity && (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 pr-1 capitalize"
+                  >
+                    {filters.severity}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 hover:bg-transparent"
+                      onClick={() => handleFilterChange("severity", "")}
+                      aria-label="Clear severity filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={clearFilters}
+              >
+                Clear all
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Logs Table */}
+        <div className="mt-5 min-w-0">
+          <Table variant="data" className="min-w-[640px]" containerClassName="hidden lg:block">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-45">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5" />
+                    Timestamp
+                  </div>
+                </TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Actor</TableHead>
+                {isAllLocations && <TableHead>Location</TableHead>}
+                <TableHead>Severity</TableHead>
+                <TableHead className="w-12.5">
+                  <span className="sr-only">Expand</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
                     <TableCell>
                       <Skeleton className="h-4 w-24" />
                     </TableCell>
-                  )}
-                  <TableCell>
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-4" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : logs.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={isAllLocations ? 7 : 6}
-                  className="h-64 text-center text-muted-foreground"
-                >
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
-                      <GitCompare className="h-8 w-8 opacity-20" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        No audit logs found
-                      </p>
-                      <p className="text-sm mt-1">
-                        Try adjusting your filters or date range
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              logs.map((log) => (
-                <React.Fragment key={log.id}>
-                  <TableRow
-                    className={cn(
-                      "cursor-pointer hover:bg-muted/30",
-                      expandedRow === log.id && "bg-muted/40",
-                    )}
-                    onClick={() =>
-                      setExpandedRow(expandedRow === log.id ? null : log.id)
-                    }
-                  >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      <div className="flex flex-col">
-                        <span>
-                          {format(new Date(log.created_at), "MMM d, yyyy")}
-                        </span>
-                        <span className="text-[10px]">
-                          {format(new Date(log.created_at), "HH:mm:ss")}
-                        </span>
-                      </div>
+                    <TableCell>
+                      <Skeleton className="h-4 w-48" />
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">
-                          {log.action}
-                        </span>
-                        {log.resource_name && (
-                          <span className="text-xs text-muted-foreground">
-                            {log.resource_type}: {log.resource_name}
-                          </span>
-                        )}
-                      </div>
+                      <Skeleton className="h-6 w-20 rounded-full" />
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-[10px] h-6 px-2 gap-1.5 border-none capitalize",
-                          CATEGORY_BADGE,
-                        )}
-                      >
-                        {CATEGORY_ICONS[log.action_category]}
-                        {log.action_category.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-linear-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 ring-2 ring-primary/10">
-                          <User className="h-3.5 w-3.5 text-primary" />
-                        </div>
-                        <span className="text-sm font-medium">
-                          {log.actor_name}
-                        </span>
-                      </div>
+                      <Skeleton className="h-4 w-32" />
                     </TableCell>
                     {isAllLocations && (
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="font-normal text-[10px] h-5 px-2 flex items-center gap-1 w-fit"
-                        >
-                          <MapPin className="h-2.5 w-2.5" />
-                          {log.location?.name || "Global"}
-                        </Badge>
+                        <Skeleton className="h-4 w-24" />
                       </TableCell>
                     )}
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-[10px] h-6 px-2 gap-1.5 border-none",
-                          SEVERITY_BADGE,
-                        )}
-                      >
-                        {
-                          SEVERITY_ICONS[
-                            log.severity as keyof typeof SEVERITY_ICONS
-                          ]
-                        }
-                        <span className="capitalize">{log.severity}</span>
-                      </Badge>
+                      <Skeleton className="h-6 w-16 rounded-full" />
                     </TableCell>
                     <TableCell>
-                      {expandedRow === log.id ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      )}
+                      <Skeleton className="h-4 w-4" />
                     </TableCell>
                   </TableRow>
-                  {expandedRow === log.id && (
-                    <TableRow className="bg-muted/20 border-none">
-                      <TableCell colSpan={isAllLocations ? 7 : 6} className="p-0">
-                        <AuditLogDetail log={log} />
+                ))
+              ) : logs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columnCount} className="h-24 text-center">
+                    <p className="text-sm font-medium">No audit logs in this period</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Widen the date range or clear the filters to see more.
+                    </p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logs.map((log) => (
+                  <React.Fragment key={log.id}>
+                    <TableRow
+                      className={cn(
+                        "cursor-pointer",
+                        expandedRow === log.id && "bg-muted/40",
+                      )}
+                      onClick={() =>
+                        setExpandedRow(expandedRow === log.id ? null : log.id)
+                      }
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
+                        <div className="flex flex-col">
+                          <span>
+                            {format(new Date(log.created_at), "MMM d, yyyy")}
+                          </span>
+                          <span className="text-[10px]">
+                            {format(new Date(log.created_at), "HH:mm:ss")}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {log.action}
+                          </span>
+                          {log.resource_name && (
+                            <span className="text-xs text-muted-foreground">
+                              {log.resource_type}: {log.resource_name}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={cn(CELL_BADGE, "capitalize")}>
+                          {CATEGORY_ICONS[log.action_category]}
+                          {log.action_category.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                            <User className="h-3.5 w-3.5" />
+                          </div>
+                          <span className="text-sm font-medium">
+                            {log.actor_name}
+                          </span>
+                        </div>
+                      </TableCell>
+                      {isAllLocations && (
+                        <TableCell>
+                          <Badge variant="secondary" className={CELL_BADGE}>
+                            <MapPin className="h-3 w-3" />
+                            {log.location?.name || "Global"}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <Badge variant="secondary" className={CELL_BADGE}>
+                          {
+                            SEVERITY_ICONS[
+                              log.severity as keyof typeof SEVERITY_ICONS
+                            ]
+                          }
+                          <span className="capitalize">{log.severity}</span>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {expandedRow === log.id ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
                       </TableCell>
                     </TableRow>
-                  )}
-                </React.Fragment>
+                    {expandedRow === log.id && (
+                      <TableRow className="bg-muted/20">
+                        <TableCell colSpan={columnCount} className="p-0">
+                          <AuditLogDetail log={log} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          {/* Mirrors the table's `hidden lg:block` (§5.3). Each card is the row
+              plus the same expandable detail, so mobile loses no information. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 lg:hidden">
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-3 rounded-2xl bg-muted/45 p-4">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                </div>
+              ))
+            ) : logs.length === 0 ? (
+              <div className="rounded-2xl bg-muted/30 px-4 py-10 text-center">
+                <p className="text-sm font-medium">No audit logs in this period</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Widen the date range or clear the filters to see more.
+                </p>
+              </div>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} className="min-w-0 overflow-hidden rounded-2xl bg-muted/45">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
+                    aria-expanded={expandedRow === log.id}
+                    className="flex w-full min-w-0 items-start justify-between gap-3 p-4 text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{log.action}</p>
+                      {log.resource_name && (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {log.resource_type}: {log.resource_name}
+                        </p>
+                      )}
+                      {/* Plain text, not pills, on the muted card (§3.5). */}
+                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">When</p>
+                          <p className="truncate font-medium tabular-nums">
+                            {format(new Date(log.created_at), "MMM d, HH:mm")}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Actor</p>
+                          <p className="truncate font-medium">{log.actor_name}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Category</p>
+                          <p className="truncate font-medium capitalize">
+                            {log.action_category.replace("_", " ")}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Severity</p>
+                          <p className="truncate font-medium capitalize">{log.severity}</p>
+                        </div>
+                        {isAllLocations && (
+                          <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground">Location</p>
+                            <p className="truncate font-medium">
+                              {log.location?.name || "Global"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {expandedRow === log.id ? (
+                      <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+
+                  {expandedRow === log.id && <AuditLogDetail log={log} />}
+                </div>
               ))
             )}
-          </TableBody>
-        </Table>
+          </div>
 
-        {/* Mirrors the table's `hidden lg:block`. Each card is the row plus the
-            same expandable detail, so mobile loses no information. */}
-        <div className="grid min-w-0 grid-cols-1 gap-3 lg:hidden">
-          {isLoading ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-28 w-full rounded-2xl" />
-            ))
-          ) : logs.length === 0 ? (
-            <div className="rounded-2xl bg-muted/45 py-10 text-center text-sm text-muted-foreground">
-              No audit logs found
-            </div>
-          ) : (
-            logs.map((log) => (
-              <div key={log.id} className="min-w-0 overflow-hidden rounded-2xl bg-muted/45">
-                <button
-                  type="button"
-                  onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
-                  aria-expanded={expandedRow === log.id}
-                  className="flex w-full min-w-0 items-start justify-between gap-3 p-4 text-left"
-                >
-                  <div className="min-w-0 space-y-1.5">
-                    <p className="truncate font-medium">{log.action}</p>
-                    {log.resource_name && (
-                      <p className="truncate text-xs text-muted-foreground">
-                        {log.resource_type}: {log.resource_name}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <Badge
-                        variant="secondary"
-                        className={cn("h-6 gap-1.5 border-none px-2 text-[10px] capitalize", CATEGORY_BADGE)}
-                      >
-                        {CATEGORY_ICONS[log.action_category]}
-                        {log.action_category.replace("_", " ")}
-                      </Badge>
-                      <Badge
-                        variant="secondary"
-                        className={cn("h-6 gap-1.5 border-none px-2 text-[10px]", SEVERITY_BADGE)}
-                      >
-                        {SEVERITY_ICONS[log.severity as keyof typeof SEVERITY_ICONS]}
-                        <span className="capitalize">{log.severity}</span>
-                      </Badge>
-                    </div>
-                    <p className="pt-0.5 text-xs text-muted-foreground">
-                      {format(new Date(log.created_at), "MMM d, yyyy HH:mm")} · {log.actor_name}
-                    </p>
-                  </div>
-                  {expandedRow === log.id ? (
-                    <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                </button>
-
-                {expandedRow === log.id && (
-                  <div className="border-t border-border/60 bg-background/60">
-                    <AuditLogDetail log={log} />
-                  </div>
-                )}
-              </div>
-            ))
-          )}
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            isLoading={isFetching}
+            itemLabel="logs"
+          />
         </div>
-        </div>
-      </Panel>
-      
-      {/* Pagination (Simple for now) */}
-      <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Previous</Button>
-          <span className="text-sm">Page {page}</span>
-          <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={logs.length < pageSize}>Next</Button>
-      </div>
-    </div>
+      </PanelSection>
+    </Panel>
   );
 }

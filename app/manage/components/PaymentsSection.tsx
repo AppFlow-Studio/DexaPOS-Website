@@ -21,6 +21,7 @@ import { CreditCard, TrendingDown, AlertTriangle } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
+import { ChartEmpty, isEmptySeries } from '@/components/dashboard/shell/ChartEmpty'
 import {
   CHART_GRID,
   CHART_TICK,
@@ -51,33 +52,6 @@ const count = (v: number) => v.toLocaleString()
 const legendLabel = (value: string) => (
   <span className="text-xs text-muted-foreground">{value}</span>
 )
-
-// An empty range still draws a full axis frame with no marks, which reads as a
-// broken chart rather than an honest "nothing happened". A row whose measures
-// are all zero is just as empty as no row at all, so both count.
-function isEmptySeries<T>(rows: T[], ...measures: ((row: T) => number)[]) {
-  return rows.length === 0 || rows.every((row) => measures.every((m) => !m(row)))
-}
-
-function ChartEmpty({
-  height,
-  title,
-  hint,
-}: {
-  height: number
-  title: string
-  hint: string
-}) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-1 text-center"
-      style={{ height }}
-    >
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
-  )
-}
 
 export function PaymentsSection({ from, to }: PaymentsSectionProps) {
   const { data, isLoading } = usePlatformPaymentMetrics(from, to)
@@ -140,7 +114,7 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
               icon={<CreditCard />}
               value={data?.summaryStats.total_transactions.toLocaleString() || '0'}
             />
-            <StatTile
+            <StatTile showMetaOnMobile
               label="Failure Rate"
               icon={<TrendingDown />}
               value={

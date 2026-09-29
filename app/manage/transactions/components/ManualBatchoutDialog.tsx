@@ -100,10 +100,12 @@ export function ManualBatchoutDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !submitting && (next ? onOpenChange(true) : closeAndReset())}>
-      <DialogContent className="sm:max-w-md">
+      {/* A confirmation with a reason: a centred card at every width, never
+          full-screen on phones (UI-DESIGN-SYSTEM §13.1, §12). */}
+      <DialogContent className="sm:max-w-md max-sm:top-1/2 max-sm:right-auto max-sm:bottom-auto max-sm:left-1/2 max-sm:h-auto max-sm:max-h-[calc(100dvh-2rem)] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-amber-600" />
+            <ShieldCheck className="h-5 w-5 text-muted-foreground" aria-hidden />
             Manual Batchout
           </DialogTitle>
           <DialogDescription>
@@ -114,7 +116,7 @@ export function ManualBatchoutDialog({
 
         {batch && (
           <div className="space-y-3">
-            <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="space-y-1 rounded-2xl bg-muted/60 p-4 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Batch</span>
                 <span className="font-mono font-medium">{batchLabel(batch)}</span>
@@ -125,16 +127,16 @@ export function ManualBatchoutDialog({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Linked amount</span>
-                <span className="font-mono font-medium">{formatCurrency(batch.linked_payment_amount)}</span>
+                <span className="font-medium tabular-nums">{formatCurrency(batch.linked_payment_amount)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Linked payments</span>
-                <span className="font-mono font-medium">{batch.linked_payment_count.toLocaleString()}</span>
+                <span className="font-medium tabular-nums">{batch.linked_payment_count.toLocaleString()}</span>
               </div>
             </div>
 
-            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex items-start gap-2 rounded-2xl bg-muted/60 px-4 py-3 text-xs">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
               <span>
                 This is a bookkeeping reconciliation — it does <strong>not</strong> command the pinpad to
                 batch out. Confirm the batch already settled at the processor before proceeding.

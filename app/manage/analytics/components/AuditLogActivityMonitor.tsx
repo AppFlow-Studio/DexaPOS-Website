@@ -441,7 +441,7 @@ function TopActorsTable({ actors, isLoading }: {
             )}
           </TableBody>
         </Table>
-        <PaginationBar className="border-t-0 pt-0" pagination={pagination} onPageChange={setPage} itemLabel="actors" />
+        <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="actors" />
       </PanelSection>
     </Panel>
   )
@@ -593,7 +593,7 @@ function FailedActionsFeed({ failed, isLoading }: {
                 })}
               </TableBody>
             </Table>
-            <PaginationBar className="border-t-0 pt-0" pagination={pagination} onPageChange={setPage} itemLabel="failed actions" />
+            <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="failed actions" />
           </>
         )}
       </PanelSection>
@@ -791,7 +791,6 @@ function FullLogTable() {
         </div>
 
         <PaginationBar
-          className="border-t-0 pt-0"
           pagination={{
             page: page + 1,
             pageSize: PAGE_SIZE,

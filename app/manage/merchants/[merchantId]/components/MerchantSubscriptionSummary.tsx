@@ -18,12 +18,11 @@ import {
 } from '@/app/manage/actions/merchant-billing'
 
 /**
- * One neutral badge for every billing state (D-03). The status word carries
+ * One neutral pill for every billing state (§4.6b). The status word carries
  * the meaning — "Past Due", "Failed" — so the fill does not need to shout it a
- * second time in red. The per-status `variant` maps this replaced were the
- * source of the solid red/blue pills in the status card.
+ * second time in red. `variant="outline"` supplies the canonical material.
  */
-const STATUS_BADGE = 'w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize'
+const STATUS_BADGE = 'w-fit shrink-0 px-2.5 text-xs font-medium capitalize'
 
 function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0)
@@ -107,10 +106,11 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
   if (!canView) return null
 
   // Mirrors the loaded block: tier row, card-on-file row, last charge, then
-  // the location list — so the card keeps its height while loading.
+  // the location list — so the card keeps its height while loading. Spacing,
+  // not a rule, separates it from the checklist above (§5.5).
   if (isLoading) {
     return (
-      <div className="space-y-3 border-t pt-3">
+      <div className="space-y-3 pt-4">
         <p className="text-sm font-medium">Subscription</p>
         <Skeleton className="h-4 w-52" />
         <Skeleton className="h-4 w-44" />
@@ -128,7 +128,7 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
   const hasTier = Boolean(tier?.plan)
 
   return (
-    <div className="space-y-3 border-t pt-3">
+    <div className="space-y-3 pt-4">
       <p className="text-sm font-medium">Subscription</p>
 
       {/* Merchant tier + status */}
@@ -136,17 +136,17 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
         <span className="text-muted-foreground">Tier</span>
         <span className="font-medium">{tier?.plan?.name ?? 'No tier'}</span>
         {tier?.subscription_status && (
-          <Badge variant="secondary" className={STATUS_BADGE}>
+          <Badge variant="outline" className={STATUS_BADGE}>
             {tier.subscription_status.replace('_', ' ')}
           </Badge>
         )}
       </div>
 
       {/* Card on file */}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex min-w-0 items-center gap-2 text-sm">
         <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="text-muted-foreground">Card on file</span>
-        <span className="font-medium">{cardLabel ?? 'No card on file'}</span>
+        <span className="shrink-0 text-muted-foreground">Card on file</span>
+        <span className="min-w-0 truncate font-medium tabular-nums">{cardLabel ?? 'No card on file'}</span>
       </div>
 
       {/* Last charge */}
@@ -154,9 +154,9 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
         <span className="text-muted-foreground">Last charge</span>
         {lastInvoice ? (
           <>
-            <span className="font-medium">{formatMoney(Number(lastInvoice.total_amount))}</span>
-            <span className="text-muted-foreground">· {formatDate(lastInvoice.paid_at || lastInvoice.created_at)}</span>
-            <Badge variant="secondary" className={STATUS_BADGE}>
+            <span className="font-medium tabular-nums">{formatMoney(Number(lastInvoice.total_amount))}</span>
+            <span className="text-muted-foreground tabular-nums">· {formatDate(lastInvoice.paid_at || lastInvoice.created_at)}</span>
+            <Badge variant="outline" className={STATUS_BADGE}>
               {lastInvoice.status}
             </Badge>
           </>
@@ -178,10 +178,10 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
               <li key={subscription.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate">{subscription.location_name || 'Location'}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  <Badge variant="secondary" className={STATUS_BADGE}>
+                  <Badge variant="outline" className={STATUS_BADGE}>
                     {subscription.status.replace('_', ' ')}
                   </Badge>
-                  <span className="font-medium">{formatMoney(Number(subscription.monthly_amount))}/mo</span>
+                  <span className="font-medium tabular-nums">{formatMoney(Number(subscription.monthly_amount))}/mo</span>
                 </span>
               </li>
             ))}

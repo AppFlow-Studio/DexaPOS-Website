@@ -1,5 +1,10 @@
 import { cn } from '@/lib/utils'
 
+/**
+ * An initials plate identifying a merchant. Structural, so it is neutral
+ * (`bg-muted`), never a tint (UI-DESIGN-SYSTEM §3.5). Callers hide it below
+ * `sm` (§13.4).
+ */
 export function MerchantAvatar({
   name,
   size = 28,
@@ -21,7 +26,7 @@ export function MerchantAvatar({
   return (
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-sm bg-accent text-accent-foreground font-mono font-semibold',
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground',
         className
       )}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}

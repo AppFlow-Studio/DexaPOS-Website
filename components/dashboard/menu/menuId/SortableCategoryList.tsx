@@ -194,7 +194,7 @@ export function SortableCategoryList({
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         label="Category Order"
         caption={
           <>

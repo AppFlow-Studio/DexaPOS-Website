@@ -450,3 +450,39 @@ crashed worker's row is parked, not re-sent. Corollary from the same review: put
 lookup in the branch the dashboard actually calls — I added the dispatch banner to the HQ-only
 branch of `GetOrderDetails` and merchants never saw it.
 
+
+## Decorative colour reads as "AI-designed" — neutral by default (2026-09-28)
+
+Context: HQ redesign (home, organizations, analytics, merchants). Pages had been converted to the
+shell primitives, but still carried tinted icon chips (`bg-primary/10 text-primary`), gradient
+dialog headers, green/red figures and arrows, brand-filled selected pills and red required
+asterisks. Structurally they were converted; to the product owner they still looked
+AI-generated. The old rule only banned *status* colour-coding (§4.6b), so none of this failed a
+review.
+
+Rule: colour is a closed list — the brand-blue section heading, chart data, destructive actions,
+and real alarms (on the glyph or figure only, words first). Everything else is `bg-card` /
+`bg-muted/*` / `text-foreground` / `text-muted-foreground`, and emphasis comes from size, weight,
+position and words. Before calling any UI change done, run the §3.5 sweep in
+`docs/UI-DESIGN-SYSTEM.md` and justify every hit against that list. The same request also set
+three layout rules that are easy to miss: wide tables get their own row, every table is paged
+and height-capped (§5.6–§5.7), and phones drop logos, avatars and subtitles (§13.4).
+
+## An unrelated edit can flip an inferred union — annotate mutation results (2026-09-28)
+
+Context: adding a `bounded` prop and a second context to `components/ui/table.tsx`.
+`tsc` gained two errors in `app/dashboard/inventory/components/CountsTab.tsx`, a file
+nobody touched: `res?.countId` — "Property 'countId' does not exist on type '{ error: string }'".
+Proven with a clean `HEAD` worktree: `table.tsx` alone brought the errors in.
+
+Cause: `useCreateInventoryCount`'s `mutationFn` returns either `Promise.resolve({ error })` or
+the server action's `Promise<{ countId?, error?, … }>`. Left to inference, TypeScript may or may
+not collapse that union, and the outcome depends on type-creation order across the whole
+program — so an edit anywhere can flip it. Fixing that one mutation flipped its sibling
+(`useLogWaste`) instead.
+
+Rule: when a `mutationFn` (or any function) returns an early `{ error }` literal beside a
+typed call, annotate the return type — `(input): ReturnType<typeof TheAction> => …` — so the
+result never depends on inference order. Corollary: `tsconfig` is `incremental`, so after a
+fix `tsc --noEmit` can replay the old diagnostic from `tsconfig.tsbuildinfo`; confirm with
+`--incremental false` before believing either result.

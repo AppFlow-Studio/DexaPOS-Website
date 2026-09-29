@@ -8,6 +8,8 @@ import { MoreHorizontal, Store, Target, TrendingUp, TrendingDown, Users } from '
 import { MerchantsModel } from '@/types/db-modles'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 
 const formatDate = (value?: string) =>
     value
@@ -99,6 +101,9 @@ const RowActions = ({ clerkOrgId, name }: { clerkOrgId: string; name: string }) 
 
 export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) => {
     const router = useRouter()
+    // §5.7: 10 rows per page; the card grid pages with the table. Above the
+    // empty return so the hook order is fixed.
+    const { pageRows, pagination, setPage } = useClientPagination(merchants ?? [], 10)
 
     if (!merchants || merchants?.length === 0) {
         return (
@@ -138,7 +143,7 @@ export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) =
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {merchants.map((merchant: any) => (
+                    {pageRows.map((merchant: any) => (
                         <TableRow
                             key={merchant.id}
                             className="cursor-pointer"
@@ -186,7 +191,7 @@ export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) =
             </Table>
 
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-                {merchants.map((merchant: any) => (
+                {pageRows.map((merchant: any) => (
                     <div
                         key={merchant.id}
                         className="min-w-0 cursor-pointer rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted"
@@ -219,6 +224,8 @@ export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) =
                     </div>
                 ))}
             </div>
+
+            <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="merchants" />
         </div>
     )
 }

@@ -7,52 +7,80 @@ import { cn } from "@/lib/utils"
 type TableProps = React.ComponentProps<"table"> & {
   containerClassName?: string
   variant?: "default" | "data"
+  /**
+   * `data` only, on by default. Caps the table's height from `md` up and pins
+   * its header, so a long table scrolls inside its own well instead of
+   * stretching the page (UI-DESIGN-SYSTEM §5.7). Pass `false` when something
+   * else already owns the scroll: a dialog body, a table nested in another
+   * table's expanded row. A different cap goes on `containerClassName`
+   * (`md:max-h-80`).
+   */
+  bounded?: boolean
 }
 
 const TableVariantContext = React.createContext<TableProps["variant"]>("default")
+const TableBoundedContext = React.createContext(false)
 
 function Table({
   className,
   containerClassName,
   variant = "default",
+  bounded = true,
   ...props
 }: TableProps) {
+  const isBounded = variant === "data" && bounded
+
   return (
     <TableVariantContext.Provider value={variant}>
-      <div
-        data-slot="table-container"
-        data-variant={variant}
-        className={cn(
-          // Keep the table width constrained while allowing horizontal scroll when
-          // content or expanded rows are wider than the viewport.
-          "relative w-full min-w-0 overflow-x-auto",
-          variant === "data" && "overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20",
-          containerClassName
-        )}
-      >
-        <table
-          data-slot="table"
+      <TableBoundedContext.Provider value={isBounded}>
+        <div
+          data-slot="table-container"
+          data-variant={variant}
           className={cn(
-            "w-full caption-bottom text-sm",
-            variant === "data" && "[&_td]:px-3 [&_td]:py-3 [&_th]:px-3",
-            className
+            // Keep the table width constrained while allowing horizontal scroll when
+            // content or expanded rows are wider than the viewport.
+            "relative w-full min-w-0 overflow-x-auto",
+            variant === "data" && "overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20",
+            // The container is the scroller, so the header can stick to it. Not
+            // below `md`: phone tables are paged or become cards, and a nested
+            // scroll area on touch traps the thumb. Print at full height.
+            isBounded &&
+              "thin-scrollbar md:max-h-[min(70vh,40rem)] md:overflow-y-auto print:max-h-none print:overflow-visible",
+            containerClassName
           )}
-          {...props}
-        />
-      </div>
+        >
+          <table
+            data-slot="table"
+            className={cn(
+              "w-full caption-bottom text-sm",
+              variant === "data" && "[&_td]:px-3 [&_td]:py-3 [&_th]:px-3",
+              className
+            )}
+            {...props}
+          />
+        </div>
+      </TableBoundedContext.Provider>
     </TableVariantContext.Provider>
   )
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   const variant = React.useContext(TableVariantContext)
+  const bounded = React.useContext(TableBoundedContext)
 
   return (
     <thead
       data-slot="table-header"
       className={cn(
-        "[&_tr]:border-b",
-        variant === "data" && "bg-muted/50",
+        // A data table's header is set apart by its fill, never a rule
+        // (UI-DESIGN-SYSTEM §5.5). `border-0`, not just dropping `border-b`:
+        // every `TableRow` carries its own `border-b`, so the line survives
+        // unless the header clears it.
+        variant === "data" ? "bg-muted/50 [&_tr]:border-0" : "[&_tr]:border-b",
+        // A sticky header needs an opaque fill or rows show through it: the
+        // card goes on the <thead> and the muted band moves onto its row, so
+        // the header looks the same as an unpinned one.
+        bounded && "sticky top-0 z-10 bg-card [&_tr]:bg-muted/50 print:static",
         className
       )}
       {...props}

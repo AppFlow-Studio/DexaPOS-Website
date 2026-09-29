@@ -18,7 +18,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Wifi, WifiOff, AlertTriangle, ChevronRight, Building2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FleetDevice, HardwareCensusItem, FleetAlertItem } from '@/app/manage/actions/hq-platform/analytics'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -237,7 +237,7 @@ function MerchantSection({ group, isMobile }: { group: MerchantGroup; isMobile: 
           </div>
         ) : (
           <div className="pt-1">
-            <Table variant="data" className="min-w-[900px]">
+            <Table bounded={false} variant="data" className="min-w-[900px]">
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Station</TableHead>
@@ -278,6 +278,7 @@ const ACTIVE_ALERT_COLUMNS: ReportColumn[] = [
 ]
 
 const NO_ALERTS: FleetAlertItem[] = []
+const NO_DEVICES: FleetDevice[] = []
 
 export function FleetHealthDashboard() {
   const { data, isLoading, dataUpdatedAt } = useFleetHealth()
@@ -293,6 +294,10 @@ export function FleetHealthDashboard() {
     pagination: alertPagination,
     setPage: setAlertPage,
   } = useClientPagination(data?.alertFeed ?? NO_ALERTS)
+  // The merchant list pages at 10 too (§5.7); each merchant's expanded device
+  // table stays whole.
+  const merchants = useMemo(() => groupByMerchant(data?.devices ?? NO_DEVICES), [data?.devices])
+  const merchantPage = useClientPagination(merchants, 10)
 
   if (isLoading) {
     return (
@@ -316,8 +321,6 @@ export function FleetHealthDashboard() {
     : 0
 
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—'
-
-  const merchants = groupByMerchant(data.devices)
 
   return (
     <div className="space-y-6">
@@ -424,7 +427,6 @@ export function FleetHealthDashboard() {
             </Table>
 
             <PaginationBar
-              className="border-t-0 pt-0"
               pagination={alertPagination}
               onPageChange={setAlertPage}
               itemLabel="alerts"
@@ -441,11 +443,18 @@ export function FleetHealthDashboard() {
           {merchants.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">No devices found</div>
           ) : (
-            <div className="space-y-4">
-              {merchants.map(group => (
-                <MerchantSection key={group.merchantId} group={group} isMobile={isMobile} />
-              ))}
-            </div>
+            <>
+              <div className="space-y-4">
+                {merchantPage.pageRows.map(group => (
+                  <MerchantSection key={group.merchantId} group={group} isMobile={isMobile} />
+                ))}
+              </div>
+              <PaginationBar
+                pagination={merchantPage.pagination}
+                onPageChange={merchantPage.setPage}
+                itemLabel="merchants"
+              />
+            </>
           )}
         </PanelSection>
       </Panel>

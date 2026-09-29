@@ -379,7 +379,7 @@ export function MarketingQrManager({
 
   return (
     <Panel>
-      <PanelSection
+      <PanelSection showCaptionOnMobile
         icon={Megaphone}
         label="Marketing QR codes"
         caption={`Codes for flyers, decals and packaging at ${locationName}. These point at your storefront, not at a table.`}

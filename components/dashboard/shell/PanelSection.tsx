@@ -8,9 +8,7 @@ import { cn } from '@/lib/utils'
  * figure, an optional trailing control, and free-form content beneath.
  *
  * Sections are separated by vertical rhythm rather than by each drawing a
- * rule, so a panel reads as one continuous surface. Pass `divider` when a
- * hairline genuinely helps — a dense list of short sections, say — rather
- * than as a default.
+ * rule, so a panel reads as one continuous surface (UI-DESIGN-SYSTEM §5.5).
  *
  * ⚠️ Classes are written as literal strings, never pulled from `tokens.ts`.
  * Tailwind does not scan `.ts` files, so a class sourced only from there gets
@@ -21,21 +19,27 @@ export function PanelSection({
   label,
   value,
   caption,
+  showCaptionOnMobile = false,
   captionClassName,
   isLoading,
   action,
   children,
   className,
-  divider = false,
 }: {
   icon?: React.ComponentType<{ className?: string }>
   label: React.ReactNode
   value?: React.ReactNode
   caption?: React.ReactNode
   /**
-   * Extra classes on the caption paragraph — used to hide it responsively.
-   * Applied to the `<p>` itself so a `hidden` variant takes its margin with
-   * it, rather than leaving a phantom gap where the text used to be.
+   * The caption is hidden below `sm` by default (UI-DESIGN-SYSTEM §13.4). Pass
+   * this when it carries scope or the basis of the figures — a period, a unit,
+   * a data-coverage warning — rather than description.
+   */
+  showCaptionOnMobile?: boolean
+  /**
+   * Extra classes on the caption paragraph. Applied to the `<p>` itself so a
+   * `hidden` variant takes its margin with it, rather than leaving a phantom
+   * gap where the text used to be.
    */
   captionClassName?: string
   isLoading?: boolean
@@ -43,8 +47,6 @@ export function PanelSection({
   action?: React.ReactNode
   children?: React.ReactNode
   className?: string
-  /** Draws a hairline above the section. Off by default. */
-  divider?: boolean
 }) {
   return (
     <section
@@ -52,7 +54,6 @@ export function PanelSection({
         // 48px of horizontal padding is most of a 320px viewport — ease off
         // below `sm` so content keeps its width.
         'min-w-0 overflow-hidden px-4 py-8 sm:px-6',
-        divider && 'border-t border-border/60',
         className
       )}
     >
@@ -77,7 +78,14 @@ export function PanelSection({
           )}
 
           {caption && (
-            <p data-slot="panel-caption" className={cn('mt-1 text-sm text-muted-foreground', captionClassName)}>
+            <p
+              data-slot="panel-caption"
+              className={cn(
+                'mt-1 text-sm text-muted-foreground',
+                !showCaptionOnMobile && 'max-sm:hidden',
+                captionClassName
+              )}
+            >
               {caption}
             </p>
           )}

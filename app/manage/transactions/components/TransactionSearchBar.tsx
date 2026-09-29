@@ -50,27 +50,29 @@ export function TransactionSearchBar({ value, onChange, className }: Transaction
 
     return (
         <div className={`relative ${className ?? ''}`}>
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
                 ref={inputRef}
+                aria-label="Search transactions"
                 placeholder="Search by order #, auth code, card last 4, customer..."
                 value={localValue}
                 onChange={e => setLocalValue(e.target.value)}
-                className="pl-9 pr-24"
+                className="h-9 pl-9 pr-10 text-[0.8125rem] sm:pr-20"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 {localValue && (
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-6 w-6 rounded-full"
+                        aria-label="Clear search"
                         onClick={clear}
                         tabIndex={-1}
                     >
                         <X className="h-3 w-3" />
                     </Button>
                 )}
-                <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1.5 text-[10px] text-muted-foreground font-mono">
+                <kbd className="hidden h-5 items-center gap-0.5 rounded-full bg-background/80 px-2 font-mono text-[10px] text-muted-foreground sm:inline-flex">
                     <span>⌘</span>K
                 </kbd>
             </div>
@@ -87,7 +89,8 @@ export function highlightText(text: string, query: string): React.ReactNode {
     return (
         <>
             {text.slice(0, index)}
-            <mark className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">
+            {/* Neutral: a match is found by weight and a quiet fill, not yellow (§3.5). */}
+            <mark className="rounded-sm bg-foreground/10 px-0.5 font-medium text-foreground">
                 {text.slice(index, index + query.length)}
             </mark>
             {text.slice(index + query.length)}

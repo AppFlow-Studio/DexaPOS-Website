@@ -25,7 +25,7 @@ export function MenuHeader({
 
   // Menu scope only has meaning when the merchant can choose among locations.
   return (
-    <PageHeader
+    <PageHeader showSubtitleOnMobile
       title={menu.name}
       subtitle={menu.description || undefined}
       backHref="/dashboard/menu"

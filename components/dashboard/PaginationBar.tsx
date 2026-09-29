@@ -29,7 +29,8 @@ export function PaginationBar({
   return (
     <div
       className={cn(
-        "mt-5 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between",
+        // No `border-t`: spacing separates the pager from the table (UI-DESIGN-SYSTEM §5.5).
+        "mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >

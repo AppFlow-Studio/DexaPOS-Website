@@ -176,49 +176,47 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[680px] max-h-[92vh] overflow-hidden gap-0 p-0">
-                <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-cyan-50/60 px-6 pt-6 pb-4">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 text-cyan-700">
-                            <Monitor className="h-6 w-6" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <DialogTitle className="text-xl">Add Station</DialogTitle>
-                            <DialogDescription className="mt-1">
-                                {step === 1 && 'Choose the location and station type first.'}
-                                {step === 2 && 'Define the station identity used by the POS.'}
-                                {step === 3 && 'Confirm the permissions this station should have.'}
-                            </DialogDescription>
-                        </div>
-                    </div>
+            {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
+                the body scrolls; header and footer carry no rule (§5.5). */}
+            <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-[680px] sm:rounded-3xl">
+                <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
+                    <DialogTitle className="text-xl">Add Station</DialogTitle>
+                    <DialogDescription>
+                        {step === 1 && 'Choose the location and station type first.'}
+                        {step === 2 && 'Define the station identity used by the POS.'}
+                        {step === 3 && 'Confirm the permissions this station should have.'}
+                    </DialogDescription>
 
-                    <div className="mt-4 grid grid-cols-3 gap-2">
+                    {/* Neutral step pills: done is `bg-muted`, current carries the
+                        ring (§3.5 — no brand or green fill for progress). */}
+                    <ol className="mt-3 grid grid-cols-3 gap-2">
                         {[
                             { id: 1, label: 'Type' },
                             { id: 2, label: 'Details' },
                             { id: 3, label: 'Capabilities' },
                         ].map((item) => (
-                            <div
+                            <li
                                 key={item.id}
+                                aria-current={step === item.id ? 'step' : undefined}
                                 className={cn(
-                                    'min-w-0 rounded-xl border px-2 py-2 text-sm transition-colors sm:px-3',
+                                    'min-w-0 rounded-2xl px-2 py-2 text-sm transition-colors sm:px-3',
                                     step === item.id
-                                        ? 'border-primary bg-primary/10 text-primary'
+                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
                                         : step > item.id
-                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                            : 'border-slate-200 bg-slate-50 text-slate-500'
+                                            ? 'bg-muted text-foreground'
+                                            : 'bg-muted/40 text-muted-foreground'
                                 )}
                             >
-                                <div className="text-[10px] uppercase tracking-wide opacity-70 sm:text-[11px]">
+                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-[11px]">
                                     Step {item.id}
                                 </div>
                                 <div className="truncate text-xs font-medium sm:text-sm">{item.label}</div>
-                            </div>
+                            </li>
                         ))}
-                    </div>
+                    </ol>
                 </DialogHeader>
 
-                <div className="overflow-y-auto px-6 py-5 max-h-[calc(92vh-214px)]">
+                <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-4">
                 {/* Step 1: Type & Location */}
                 {step === 1 && (
                     <div className="space-y-6">
@@ -240,23 +238,21 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
 
                         <div className="space-y-2">
                             <Label>Station Type *</Label>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 {stationTypes.map((type) => (
                                     <button
                                         key={type.type}
                                         type="button"
+                                        aria-pressed={selectedType === type.type}
                                         onClick={() => setSelectedType(type.type)}
                                         className={cn(
-                                            'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-left',
+                                            'flex flex-col items-center gap-2 rounded-2xl p-4 text-left transition-colors',
                                             selectedType === type.type
-                                                ? 'border-primary bg-primary/5'
-                                                : 'border-border hover:border-primary/50'
+                                                ? 'bg-muted ring-1 ring-border'
+                                                : 'bg-muted/45 hover:bg-muted'
                                         )}
                                     >
-                                        <div className={cn(
-                                            'p-3 rounded-lg',
-                                            selectedType === type.type ? 'bg-primary/10 text-primary' : 'bg-muted'
-                                        )}>
+                                        <div className="p-1 text-muted-foreground">
                                             {type.icon}
                                         </div>
                                         <div className="text-center">
@@ -283,7 +279,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="station-code">Station Code</Label>
                                 <Input
@@ -384,7 +380,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                 )}
                 </div>
 
-                <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
+                <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
                     <div className="flex w-full items-center justify-between gap-3">
                         <div>
                         {step > 1 && (

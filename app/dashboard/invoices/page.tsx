@@ -195,7 +195,7 @@ export default function InvoicesPage() {
   const page = Number.isFinite(requestedPage)
     ? Math.max(1, Math.floor(requestedPage))
     : 1;
-  const pageSize = 25;
+  const pageSize = 10;
 
   const {
     data: invoiceResult,

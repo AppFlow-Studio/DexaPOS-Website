@@ -118,7 +118,7 @@ export default function MerchantStaffPage() {
             icon={<Mail />}
             isLoading={isLoading}
           />
-          <StatTile
+          <StatTile showMetaOnMobile
             label="Recent activity"
             value={stats.recentOrders}
             meta="Orders in the last 7 days"
@@ -130,7 +130,7 @@ export default function MerchantStaffPage() {
 
       {pendingInvites && pendingInvites.length > 0 && (
         <Panel>
-          <PanelSection
+          <PanelSection showCaptionOnMobile
             icon={Mail}
             label="Pending invitations"
             caption={`${pendingInvites.length} invitation${

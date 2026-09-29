@@ -14,10 +14,7 @@ import {
 } from 'lucide-react'
 
 import type { DeviceActivityItem, DeviceCategory, DeviceLifecycleStatus } from '@/types/device-registry'
-import {
-  deviceLifecycleStatusLabel,
-  deviceLifecycleStatusStyle,
-} from '@/lib/constants/device-status'
+import { deviceLifecycleStatusLabel } from '@/lib/constants/device-status'
 
 const CATEGORY_META: Record<
   DeviceCategory,
@@ -37,11 +34,6 @@ const CATEGORY_META: Record<
 
 export function formatDeviceStatus(status: DeviceLifecycleStatus) {
   return deviceLifecycleStatusLabel(status)
-}
-
-export function getDeviceStatusClasses(status: DeviceLifecycleStatus) {
-  const style = deviceLifecycleStatusStyle(status)
-  return `${style.bg} ${style.text} border-0`
 }
 
 export function formatDeviceCategory(category: DeviceCategory) {

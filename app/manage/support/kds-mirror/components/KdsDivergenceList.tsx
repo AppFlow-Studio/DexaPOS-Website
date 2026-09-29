@@ -2,25 +2,40 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { AlertTriangle, CheckCircle2, ListFilter } from "lucide-react";
+import { ListFilter } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { useClientPagination } from "@/lib/hooks/useClientPagination";
 import type {
   KdsDeviceTruthItem,
   KdsDeviceTruthVerdict,
 } from "@/app/manage/actions/kds-device-truth";
-import { VERDICT_META, verdictToneClass } from "./verdictMeta";
-import { TablePagination } from "./TablePagination";
+import {
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  RecordCard,
+  RecordCardSkeletons,
+} from "@/app/manage/transactions/components/ledger-primitives";
+import { VERDICT_META } from "./verdictMeta";
+import { Pill } from "./kds-primitives";
 
 /**
  * The divergence list is paginated client-side over the fetched window (so the
  * summary counts and the timeline still cover the whole window, not just the
- * current page). 25 rows per page keeps the table snappy on a busy display's
- * 24h window without a second round trip.
+ * current page), at the standard 10 rows (UI-DESIGN-SYSTEM §5.7).
  */
-const DIVERGENCE_PAGE_SIZE = 25;
+const DIVERGENCE_PAGE_SIZE = 10;
 
 /**
  * Verdicts that mean "the server and the device disagree about what happened".
@@ -33,14 +48,37 @@ const DIVERGENCE_VERDICTS: KdsDeviceTruthVerdict[] = [
   "GHOST",
 ];
 
+function serverFiredLabel(item: KdsDeviceTruthItem): string {
+  return item.server_fired_at
+    ? format(new Date(item.server_fired_at), "HH:mm")
+    : "—";
+}
+
+function deviceLabel(item: KdsDeviceTruthItem): string {
+  const parts = [item.arrived && "arrived", item.acked && "acked"].filter(
+    Boolean
+  );
+  return parts.length > 0 ? parts.join(", ") : "—";
+}
+
+/** "device was online/offline" — only said for a NEVER_SHOWED verdict. */
+function onlineNote(item: KdsDeviceTruthItem): string | null {
+  if (item.verdict !== "NEVER_SHOWED") return null;
+  return item.device_online_at_fire === false
+    ? "device was offline"
+    : "device was online";
+}
+
 /**
  * The routed-vs-seen list for a display window.
  *
  * Defaults to divergences only (NEVER_SHOWED / RENDER_SUSPECT / GHOST), with a
  * toggle to reveal every item including the confirmed and expected ones.
- * Every row carries the verdict badge AND its explanation, because "offline"
- * is not a bug and "no device data" is not even evidence — support should not
- * have to remember which is which.
+ * Every row carries the verdict word AND its explanation (in the title),
+ * because "offline" is not a bug and "no device data" is not even evidence —
+ * support should not have to remember which is which.
+ *
+ * Verdicts are neutral pills (§4.6b). A NEVER_SHOWED row is marked by weight.
  */
 export function KdsDivergenceList({
   items,
@@ -50,67 +88,61 @@ export function KdsDivergenceList({
   isLoading: boolean;
 }) {
   const [showAll, setShowAll] = React.useState(false);
-  const [page, setPage] = React.useState(0);
-
-  // A new window / toggle replaces the data set — re-anchor to the first page.
-  // Never in an effect (that would cascade); this is the React-recommended
-  // "adjust state during render when a prop changes" pattern, keyed on the
-  // items reference so a refetch-in-flight with a placeholder does not reset.
-  const [prevItems, setPrevItems] = React.useState(items);
-  if (prevItems !== items) {
-    setPrevItems(items);
-    setPage(0);
-  }
 
   const divergences = items.filter((item) =>
     DIVERGENCE_VERDICTS.includes(item.verdict)
   );
   const visible = showAll ? items : divergences;
-
-  // Clamp against the current data set too, so paging never lingers past the
-  // end when the list shrinks under the current page.
-  const totalPages = Math.max(1, Math.ceil(visible.length / DIVERGENCE_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageRows = visible.slice(
-    safePage * DIVERGENCE_PAGE_SIZE,
-    (safePage + 1) * DIVERGENCE_PAGE_SIZE
+  const { pageRows, pagination, setPage } = useClientPagination(
+    visible,
+    DIVERGENCE_PAGE_SIZE
   );
+
+  // A new window replaces the data set — re-anchor to the first page. Never
+  // in an effect (that would cascade); this is the React-recommended "adjust
+  // state during render when a prop changes" pattern, keyed on the items
+  // reference so a refetch-in-flight with a placeholder does not reset.
+  const [prevItems, setPrevItems] = React.useState(items);
+  if (prevItems !== items) {
+    setPrevItems(items);
+    setPage(1);
+  }
+
+  const toggleShowAll = () => {
+    setShowAll((v) => !v);
+    setPage(1);
+  };
 
   if (isLoading && items.length === 0) {
     return (
-      <div className="space-y-2">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-12 w-full rounded-lg" />
-        ))}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <RecordCardSkeletons count={2} />
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-10 text-center">
-        <CheckCircle2 className="mb-2 h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-        <p className="text-sm font-medium">No routed items in this window</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Nothing to compare — the routing log has no entries for this display
-          in the selected window.
-        </p>
-      </div>
+      <CardGridEmpty
+        title="No routed items in this window"
+        hint="Nothing to compare — the routing log has no entries for this display in the selected window."
+      />
     );
   }
 
   if (visible.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-10 text-center">
-        <CheckCircle2 className="mb-2 h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-        <p className="text-sm font-medium">No divergences in this window</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+      <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-1 rounded-2xl bg-muted/30 px-4 text-center">
+        <p className="text-sm font-medium">
+          All clear — no divergences in this window
+        </p>
+        <p className="text-xs text-muted-foreground">
           Everything the server routed was acknowledged as painted by the
-          device.
+          device.{" "}
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="ml-1 font-medium text-primary underline underline-offset-2"
+            className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
           >
             Show all items
           </button>
@@ -120,118 +152,150 @@ export function KdsDivergenceList({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          {divergences.length > 0 && !showAll
+    <div className="min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[0.8125rem] text-muted-foreground">
+          {!showAll
             ? `${divergences.length} item(s) where the server and the device disagree`
             : `${items.length} item(s) routed or reported in this window`}
         </p>
-        <button
+        {/* A filter chip (DS-CTL-03): tinted and borderless, pressed state
+            said by aria-pressed and the label. */}
+        <Button
           type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-accent"
+          variant="ghost"
+          size="sm"
+          aria-pressed={showAll}
+          onClick={toggleShowAll}
+          className="h-9 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
         >
-          <ListFilter className="h-3 w-3" />
+          <ListFilter className="h-3.5 w-3.5" />
           {showAll ? "Divergences only" : "Show all items"}
-        </button>
+        </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b bg-muted/50">
-            <tr className="text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Item</th>
-              <th className="px-3 py-2 font-medium">Order</th>
-              <th className="px-3 py-2 font-medium">Kitchen status</th>
-              <th className="px-3 py-2 font-medium">Server routed</th>
-              <th className="px-3 py-2 font-medium">Device</th>
-              <th className="px-3 py-2 font-medium">Verdict</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {pageRows.map((item) => {
-              const meta = VERDICT_META[item.verdict];
-              return (
-                <tr
-                  key={item.order_item_id}
+      <Table
+        variant="data"
+        containerClassName="hidden lg:block"
+        className="min-w-[720px]"
+      >
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Item</TableHead>
+            <TableHead>Order</TableHead>
+            <TableHead>Kitchen status</TableHead>
+            <TableHead>Server routed</TableHead>
+            <TableHead>Device</TableHead>
+            <TableHead>Verdict</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pageRows.map((item) => {
+            const meta = VERDICT_META[item.verdict];
+            const note = onlineNote(item);
+            const isNeverShowed = item.verdict === "NEVER_SHOWED";
+            return (
+              <TableRow
+                key={item.order_item_id}
+                className={cn(
+                  "align-top",
+                  // Attention by weight, not a tinted row (§3.5).
+                  isNeverShowed
+                    ? "font-medium text-foreground"
+                    : "text-muted-foreground"
+                )}
+              >
+                <TableCell className="max-w-[220px]">
+                  <span className="line-clamp-2 font-medium text-foreground">
+                    {item.item_name ?? "—"}
+                  </span>
+                </TableCell>
+                <TableCell className="tabular-nums">
+                  {item.order_number ?? "—"}
+                </TableCell>
+                <TableCell>{item.kitchen_status ?? "—"}</TableCell>
+                <TableCell className="tabular-nums">
+                  {serverFiredLabel(item)}
+                </TableCell>
+                <TableCell>
+                  {item.arrived || item.acked ? (
+                    <span className="flex gap-1">
+                      {item.arrived && <Pill>arrived</Pill>}
+                      {item.acked && <Pill>acked</Pill>}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col items-start gap-1">
+                    <Pill
+                      title={meta.description}
+                      className="text-foreground"
+                    >
+                      {meta.label}
+                    </Pill>
+                    {note && <span className="text-xs">{note}</span>}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+        {pageRows.map((item) => {
+          const meta = VERDICT_META[item.verdict];
+          const note = onlineNote(item);
+          return (
+            <RecordCard key={item.order_item_id}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="line-clamp-2 min-w-0 font-medium">
+                  {item.item_name ?? "—"}
+                </p>
+                <span
+                  title={meta.description}
                   className={cn(
-                    "align-top",
-                    item.verdict === "NEVER_SHOWED" && "bg-red-50/50 dark:bg-red-950/20"
+                    "shrink-0 text-xs",
+                    meta.needsAttention
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground"
                   )}
                 >
-                  <td className="max-w-[220px] px-3 py-2">
-                    <span className="line-clamp-2 font-medium">
-                      {item.item_name ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {item.order_number ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {item.kitchen_status ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {item.server_fired_at
-                      ? format(new Date(item.server_fired_at), "HH:mm")
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {item.arrived || item.acked ? (
-                      <span className="flex gap-1">
-                        {item.arrived && <Badge variant="outline">arrived</Badge>}
-                        {item.acked && (
-                          <Badge
-                            variant="outline"
-                            className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                          >
-                            acked
-                          </Badge>
-                        )}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col items-start gap-1">
-                      <Badge
-                        variant="outline"
-                        className={verdictToneClass(item.verdict)}
-                        title={meta.description}
-                      >
-                        {meta.label}
-                      </Badge>
-                      {item.verdict === "NEVER_SHOWED" && (
-                        <span className="flex items-center gap-1 text-red-700 dark:text-red-300">
-                          <AlertTriangle className="h-3 w-3" />
-                          {item.device_online_at_fire === false
-                            ? "device was offline"
-                            : "device was online"}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  {meta.label}
+                </span>
+              </div>
+              {note && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{note}</p>
+              )}
+              <CardFields>
+                <CardField label="Order" value={item.order_number ?? "—"} />
+                <CardField
+                  label="Kitchen status"
+                  value={item.kitchen_status ?? "—"}
+                />
+                <CardField label="Server routed" value={serverFiredLabel(item)} />
+                <CardField label="Device" value={deviceLabel(item)} />
+              </CardFields>
+            </RecordCard>
+          );
+        })}
       </div>
 
-      {!isLoading && visible.length > 0 && (
-        <TablePagination
-          page={safePage}
-          pageSize={DIVERGENCE_PAGE_SIZE}
-          totalCount={visible.length}
-          onPageChange={setPage}
-        />
-      )}
+      <PaginationBar
+        pagination={pagination}
+        onPageChange={setPage}
+        itemLabel="items"
+      />
 
       {!showAll && items.length > divergences.length && (
         <p className="text-xs text-muted-foreground">
-          {items.length - divergences.length} confirmed / expected item(s)
-          hidden. Use “Show all items” to see them.
+          <span className="tabular-nums">
+            {items.length - divergences.length}
+          </span>{" "}
+          confirmed / expected item(s) hidden. Use &ldquo;Show all items&rdquo;
+          to see them.
         </p>
       )}
     </div>
