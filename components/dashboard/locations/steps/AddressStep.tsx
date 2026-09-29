@@ -79,7 +79,7 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
     return (
         <div className="space-y-6">
             <div className="space-y-2">
-                <Label htmlFor="address_line1" className="text-primary">
+                <Label htmlFor="address_line1">
                     Street address <span className="text-destructive">*</span>
                 </Label>
                 <AddressAutocomplete
@@ -120,7 +120,7 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
 
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                    <Label htmlFor="city" className="text-primary">
+                    <Label htmlFor="city">
                         City <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -136,7 +136,7 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="state" className="text-primary">
+                    <Label htmlFor="state">
                         State <span className="text-destructive">*</span>
                     </Label>
                     <Select
@@ -162,7 +162,7 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
 
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                    <Label htmlFor="postal_code" className="text-primary">
+                    <Label htmlFor="postal_code">
                         ZIP code <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -182,7 +182,7 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="country" className="text-primary">
+                    <Label htmlFor="country">
                         Country
                     </Label>
                     <Input
@@ -195,7 +195,7 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="timezone" className="text-primary">
+                <Label htmlFor="timezone">
                     Timezone <span className="text-destructive">*</span>
                 </Label>
                 <Select

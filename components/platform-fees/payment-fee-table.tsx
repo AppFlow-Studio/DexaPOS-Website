@@ -206,20 +206,27 @@ export function PaymentFeeTable({
                       <p className="font-medium tabular-nums">
                         {p.captured_at ? format(new Date(p.captured_at), 'MMM d, h:mm a') : '—'}
                       </p>
-                      <p className="font-mono text-[11px] text-muted-foreground">
+                      <p className="font-mono text-[11px] text-muted-foreground max-sm:hidden">
                         {p.id.slice(0, 8)}…{p.id.slice(-4)}
                       </p>
                     </div>
-                    {/* Plain text on a muted card, not a pill (§3.5). */}
-                    <span className="shrink-0 text-sm text-muted-foreground">
+                    {/* Plain text on a muted card, not a pill (§3.5). Phones drop it:
+                        the status filter above already scopes the list. */}
+                    <span className="shrink-0 text-sm text-muted-foreground max-sm:hidden">
                       {paymentStatusLabel(p.status, p.is_returned)}
                     </span>
                   </div>
+                  {/* Phones keep total, fee, where and which card; the ID and the
+                      subtotal/tip split show from sm. */}
                   <CardFields>
                     <CardField label="Total" value={<Money value={p.total_amount} />} />
                     <CardField label="Card fee" value={<Money value={p.dual_pricing_fee} />} />
-                    <CardField label="Subtotal" value={<Money value={p.subtotal_portion} />} />
-                    <CardField label="Tip" value={<Money value={p.tip_amount} />} />
+                    <CardField
+                      label="Subtotal"
+                      value={<Money value={p.subtotal_portion} />}
+                      className="max-sm:hidden"
+                    />
+                    <CardField label="Tip" value={<Money value={p.tip_amount} />} className="max-sm:hidden" />
                     <CardField label="Location" value={p.location_name ?? '—'} />
                     <CardField
                       label="Card"

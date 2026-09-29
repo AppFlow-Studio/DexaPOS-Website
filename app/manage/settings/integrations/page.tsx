@@ -7,7 +7,10 @@ import {
 import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { OrderOutPushMenuIntegrationCard } from './OrderOutPushMenuIntegrationCard'
 import { DexaBillingNmiRailCard } from './DexaBillingNmiRailCard'
-import { DexaSaasBillingValorRailCard } from './DexaSaasBillingValorRailCard'
+import {
+  DexaSaasBillingValorRailCard,
+  SubscriptionRailCutoverCard,
+} from './DexaSaasBillingValorRailCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +35,11 @@ export default async function IntegrationsPage() {
       />
 
       <DexaSaasBillingValorRailCard config={valorSaasConfig} canEdit={canManageConfig} />
+
+      <SubscriptionRailCutoverCard
+        configured={valorSaasConfig.configured}
+        canEdit={canManageConfig}
+      />
 
       <DexaBillingNmiRailCard config={billingConfig} canEdit={canManageConfig} />
 

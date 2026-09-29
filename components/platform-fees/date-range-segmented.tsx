@@ -51,11 +51,12 @@ export function DateRangeSegmented({
   className?: string
 }) {
   return (
-    <div className={cn('thin-scrollbar min-w-0 max-w-full overflow-x-auto', className)}>
+    <div className={cn('thin-scrollbar w-full min-w-0 max-w-full overflow-x-auto sm:w-auto', className)}>
+      {/* Phones: the rail spans the row and the pills share it equally. */}
       <div
         role="group"
         aria-label="Date range"
-        className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1"
+        className="flex h-auto w-full flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1 sm:inline-flex sm:w-max"
       >
         {presets.map((p) => {
           const active = p.value === value
@@ -68,7 +69,7 @@ export function DateRangeSegmented({
               title={p.label}
               onClick={() => onChange(p.value)}
               className={cn(
-                'shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-medium tabular-nums transition-colors max-sm:h-11 sm:px-4',
+                'min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-2 text-[0.8125rem] font-medium tabular-nums transition-colors max-sm:h-11 sm:flex-none sm:shrink-0 sm:px-4',
                 active
                   ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
                   : 'text-muted-foreground hover:text-foreground'

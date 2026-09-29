@@ -1,10 +1,13 @@
 'use client'
 
 import { useMemo } from 'react'
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { CreditCard } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { subscriptionBillingScope } from '@/supabase/functions/_shared/subscription-billing-scope'
 import {
@@ -32,7 +35,13 @@ function formatDate(date: string | null | undefined): string {
   if (!date) return '—'
   const value = new Date(date)
   if (Number.isNaN(value.getTime())) return '—'
-  return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  // The year only earns its width when it isn't this one.
+  const sameYear = value.getFullYear() === new Date().getFullYear()
+  return value.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
 }
 
 function cardOnFileLabel(profiles: MerchantBillingProfileRecord[]): string | null {
@@ -51,11 +60,57 @@ function cardOnFileLabel(profiles: MerchantBillingProfileRecord[]): string | nul
   return `${brand} •••• ${card.card_last_four}${exp}`
 }
 
-interface MerchantSubscriptionSummaryProps {
-  merchantId: string
+/**
+ * A status pill only when the state needs attention — "Past Due", "Failed".
+ * The healthy state is the default reading, so it gets no pill of its own.
+ */
+function StatusBadge({ status, healthy }: { status: string | null | undefined; healthy: string }) {
+  if (!status || status === healthy) return null
+  return (
+    <Badge variant="outline" className={STATUS_BADGE}>
+      {status.replace('_', ' ')}
+    </Badge>
+  )
 }
 
-export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscriptionSummaryProps) {
+/**
+ * Label on the left, value right-aligned, so every row reads down one edge.
+ * A status pill goes on its own line under the value, matching the location
+ * rows, so it never competes with the value for width on a phone.
+ */
+function SummaryRow({
+  label,
+  badge,
+  children,
+}: {
+  label: string
+  badge?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="flex min-w-0 flex-col items-end gap-1 text-right">
+        <span className="max-w-full truncate">{children}</span>
+        {badge}
+      </span>
+    </div>
+  )
+}
+
+interface MerchantSubscriptionSummaryProps {
+  merchantId: string
+  /** Link to the full Subscriptions tab. */
+  manageHref: string
+  /** True when nothing sits above this block in the card (no top spacing). */
+  isFirstBlock?: boolean
+}
+
+export function MerchantSubscriptionSummary({
+  merchantId,
+  manageHref,
+  isFirstBlock = false,
+}: MerchantSubscriptionSummaryProps) {
   const { hasPermission } = useAdminPermissions()
   const canView = hasPermission('system.billing.manage')
 
@@ -105,12 +160,12 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
   // the Subscriptions tab and every getter above.
   if (!canView) return null
 
-  // Mirrors the loaded block: tier row, card-on-file row, last charge, then
-  // the location list — so the card keeps its height while loading. Spacing,
-  // not a rule, separates it from the checklist above (§5.5).
+  // Mirrors the loaded block: plan row, card row, last charge, then the
+  // location list — so the card keeps its height while loading. Spacing, not
+  // a rule, separates it from the checklist above (§5.5).
   if (isLoading) {
     return (
-      <div className="space-y-3 pt-4">
+      <div className={cn('space-y-3', !isFirstBlock && 'pt-4')}>
         <p className="text-sm font-medium">Subscription</p>
         <Skeleton className="h-4 w-52" />
         <Skeleton className="h-4 w-44" />
@@ -128,45 +183,48 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
   const hasTier = Boolean(tier?.plan)
 
   return (
-    <div className="space-y-3 pt-4">
-      <p className="text-sm font-medium">Subscription</p>
-
-      {/* Merchant tier + status */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Tier</span>
-        <span className="font-medium">{tier?.plan?.name ?? 'No tier'}</span>
-        {tier?.subscription_status && (
-          <Badge variant="outline" className={STATUS_BADGE}>
-            {tier.subscription_status.replace('_', ' ')}
-          </Badge>
-        )}
+    <div className={cn('space-y-3', !isFirstBlock && 'pt-4')}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">Subscription</p>
+        <Button variant="ghost" size="sm" className="-mr-2 h-7" asChild>
+          <Link href={manageHref}>
+            Manage
+            <ArrowUpRight className="ml-1 h-4 w-4" />
+          </Link>
+        </Button>
       </div>
 
-      {/* Card on file */}
-      <div className="flex min-w-0 items-center gap-2 text-sm">
-        <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="shrink-0 text-muted-foreground">Card on file</span>
-        <span className="min-w-0 truncate font-medium tabular-nums">{cardLabel ?? 'No card on file'}</span>
-      </div>
+      <SummaryRow
+        label="Plan"
+        badge={<StatusBadge status={tier?.subscription_status} healthy="active" />}
+      >
+        <span className="font-medium">{tier?.plan?.name ?? 'No plan'}</span>
+      </SummaryRow>
 
-      {/* Last charge */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Last charge</span>
-        {lastInvoice ? (
-          <>
-            <span className="font-medium tabular-nums">{formatMoney(Number(lastInvoice.total_amount))}</span>
-            <span className="text-muted-foreground tabular-nums">· {formatDate(lastInvoice.paid_at || lastInvoice.created_at)}</span>
-            <Badge variant="outline" className={STATUS_BADGE}>
-              {lastInvoice.status}
-            </Badge>
-          </>
+      <SummaryRow label="Card">
+        {cardLabel ? (
+          <span className="font-medium tabular-nums">{cardLabel}</span>
         ) : (
-          <span className="font-medium">No charges yet</span>
+          <span className="text-muted-foreground">None</span>
         )}
-      </div>
+      </SummaryRow>
+
+      <SummaryRow
+        label="Last charge"
+        badge={lastInvoice && <StatusBadge status={lastInvoice.status} healthy="paid" />}
+      >
+        {lastInvoice ? (
+          <span className="tabular-nums">
+            <span className="font-medium">{formatMoney(Number(lastInvoice.total_amount))}</span>
+            <span className="text-muted-foreground"> · {formatDate(lastInvoice.paid_at || lastInvoice.created_at)}</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">None yet</span>
+        )}
+      </SummaryRow>
 
       {/* Location-level subscriptions */}
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 pt-1">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Locations</p>
         {locationSubscriptions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -175,13 +233,15 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
         ) : (
           <ul className="space-y-1.5">
             {locationSubscriptions.map((subscription) => (
-              <li key={subscription.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate">{subscription.location_name || 'Location'}</span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <Badge variant="outline" className={STATUS_BADGE}>
-                    {subscription.status.replace('_', ' ')}
-                  </Badge>
-                  <span className="font-medium tabular-nums">{formatMoney(Number(subscription.monthly_amount))}/mo</span>
+              // The status pill sits under the name rather than beside it, so a
+              // problem row doesn't truncate the location name on a phone.
+              <li key={subscription.id} className="flex items-start justify-between gap-3 text-sm">
+                <span className="flex min-w-0 flex-col items-start gap-1">
+                  <span className="max-w-full truncate">{subscription.location_name || 'Location'}</span>
+                  <StatusBadge status={subscription.status} healthy="active" />
+                </span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {formatMoney(Number(subscription.monthly_amount))}/mo
                 </span>
               </li>
             ))}

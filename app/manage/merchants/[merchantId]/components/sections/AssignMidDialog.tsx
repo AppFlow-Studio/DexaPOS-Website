@@ -174,8 +174,9 @@ export function AssignMidDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="flex shrink-0 flex-row items-center justify-between px-6 pb-6 pt-4 sm:justify-between">
-                    {editing?.luqra_mid ? (
+                {/* Phone: actions centred, Clear MID below them. sm+: Clear left, actions right. */}
+                <DialogFooter className="flex shrink-0 flex-col-reverse items-center gap-2 px-6 pb-6 pt-4 sm:flex-row sm:justify-between">
+                    {editing?.luqra_mid && (
                         <Button
                             variant="ghost"
                             className="text-destructive hover:text-destructive"
@@ -184,10 +185,8 @@ export function AssignMidDialog({
                         >
                             Clear MID
                         </Button>
-                    ) : (
-                        <span />
                     )}
-                    <div className="flex gap-2">
+                    <div className="flex justify-center gap-2 sm:ml-auto">
                         <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
                             Cancel
                         </Button>

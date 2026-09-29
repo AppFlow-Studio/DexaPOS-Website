@@ -113,31 +113,24 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
                         <Table variant="data" containerClassName="hidden lg:block" className="min-w-[680px]">
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Location</TableHead>
                                     <TableHead>MID</TableHead>
+                                    <TableHead>Assigned to</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead>Descriptor</TableHead>
                                     <TableHead>Processor</TableHead>
-                                    <TableHead>Assigned</TableHead>
-                                    <TableHead>Status</TableHead>
+                                    <TableHead>Assigned on</TableHead>
                                     {canEdit && <TableHead className="w-24" />}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {pageRows.map((row) => (
                                     <TableRow key={row.id}>
-                                        <TableCell className="font-medium text-foreground">{row.name}</TableCell>
-                                        <TableCell className="font-mono text-xs">
+                                        <TableCell className="font-mono text-xs font-medium text-foreground">
                                             {row.luqra_mid ?? (
-                                                <span className="font-sans text-muted-foreground">No MID assigned</span>
+                                                <span className="font-sans font-normal text-muted-foreground">No MID assigned</span>
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {row.luqra_mid_descriptor ?? '—'}
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">TSYS</TableCell>
-                                        <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                                            {formatDate(row.luqra_mid_assigned_at)}
-                                        </TableCell>
+                                        <TableCell className="text-foreground">{row.name}</TableCell>
                                         <TableCell>
                                             <Badge
                                                 variant="secondary"
@@ -145,6 +138,13 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
                                             >
                                                 {statusLabel(row.luqra_mid_status)}
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {row.luqra_mid_descriptor ?? '—'}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">TSYS</TableCell>
+                                        <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                            {formatDate(row.luqra_mid_assigned_at)}
                                         </TableCell>
                                         {canEdit && (
                                             <TableCell className="text-right">
@@ -159,24 +159,24 @@ export function MidsSection({ merchantId }: { merchantId: string }) {
                         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
                             {pageRows.map((row) => (
                                 <div key={row.id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <p className="truncate font-medium">{row.name}</p>
-                                            <p className="truncate font-mono text-xs text-muted-foreground">
-                                                {row.luqra_mid ?? 'No MID assigned'}
-                                            </p>
-                                        </div>
-                                        <span className="shrink-0 text-sm text-muted-foreground">
-                                            {statusLabel(row.luqra_mid_status)}
-                                        </span>
-                                    </div>
+                                    {row.luqra_mid ? (
+                                        <p className="truncate font-mono font-medium tabular-nums">{row.luqra_mid}</p>
+                                    ) : (
+                                        <p className="truncate font-medium text-muted-foreground">No MID assigned</p>
+                                    )}
                                     <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                        <CardField label="Assigned to" value={row.name} />
+                                        <CardField label="Status" value={statusLabel(row.luqra_mid_status)} />
                                         <CardField label="Processor" value="TSYS" />
-                                        <CardField label="Assigned" value={formatDate(row.luqra_mid_assigned_at)} />
                                         <CardField label="Descriptor" value={row.luqra_mid_descriptor ?? '—'} />
                                     </div>
+                                    {row.luqra_mid_assigned_at && (
+                                        <p className="mt-3 hidden text-xs text-muted-foreground sm:block">
+                                            Assigned on {formatDate(row.luqra_mid_assigned_at)}
+                                        </p>
+                                    )}
                                     {canEdit && (
-                                        <div className="mt-3 flex justify-end">
+                                        <div className="mt-3 flex justify-center sm:justify-end">
                                             <EditButton row={row} onEdit={openEdit} className="h-9 rounded-full px-4" />
                                         </div>
                                     )}

@@ -420,7 +420,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                         enough to truncate "Payment Terminals" and "Connected
                         Terminals". StatRow takes 2|3|4 only (§14.7 trap 6). */}
                     <div className="mt-6 space-y-6">
-                        <StatRow columns={2}>
+                        <StatRow columns={2} className="grid-cols-2 gap-x-4">
                             <StatTile
                                 label="Total Stations"
                                 icon={<Monitor />}
@@ -436,7 +436,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                 meta={stationStats ? `${stationStats.offline ?? 0} offline` : undefined}
                             />
                         </StatRow>
-                        <StatRow columns={2}>
+                        <StatRow columns={2} className="grid-cols-2 gap-x-4">
                             <StatTile
                                 label="Payment Terminals"
                                 icon={<CreditCard />}
@@ -482,7 +482,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                     <div className="mt-4 flex w-full min-w-0 flex-wrap items-center gap-3">
                         {/* §4.5 pill rail; classes are the TAB_* literals (C7). */}
                         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')} className="max-w-full shrink-0">
-                            <div className="w-full min-w-0 overflow-x-auto">
+                            <div className="no-scrollbar w-full min-w-0 overflow-x-auto">
                                 <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                                     <TabsTrigger
                                         value="stations"
@@ -699,16 +699,14 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            <div className="flex shrink-0 items-center gap-1">
-                                                                <span className="text-sm text-muted-foreground">
-                                                                    {station.is_online ? 'Online' : 'Offline'}
-                                                                    {!station.is_active && ' · Deactivated'}
-                                                                </span>
-                                                                {canManageDevices && renderStationActions(station)}
-                                                            </div>
+                                                            {canManageDevices && renderStationActions(station)}
                                                         </div>
 
                                                         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                            <DeviceCardField
+                                                                label="Status"
+                                                                value={`${station.is_online ? 'Online' : 'Offline'}${station.is_active ? '' : ' · Deactivated'}`}
+                                                            />
                                                             <DeviceCardField
                                                                 label="Type"
                                                                 value={`${getStationTypeLabel(station.station_type)}${station.station_number ? ` #${station.station_number}` : ''}`}
@@ -849,15 +847,11 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                     </p>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex shrink-0 items-center gap-1">
-                                                                <span className="text-sm text-muted-foreground">
-                                                                    {terminal.is_connected ? 'Online' : 'Offline'}
-                                                                </span>
-                                                                {canManageDevices && renderTerminalActions(terminal)}
-                                                            </div>
+                                                            {canManageDevices && renderTerminalActions(terminal)}
                                                         </div>
 
                                                         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                            <DeviceCardField label="Status" value={terminal.is_connected ? 'Online' : 'Offline'} />
                                                             <DeviceCardField label="Serial" value={terminal.serial_number || '—'} />
                                                             <DeviceCardField label="Location" value={terminal.location_name} />
                                                             <DeviceCardField label="Station" value={terminal.station_name || 'Unassigned'} />

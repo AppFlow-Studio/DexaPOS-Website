@@ -413,7 +413,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                         <Badge variant="outline" className="text-sm px-2 py-0.5 whitespace-normal break-words">
                                             {pricingStrategyLabel}
                                         </Badge>
-                                        <div className="text-sm text-muted-foreground mt-1">
+                                        <div className="text-sm text-muted-foreground mt-1 max-sm:hidden">
                                             Applies to all locations unless individually overridden.
                                         </div>
                                     </div>

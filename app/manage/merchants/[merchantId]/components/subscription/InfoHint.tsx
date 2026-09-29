@@ -24,7 +24,7 @@ export function InfoHint({ label, className }: { label: string; className?: stri
           <Info className="h-3.5 w-3.5" />
         </button>
       </TooltipTrigger>
-      <TooltipContent className="max-w-xs text-xs leading-relaxed">{label}</TooltipContent>
+      <TooltipContent className="max-w-[min(20rem,calc(100vw-2rem))] text-xs leading-relaxed">{label}</TooltipContent>
     </Tooltip>
   )
 }

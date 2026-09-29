@@ -135,7 +135,7 @@ export function BillingInsightsSection({
       <Card className="rounded-3xl">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle className="flex items-center gap-2 text-base text-[#0C4FD1] dark:text-[#6CA0FF]">
               Billing &amp; invoices
               <InfoHint label="Subscription payment activity across the merchant tier and every location. Filter by location to drill in." />
             </CardTitle>
@@ -156,7 +156,7 @@ export function BillingInsightsSection({
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Insight tiles */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-2xl bg-muted/60 p-4">
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 Net collected
@@ -192,8 +192,10 @@ export function BillingInsightsSection({
           </div>
 
           {/* Charts */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border p-4">
+          {/* grid-cols-1 + min-w-0: an implicit `auto` track sizes to the chart's
+              rendered width and never shrinks back, pushing it off a phone. */}
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="min-w-0 rounded-2xl border p-4">
               <div className="mb-2 text-sm font-medium">Payment trend</div>
               {trendData.length > 0 ? (
                 <ChartContainer config={trendChartConfig} className="h-[220px] w-full">
@@ -212,7 +214,7 @@ export function BillingInsightsSection({
                 </div>
               )}
             </div>
-            <div className="rounded-2xl border p-4">
+            <div className="min-w-0 rounded-2xl border p-4">
               <div className="mb-2 text-sm font-medium">Invoice status</div>
               {statusData.length > 0 ? (
                 <ChartContainer config={statusChartConfig} className="h-[220px] w-full">

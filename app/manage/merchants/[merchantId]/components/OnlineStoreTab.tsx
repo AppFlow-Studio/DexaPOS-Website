@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { Panel } from '@/components/dashboard/shell/Panel'
@@ -91,7 +91,8 @@ function getRequestStatusDescription(status: LocationOnlineStoreOverview['setupR
         case 'rejected':
             return 'Rejected and waiting for merchant resubmission'
         case 'setup_completed':
-            return 'Storefront setup completed'
+            // The "Setup Complete" badge already says it.
+            return null
         default:
             return 'No branch request has been submitted yet'
     }
@@ -414,9 +415,11 @@ export function OnlineStoreTab({
                                                             </Badge>
                                                         )}
                                                     </h4>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {getRequestStatusDescription(requestStatus)}
-                                                    </p>
+                                                    {getRequestStatusDescription(requestStatus) ? (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {getRequestStatusDescription(requestStatus)}
+                                                        </p>
+                                                    ) : null}
                                                     {storeInfo?.setupRejectionReason && requestStatus === 'rejected' ? (
                                                         <p className="mt-1 text-xs text-muted-foreground">
                                                             Reason: {storeInfo.setupRejectionReason}
@@ -764,7 +767,7 @@ export function OnlineStoreTab({
 
                     {requirementsData?.success && !requirementsData.complete ? (
                         <Panel>
-                            <PanelSection showCaptionOnMobile
+                            <PanelSection
                                 label="Missing Packet Items"
                                 caption="These fields are required before approval. Use the editor to fill only the missing items."
                             >
@@ -822,6 +825,7 @@ export function OnlineStoreTab({
                                     ? 'Store is live and accepting online orders'
                                     : 'Enable to start accepting online orders'
                             }
+                            inlineAction
                             action={
                                 <Switch
                                     aria-label="Online ordering"
@@ -845,7 +849,7 @@ export function OnlineStoreTab({
                             <div className="flex items-center justify-between gap-3 rounded-2xl border p-3">
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium">Store Status</p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground max-sm:hidden">
                                         {localSettings.enabled ? 'Store is enabled in admin' : 'Store is disabled in admin'}
                                     </p>
                                 </div>
@@ -857,7 +861,7 @@ export function OnlineStoreTab({
                             <div className="flex items-center justify-between gap-3 rounded-2xl border p-3">
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground max-sm:hidden">
                                         {valorReady
                                             ? 'Boarded on Valor and live — the storefront can take card payments online.'
                                             : valorBoarded
@@ -1044,7 +1048,7 @@ export function OnlineStoreTab({
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                             <div className="min-w-0">
                                                 <p className="font-medium">Operating Hours</p>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground max-sm:hidden">
                                                     Storefront ordering hours (defaults to location business hours if unchanged).
                                                 </p>
                                             </div>
@@ -1323,6 +1327,7 @@ export function OnlineStoreTab({
                                         icon={Store}
                                         label="Pickup Orders"
                                         caption="Allow customers to pick up orders"
+                                        inlineAction
                                         action={
                                             <Switch
                                                 aria-label="Pickup orders"
@@ -1338,6 +1343,7 @@ export function OnlineStoreTab({
                                         icon={Truck}
                                         label="Delivery Orders"
                                         caption="Offer delivery to customers"
+                                        inlineAction
                                         action={
                                             <Switch
                                                 aria-label="Delivery orders"
@@ -1463,7 +1469,7 @@ export function OnlineStoreTab({
                                             <Zap className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Automatically Accept All Orders</Label>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground max-sm:hidden">
                                                     New orders will be accepted without manual confirmation
                                                 </p>
                                             </div>
@@ -1478,7 +1484,7 @@ export function OnlineStoreTab({
                                             <Check className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Auto-Close Paid Orders</Label>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground max-sm:hidden">
                                                     Automatically close orders that are paid upon acceptance
                                                 </p>
                                             </div>
@@ -1505,7 +1511,7 @@ export function OnlineStoreTab({
                                             <Bell className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Email on New Order</Label>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground max-sm:hidden">
                                                     Send an email notification for every new order
                                                 </p>
                                             </div>
@@ -1546,7 +1552,7 @@ export function OnlineStoreTab({
                                             <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Accept Online Card Payments</Label>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground max-sm:hidden">
                                                     Process payments via integrated payment processor
                                                 </p>
                                             </div>
@@ -1563,7 +1569,7 @@ export function OnlineStoreTab({
                                             <DollarSign className="h-5 w-5 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
                                                 <Label>Accept Cash on Delivery</Label>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground max-sm:hidden">
                                                     Allow customers to pay cash at the door
                                                 </p>
                                             </div>
@@ -1583,6 +1589,7 @@ export function OnlineStoreTab({
                                 <PanelSection
                                     label="Tipping"
                                     caption="Configure tipping options for customers"
+                                    inlineAction
                                     action={
                                         <Switch
                                             aria-label="Tipping"
@@ -1640,6 +1647,7 @@ export function OnlineStoreTab({
                                 <PanelSection
                                     label="Convenience Fee"
                                     caption="Add a fee for online ordering"
+                                    inlineAction
                                     action={
                                         <Switch
                                             aria-label="Convenience fee"

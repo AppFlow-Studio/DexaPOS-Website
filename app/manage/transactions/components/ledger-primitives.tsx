@@ -60,13 +60,15 @@ export function CardField({
     label,
     value,
     mono = false,
+    className,
 }: {
     label: string
     value: React.ReactNode
     mono?: boolean
+    className?: string
 }) {
     return (
-        <div className="min-w-0">
+        <div className={cn('min-w-0', className)}>
             <p className="text-xs text-muted-foreground">{label}</p>
             <p className={cn('truncate font-medium tabular-nums', mono && 'font-mono text-xs')}>
                 {value}

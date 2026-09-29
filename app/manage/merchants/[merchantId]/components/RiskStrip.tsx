@@ -12,8 +12,8 @@ export function RiskStrip({ merchant }: { merchant: MerchantDetails }) {
 
     // The standard KPI panel (§4.8) rather than a hand-rolled strip: its cell
     // dividers were lines (§5.5) and its labels an uppercase variant of the
-    // stat label. Metas on the `—` tiles stay on phones because they explain
-    // the blank.
+    // stat label. Metas, including "Awaiting Luqra sync" on the `—` tiles, are
+    // desktop-only: on phones the height matters more than the explanation.
     return (
         <Panel>
             <div className="px-4 py-6 sm:px-6">
@@ -29,14 +29,12 @@ export function RiskStrip({ merchant }: { merchant: MerchantDetails }) {
                         label="Next funding"
                         value="—"
                         meta="Awaiting Luqra sync"
-                        showMetaOnMobile
                     />
                     <StatTile
                         icon={<Shield className="h-4 w-4" />}
                         label="Chargeback rate"
                         value="—"
                         meta="Awaiting Luqra sync"
-                        showMetaOnMobile
                     />
                     <StatTile
                         icon={<Activity className="h-4 w-4" />}

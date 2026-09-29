@@ -16,6 +16,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import {
   getPlatformMerchants,
@@ -51,6 +56,21 @@ const BATCH_PAGE_SIZE = 25
 const PAYMENT_PAGE_SIZE = 10
 const BATCH_COLUMN_COUNT = 12
 const PAYMENT_COLUMN_COUNT = 9
+
+// Fields on the below-`2xl` batch cards. Batch ID, merchant, location and
+// status head each card and are always shown; the rest toggle from Info.
+const BATCH_CARD_FIELDS: ReportColumn[] = [
+  { id: 'business_date', label: 'Business date' },
+  { id: 'transactions', label: 'Transactions' },
+  { id: 'gross', label: 'Gross' },
+  { id: 'net_deposit', label: 'Net deposit' },
+  { id: 'tip', label: 'Tip' },
+  { id: 'refund', label: 'Refund' },
+  { id: 'opened', label: 'Opened' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'origin', label: 'Origin' },
+  { id: 'discrepancy', label: 'Discrepancy' },
+]
 
 function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -223,6 +243,7 @@ export function BatchReconciliationSection({
   const [merchants, setMerchants] = useState<PlatformMerchant[]>([])
   const [loadingMerchants, setLoadingMerchants] = useState(true)
   const [manualBatchoutOpen, setManualBatchoutOpen] = useState(false)
+  const [hiddenBatchFields, setHiddenBatchFields] = useState(() => initialHiddenColumns(BATCH_CARD_FIELDS))
 
   const filters = useMemo<PlatformSettlementBatchFilters>(() => ({
     merchantIds: merchantId !== 'all' ? [merchantId] : undefined,
@@ -391,6 +412,14 @@ export function BatchReconciliationSection({
           </Button>
         )}
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {/* Shown wherever the batch cards are (below `2xl`), not only on phones. */}
+          <MobileColumnsButton
+            label="Info"
+            columns={BATCH_CARD_FIELDS}
+            hidden={hiddenBatchFields}
+            onChange={setHiddenBatchFields}
+            className="md:inline-flex 2xl:hidden"
+          />
           <Button
             variant="outline"
             size="sm"
@@ -545,18 +574,20 @@ export function BatchReconciliationSection({
                       </div>
                       <p className="shrink-0 text-sm text-muted-foreground">{formatLabel(batch.status)}</p>
                     </div>
-                    <CardFields>
-                      <CardField label="Business date" value={formatDateOnly(batch.business_date)} />
-                      <CardField label="Transactions" value={batch.transaction_count.toLocaleString()} />
-                      <CardField label="Gross" value={formatCurrency(batch.gross_amount)} />
-                      <CardField label="Net deposit" value={formatCurrency(batch.net_deposit)} />
-                      <CardField label="Tip" value={formatCurrency(batch.tip_amount)} />
-                      <CardField label="Refund" value={formatCurrency(batch.refund_amount)} />
-                      <CardField label="Opened" value={formatDateTime(batch.opened_at)} />
-                      <CardField label="Closed" value={formatDateTime(batch.closed_at)} />
-                      <CardField label="Origin" value={originLabel ?? '—'} />
-                      <CardField label="Discrepancy" value={<DiscrepancyValue batch={batch} />} />
-                    </CardFields>
+                    {hiddenBatchFields.size < BATCH_CARD_FIELDS.length && (
+                      <CardFields>
+                        {!hiddenBatchFields.has('business_date') && <CardField label="Business date" value={formatDateOnly(batch.business_date)} />}
+                        {!hiddenBatchFields.has('transactions') && <CardField label="Transactions" value={batch.transaction_count.toLocaleString()} />}
+                        {!hiddenBatchFields.has('gross') && <CardField label="Gross" value={formatCurrency(batch.gross_amount)} />}
+                        {!hiddenBatchFields.has('net_deposit') && <CardField label="Net deposit" value={formatCurrency(batch.net_deposit)} />}
+                        {!hiddenBatchFields.has('tip') && <CardField label="Tip" value={formatCurrency(batch.tip_amount)} />}
+                        {!hiddenBatchFields.has('refund') && <CardField label="Refund" value={formatCurrency(batch.refund_amount)} />}
+                        {!hiddenBatchFields.has('opened') && <CardField label="Opened" value={formatDateTime(batch.opened_at)} />}
+                        {!hiddenBatchFields.has('closed') && <CardField label="Closed" value={formatDateTime(batch.closed_at)} />}
+                        {!hiddenBatchFields.has('origin') && <CardField label="Origin" value={originLabel ?? '—'} />}
+                        {!hiddenBatchFields.has('discrepancy') && <CardField label="Discrepancy" value={<DiscrepancyValue batch={batch} />} />}
+                      </CardFields>
+                    )}
                   </button>
                 </RecordCard>
               )
@@ -579,7 +610,7 @@ export function BatchReconciliationSection({
 
       {selectedBatch && (
         <div className="space-y-3 rounded-2xl border bg-card p-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <div className="hidden flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:flex">
             <span>
               <span className="text-muted-foreground">Selected batch </span>
               <span className="font-mono font-medium">{formatBatchLabel(selectedBatch)}</span>

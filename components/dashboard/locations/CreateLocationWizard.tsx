@@ -526,7 +526,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                 {/* Main Content */}
                 <div className="flex flex-1 h-full flex-col min-w-0">
                     {/* Header */}
-                    <div className="border-b px-4 md:px-8 py-4 flex items-center justify-between gap-4">
+                    <div className="border-b border-border/60 px-4 md:px-8 py-4 flex items-center justify-between gap-4">
                         <div className="min-w-0">
                             {/* Mobile/tablet step indicator */}
                             <p className="text-xs font-medium text-muted-foreground mb-0.5 lg:hidden">
@@ -557,7 +557,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                     <div className="lg:hidden px-4 pt-2 pb-1">
                         <div className="h-1 bg-muted rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-primary rounded-full transition-all duration-500"
+                                className="h-full bg-foreground/70 rounded-full transition-all duration-500"
                                 style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }}
                             />
                         </div>
@@ -571,7 +571,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                     </div>
 
                     {/* Footer */}
-                    <div className="border-t px-4 md:px-8 py-4 flex items-center justify-between">
+                    <div className="border-t border-border/60 px-4 md:px-8 py-4 flex items-center justify-between">
                         <Button
                             variant="ghost"
                             onClick={handleBack}

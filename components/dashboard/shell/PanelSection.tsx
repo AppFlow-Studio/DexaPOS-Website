@@ -23,6 +23,7 @@ export function PanelSection({
   captionClassName,
   isLoading,
   action,
+  inlineAction = false,
   children,
   className,
 }: {
@@ -45,6 +46,11 @@ export function PanelSection({
   isLoading?: boolean
   /** Right-aligned control on the heading row. */
   action?: React.ReactNode
+  /**
+   * Keep the action on the heading row at every width instead of letting it
+   * drop beneath on a phone. Only for a compact control, such as a `Switch`.
+   */
+  inlineAction?: boolean
   children?: React.ReactNode
   className?: string
 }) {
@@ -60,8 +66,13 @@ export function PanelSection({
       {/* Wraps rather than squeezing: a `shrink-0` action beside a non-wrapping
           row forces the title column to collapse to one word per line on a
           phone. The action drops beneath the heading instead. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1 basis-64">
+      <div
+        className={cn(
+          'flex items-start justify-between gap-x-4 gap-y-3',
+          inlineAction ? 'flex-nowrap' : 'flex-wrap'
+        )}
+      >
+        <div className={cn('min-w-0 flex-1', inlineAction ? 'basis-0' : 'basis-64')}>
           <div className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             {Icon && <Icon className="h-[1.125rem] w-[1.125rem] shrink-0" />}
             <span className="min-w-0">{label}</span>
@@ -94,7 +105,9 @@ export function PanelSection({
         {/* `min-w-0` + `max-w-full`, never `shrink-0`: a rigid action wrapper
             overflows its own row once the controls inside exceed the width
             left over on a phone. */}
-        {action && <div className="min-w-0 max-w-full">{action}</div>}
+        {action && (
+          <div className={cn(inlineAction ? 'shrink-0' : 'min-w-0 max-w-full')}>{action}</div>
+        )}
       </div>
 
       {/* `min-w-0`: a block child takes an automatic minimum width from its

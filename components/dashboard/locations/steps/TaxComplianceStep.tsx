@@ -33,7 +33,7 @@ export function TaxComplianceStep({ data, onChange, errors }: TaxComplianceStepP
             </p>
 
             <div className="space-y-2">
-                <Label htmlFor="ein" className="text-primary">
+                <Label htmlFor="ein">
                     EIN <span className="text-destructive">*</span>
                 </Label>
                 <Input
@@ -67,7 +67,7 @@ export function TaxComplianceStep({ data, onChange, errors }: TaxComplianceStepP
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="sales_tax_rate" className="text-primary">
+                <Label htmlFor="sales_tax_rate">
                     Sales Tax Rate (%) <span className="text-destructive">*</span>
                 </Label>
                 <div className="relative">

@@ -56,7 +56,7 @@ export function SubscriptionEditSummary({
   return (
     <Card className="rounded-3xl lg:sticky lg:top-6">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2 text-base text-[#0C4FD1] dark:text-[#6CA0FF]">
           Summary
           {isQuoteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </CardTitle>

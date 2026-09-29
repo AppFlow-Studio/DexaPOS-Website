@@ -1,7 +1,6 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LocationFormData, US_STATES, US_TIMEZONES, BusinessHours, DayHours } from '@/types/merchant_locations'
 import { Building2, MapPin, ShieldCheck, Landmark, Clock, UserCog, Edit2 } from 'lucide-react'
 import { formatPhoneForDisplay } from '@/lib/phone'
@@ -24,38 +23,38 @@ function ReviewSection({
     onEdit: (step: number) => void
     children: React.ReactNode
 }) {
+    // Borderless tinted card (§5.8) with the standard section heading — brand
+    // blue on the words and the icon together, never the icon alone (§3.5).
     return (
-        <Card>
-            <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-primary" />
-                        {title}
-                    </CardTitle>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onEdit(step)}
-                        className="gap-1.5 text-muted-foreground hover:text-foreground"
-                    >
-                        <Edit2 className="h-3.5 w-3.5" />
-                        Edit
-                    </Button>
-                </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-                {children}
-            </CardContent>
-        </Card>
+        <section className="rounded-2xl bg-muted/45 p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0">{title}</span>
+                </h3>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onEdit(step)}
+                    className="shrink-0 gap-1.5 text-muted-foreground hover:text-foreground"
+                >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    Edit
+                </Button>
+            </div>
+            {children}
+        </section>
     )
 }
 
+// Rows are separated by spacing, not lines (§5.5). A long value wraps under
+// its own column instead of pushing the label out.
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
     return (
-        <div className="flex justify-between py-1.5 border-b last:border-0">
-            <span className="text-sm text-muted-foreground">{label}</span>
-            <span className="text-sm font-medium">{value || '-'}</span>
+        <div className="flex items-baseline justify-between gap-4 py-1.5">
+            <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+            <span className="min-w-0 break-words text-right text-sm font-medium">{value || '-'}</span>
         </div>
     )
 }
@@ -106,7 +105,7 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
 
     return (
         <div className="space-y-4">
-            <p className="text-sm text-muted-foreground mb-6">
+            <p className="text-sm text-muted-foreground mb-6 max-sm:hidden">
                 Please review the information below before creating your location.
             </p>
 
@@ -150,17 +149,19 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                     <InfoRow label="Account" value={maskLastFour(data.account_number)} />
                     <InfoRow label="Account Type" value={data.account_type} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">
+                <p className="text-xs text-muted-foreground mt-3 max-sm:hidden">
                     Banking entries are captured in UI for now. Save/tokenization wiring is deferred.
                 </p>
             </ReviewSection>
 
             <ReviewSection title="Business Hours" icon={Clock} step={5} onEdit={onEditStep}>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {/* One column on phones: two columns squeezed each day into
+                    its hours ("Mon9:00 AM"). */}
+                <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
                     {formattedHours.map(({ day, hours }) => (
-                        <div key={day} className="flex justify-between py-1">
+                        <div key={day} className="flex justify-between gap-4 py-1.5">
                             <span className="text-sm text-muted-foreground">{day}</span>
-                            <span className={`text-sm ${hours === 'Closed' ? 'text-muted-foreground italic' : 'font-medium'}`}>
+                            <span className={`text-right text-sm ${hours === 'Closed' ? 'text-muted-foreground' : 'font-medium'}`}>
                                 {hours}
                             </span>
                         </div>
@@ -192,11 +193,12 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                 </div>
             </ReviewSection>
 
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mt-6">
-                <h4 className="font-medium text-sm mb-2">Ready to create?</h4>
+            {/* Neutral callout (§3.5), not a brand-tinted box. */}
+            <div className="mt-6 rounded-2xl bg-muted/60 px-4 py-3">
+                <h4 className="font-medium text-sm mb-1">Ready to create?</h4>
                 <p className="text-sm text-muted-foreground">
-                    Click "Create Location" below to add <strong>{data.name}</strong> to your merchant account.
-                    Banking and manager automation logic will be finalized in the next backend phase.
+                    Click &ldquo;Create Location&rdquo; below to add <strong className="font-medium text-foreground">{data.name}</strong> to your merchant account.
+                    <span className="max-sm:hidden"> Banking and manager automation logic will be finalized in the next backend phase.</span>
                 </p>
             </div>
         </div>

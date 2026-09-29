@@ -78,9 +78,8 @@ export default function MerchantPlatformFeesPage({
   const activeLocations = byLocation.filter((l) => l.payment_count > 0).length
   const known = !!totals
 
-  // The identity line is scope (record id, size, status), so it stays on phones.
+  // The identity line (size, type, status) shows from sm; phones drop it.
   const identity = [
-    `${merchantId.slice(0, 8)}…`,
     data ? `${byLocation.length} location${byLocation.length === 1 ? '' : 's'}` : null,
     data?.merchant.type ? capitalize(data.merchant.type) : null,
     data?.merchant.onboarding_status
@@ -120,7 +119,6 @@ export default function MerchantPlatformFeesPage({
       <PageHeader
         title={merchantName}
         subtitle={identity}
-        showSubtitleOnMobile
         subtitleClassName="tabular-nums"
         backHref="/manage/platform-fees"
         backLabel="Back to Platform Fees"
@@ -149,10 +147,12 @@ export default function MerchantPlatformFeesPage({
       {/* One control row governs every tab. The dates are scope, so they stay on phones.
           Sticky: it pins to the top of #main-content (the layout's scroller) so the range
           stays in reach on long tabs. The negative margins span the scroller's p-4/sm:p-6
-          gutter so rows don't show beside it; the fill hides them under it. */}
-      <div className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 bg-background px-4 py-3 sm:-mx-6 sm:px-6">
+          gutter so rows don't show beside it; the fill hides them under it. The negative
+          top does the same for the top padding, which sticky honours, so no scrolled rows
+          peek through a gap above the rail. */}
+      <div className="sticky -top-4 z-20 -mx-4 flex flex-col gap-1.5 bg-background px-4 py-2 sm:-top-6 sm:-mx-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-6 sm:py-3">
         <DateRangeSegmented value={preset} onChange={setPreset} />
-        <span className="text-sm text-muted-foreground tabular-nums">
+        <span className="px-1 text-xs text-muted-foreground tabular-nums sm:px-0 sm:text-sm">
           {format(new Date(range.from), 'MMM d, yyyy')} – {format(new Date(range.to), 'MMM d, yyyy')}
         </span>
       </div>
@@ -328,7 +328,7 @@ function TopLocationsList({ rows }: { rows: LocationFeeRow[] }) {
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-[#0C4FD1] dark:bg-[#6CA0FF]" style={{ width: `${pct}%` }} />
             </div>
-            <p className="text-xs text-muted-foreground tabular-nums">
+            <p className="text-xs text-muted-foreground tabular-nums max-sm:hidden">
               {r.payment_count.toLocaleString()} payment{r.payment_count === 1 ? '' : 's'}
             </p>
           </li>
@@ -421,8 +421,12 @@ function LocationsTable({
         ) : (
           pageRows.map((r) => (
             <div key={r.location_id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+              {/* Phones keep the four money/volume fields; the address and rate
+                  (also on Fee configuration) show from sm. */}
               <p className="truncate font-medium">{r.location_name}</p>
-              <p className="truncate text-xs text-muted-foreground">{r.location_address ?? '—'}</p>
+              <p className="truncate text-xs text-muted-foreground max-sm:hidden">
+                {r.location_address ?? '—'}
+              </p>
               <CardFields>
                 <CardField label="Net fee" value={<Money value={r.net_platform_fee} />} />
                 <CardField label="Card fees" value={<Money value={r.gross_dual_pricing_fee} />} />
@@ -434,6 +438,7 @@ function LocationsTable({
                 <CardField
                   label="Card %"
                   value={r.dual_pricing_percentage > 0 ? `${r.dual_pricing_percentage}%` : 'Off'}
+                  className="max-sm:hidden"
                 />
               </CardFields>
             </div>
@@ -449,16 +454,16 @@ function LocationsTable({
           <span>
             {rows.length} location{rows.length === 1 ? '' : 's'}
           </span>
-          <span>
+          <span className="max-sm:hidden">
             Card fees <Money value={totals.gross} className="font-medium text-foreground" />
           </span>
-          <span>
+          <span className="max-sm:hidden">
             Refunded <Money value={-totals.refunded} className="font-medium text-foreground" />
           </span>
           <span>
             Net fee <Money value={totals.net} className="font-medium text-foreground" />
           </span>
-          <span>
+          <span className="max-sm:hidden">
             <span className="font-medium text-foreground">{totals.payments.toLocaleString()}</span> payments
           </span>
         </p>
@@ -494,7 +499,8 @@ function FeeConfigReadOnly({
               <TableRow>
                 <TableHead>Location</TableHead>
                 <TableHead>Card surcharge</TableHead>
-                <TableHead className="text-right">Status</TableHead>
+                {/* Status restates the rate (0% is Off), so phones drop it. */}
+                <TableHead className="text-right max-sm:hidden">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -517,7 +523,7 @@ function FeeConfigReadOnly({
                   <TableRow key={r.location_id}>
                     <TableCell className="font-medium">{r.location_name}</TableCell>
                     <TableCell className="tabular-nums">{r.dual_pricing_percentage}%</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right max-sm:hidden">
                       <StatusBadge>{r.dual_pricing_percentage > 0 ? 'Enabled' : 'Off'}</StatusBadge>
                     </TableCell>
                   </TableRow>

@@ -25,6 +25,11 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
 import type { PaginationMeta } from '@/types/pagination'
 import { useMerchantPayments } from '@/lib/queries/use-merchant-payments'
 import { KpiStrip, type KpiCell } from './KpiStrip'
@@ -39,6 +44,19 @@ const PAYMENT_STATUSES = [
 ] as const
 
 const CELL_BADGE = 'w-fit gap-1 rounded-full border-0 px-2.5 text-xs font-medium'
+
+// Fields on the below-`xl` payment cards. Order number and total head each
+// card and are always shown; everything else is toggled from the Info picker.
+const CARD_FIELDS: ReportColumn[] = [
+    { id: 'status', label: 'Status' },
+    { id: 'location', label: 'Location' },
+    { id: 'method', label: 'Method' },
+    { id: 'card', label: 'Card' },
+    { id: 'auth', label: 'Auth' },
+    { id: 'batch', label: 'Batch' },
+    { id: 'settled', label: 'Settled' },
+    { id: 'luqra', label: 'Luqra' },
+]
 
 function formatMoney(n: number) {
     return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -75,6 +93,7 @@ export function MerchantPaymentsTab({
     const [unsettledOnly, setUnsettledOnly] = useState(false)
     const [unmatchedOnly, setUnmatchedOnly] = useState(false)
     const [page, setPage] = useState(1)
+    const [hiddenFields, setHiddenFields] = useState(() => initialHiddenColumns(CARD_FIELDS))
     const count = 10
 
     const dateFrom = toIsoDate(range?.from)
@@ -242,6 +261,14 @@ export function MerchantPaymentsTab({
                 </Field>
 
                 <div className="flex items-center gap-2 sm:ml-auto">
+                    {/* Shown wherever the cards are (below `xl`), not only on phones. */}
+                    <MobileColumnsButton
+                        label="Info"
+                        columns={CARD_FIELDS}
+                        hidden={hiddenFields}
+                        onChange={setHiddenFields}
+                        className="md:inline-flex xl:hidden"
+                    />
                     <Button
                         variant="outline"
                         className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
@@ -264,7 +291,8 @@ export function MerchantPaymentsTab({
                 </div>
             ) : (
                 <div>
-                    <Table variant="data" containerClassName="hidden xl:block" className="min-w-[960px]">
+                    {/* Paged at 10 rows, so no inner height cap: the page scrolls. */}
+                    <Table variant="data" bounded={false} containerClassName="hidden xl:block" className="min-w-[960px]">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Captured</TableHead>
@@ -398,23 +426,21 @@ export function MerchantPaymentsTab({
                                             >
                                                 {r.order_number ?? r.order_id.slice(0, 8)}
                                             </Link>
-                                            <p className="text-xs text-muted-foreground tabular-nums">
+                                            <p className="hidden text-xs text-muted-foreground tabular-nums md:block">
                                                 {formatDateTime(r.captured_at ?? r.initiated_at)}
                                             </p>
                                         </div>
-                                        <div className="shrink-0 text-right">
-                                            <p className="font-medium tabular-nums">{formatMoney(r.total_amount)}</p>
-                                            <p className="text-sm capitalize text-muted-foreground">{r.status}</p>
-                                        </div>
+                                        <p className="shrink-0 font-medium tabular-nums">{formatMoney(r.total_amount)}</p>
                                     </div>
                                     <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                        <CardField label="Location" value={r.location_name ?? '—'} />
-                                        <CardField label="Method" value={r.payment_method} capitalize />
-                                        <CardField label="Card" value={cardLabel(r)} />
-                                        <CardField label="Auth" value={r.authorization_code ?? '—'} />
-                                        <CardField label="Batch" value={batchLabel(r) ?? '—'} />
-                                        <CardField label="Settled" value={r.is_settled ? 'Settled' : 'Pending'} />
-                                        <div className="min-w-0">
+                                        {!hiddenFields.has('status') && <CardField label="Status" value={r.status} capitalize />}
+                                        {!hiddenFields.has('location') && <CardField label="Location" value={r.location_name ?? '—'} />}
+                                        {!hiddenFields.has('method') && <CardField label="Method" value={r.payment_method} capitalize />}
+                                        {!hiddenFields.has('card') && <CardField label="Card" value={cardLabel(r)} />}
+                                        {!hiddenFields.has('auth') && <CardField label="Auth" value={r.authorization_code ?? '—'} />}
+                                        {!hiddenFields.has('batch') && <CardField label="Batch" value={batchLabel(r) ?? '—'} />}
+                                        {!hiddenFields.has('settled') && <CardField label="Settled" value={r.is_settled ? 'Settled' : 'Pending'} />}
+                                        {!hiddenFields.has('luqra') && <div className="min-w-0">
                                             <p className="text-xs text-muted-foreground">Luqra</p>
                                             {r.luqra_transaction_id ? (
                                                 <Link
@@ -426,7 +452,7 @@ export function MerchantPaymentsTab({
                                             ) : (
                                                 <p className="truncate font-medium">Unmatched</p>
                                             )}
-                                        </div>
+                                        </div>}
                                     </div>
                                 </div>
                             ))

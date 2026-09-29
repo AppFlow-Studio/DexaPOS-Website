@@ -34,7 +34,7 @@ export function BasicInfoStep({ data, onChange, errors }: BasicInfoStepProps) {
     return (
         <div className="space-y-6">
             <div className="space-y-2">
-                <Label htmlFor="name" className="text-primary">
+                <Label htmlFor="name">
                     Location name <span className="text-destructive">*</span>
                 </Label>
                 <Input

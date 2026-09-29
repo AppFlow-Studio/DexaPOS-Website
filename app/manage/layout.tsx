@@ -29,8 +29,7 @@ import {
     LayoutDashboard,
     Users,
     BarChart3,
-    Settings,
-    HelpCircle,
+    Plug,
     MessageSquare,
     Search,
     Plus,
@@ -221,15 +220,10 @@ const navMain: NavGroup[] = [
 
 const navFooter = [
     {
-        title: 'NMI Integration',
-        url: '/manage/nmi-integration',
-        icon: Settings,
+        title: 'Integrations',
+        url: '/manage/settings/integrations',
+        icon: Plug,
         requiredPermission: 'system.config.manage' as PermissionCode,
-    },
-    {
-        title: 'Get Help',
-        url: '#',
-        icon: HelpCircle,
     },
 ]
 
@@ -441,12 +435,6 @@ function AppSidebar() {
                                 <Link href="/manage/profile">
                                     <User className="mr-2 h-4 w-4" />
                                     Profile
-                                </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                                <Link href="/manage/settings">
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    Settings
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleSignOut}>

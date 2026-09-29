@@ -25,8 +25,8 @@ function formatMoney(n: number) {
     return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
-function formatToday(loc: LocationSummary) {
-    return `${formatMoney(loc.revenue_today ?? 0)} (${loc.orders_today ?? 0})`
+function formatOrders(n: number) {
+    return `${n} ${n === 1 ? 'order' : 'orders'}`
 }
 
 export function LocationsSection({ locations }: { locations: LocationSummary[] }) {
@@ -56,7 +56,7 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
                                     <TableHead>Name</TableHead>
                                     <TableHead>Address</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Today</TableHead>
+                                    <TableHead className="text-right">Sales today</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -76,8 +76,8 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap text-right tabular-nums text-foreground">
                                             {formatMoney(loc.revenue_today ?? 0)}
-                                            <span className="ml-1 text-muted-foreground">
-                                                ({loc.orders_today ?? 0})
+                                            <span className="ml-1.5 text-muted-foreground">
+                                                · {formatOrders(loc.orders_today ?? 0)}
                                             </span>
                                         </TableCell>
                                     </TableRow>
@@ -94,14 +94,19 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
                                             {loc.is_active ? 'Live' : 'Offline'}
                                         </span>
                                     </div>
-                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                        <div className="min-w-0">
+                                    <div className="mt-3 flex items-start justify-between gap-4 text-sm">
+                                        <div className="min-w-0 flex-1">
                                             <p className="text-xs text-muted-foreground">Address</p>
                                             <p className="truncate font-medium">{formatAddress(loc)}</p>
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-xs text-muted-foreground">Today</p>
-                                            <p className="truncate font-medium tabular-nums">{formatToday(loc)}</p>
+                                        <div className="shrink-0 text-right">
+                                            <p className="text-xs text-muted-foreground">Sales today</p>
+                                            <p className="font-medium tabular-nums">
+                                                {formatMoney(loc.revenue_today ?? 0)}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground tabular-nums">
+                                                {formatOrders(loc.orders_today ?? 0)}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

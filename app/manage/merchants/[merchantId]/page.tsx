@@ -4,7 +4,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
-import { PageShell } from '@/components/dashboard/shell'
+import {
+    PageShell,
+    TAB_PILL_ACTIVE,
+    TAB_PILL_BUTTON,
+    TAB_PILL_INACTIVE,
+    TAB_RAIL,
+} from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import {
     AlertTriangle,
@@ -37,6 +43,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { OverviewTab } from './components/OverviewTab'
 import { BusinessInfoTab } from './components/BusinessInfoTab'
 import { NotesTab } from './components/NotesTab'
@@ -82,13 +89,13 @@ interface SectionDef {
     group: SectionGroup
     icon: LucideIcon
     label: string
-    /** Shorter label for the phone rail, where width is scarce. */
+    /** Shorter label for phones, where the section row is narrow. */
     shortLabel?: string
     /** Gate on an HQ permission; hidden sections are never navigable. */
     requires?: 'billing' | 'devices'
 }
 
-/** One table drives both the desktop nav and the phone rail, so they cannot drift. */
+/** One table drives both rows of the section bar, so they cannot drift. */
 const SECTIONS: SectionDef[] = [
     { value: 'overview', group: 'Account', icon: LayoutDashboard, label: 'Overview' },
     { value: 'business-info', group: 'Account', icon: Building2, label: 'Business' },
@@ -115,6 +122,7 @@ export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
     const searchParams = useSearchParams()
     const { hasPermission } = useAdminPermissions()
+    const isMobile = useIsMobile()
     const { data: merchantDetails, isLoading, isError, refetch, isRefetching } =
         useAdminMerchantDetails(merchantId as string)
 
@@ -150,7 +158,20 @@ export default function MerchantDetailsPage() {
             (s.requires === 'devices' && canManageDevices)
     )
 
-    // Phone rail: keep the active pill centred (§13.2, D-24). Scroll the rail
+    const activeGroup = SECTIONS.find((s) => s.value === activeTab)?.group ?? 'Account'
+    const groupSections = sections.filter((s) => s.group === activeGroup)
+
+    // Switching group returns to the section last open in it, so hopping
+    // Account → Processing → Account does not lose your place.
+    const lastInGroup = useRef<Partial<Record<SectionGroup, SectionKey>>>({})
+    const selectGroup = (group: SectionGroup) => {
+        lastInGroup.current[activeGroup] = activeTab
+        const remembered = lastInGroup.current[group]
+        const target = sections.find((s) => s.value === remembered) ?? sections.find((s) => s.group === group)
+        if (target) setActiveTab(target.value)
+    }
+
+    // Section row: keep the active pill centred (§13.2, D-24). Scroll the rail
     // itself rather than `scrollIntoView`, which walks every scrollable
     // ancestor. `isLoading` is a dep because the rail is not mounted while the
     // skeleton renders.
@@ -229,7 +250,13 @@ export default function MerchantDetailsPage() {
                                     <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
+                            {/* Phones: the button wraps to the left edge, so an
+                                end-aligned panel would jam against it. */}
+                            <DropdownMenuContent
+                                align={isMobile ? 'start' : 'end'}
+                                collisionPadding={16}
+                                className="w-56"
+                            >
                                 <DropdownMenuLabel>Import menu from…</DropdownMenuLabel>
                                 <DropdownMenuItem onClick={() => setCloverImportOpen(true)}>
                                     <FileSpreadsheet className="mr-2 h-3.5 w-3.5" />
@@ -248,148 +275,142 @@ export default function MerchantDetailsPage() {
                 onOpenChange={setCloverImportOpen}
             />
 
-            {/* Phone: the standard pill rail (§4.5), scrolled so the active
-                section is always in view (§13.2). */}
-            <div ref={railRef} className="no-scrollbar relative -mx-1 overflow-x-auto px-1 md:hidden">
-                <nav
-                    aria-label="Merchant sections"
-                    className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1"
-                >
-                    {sections.map(({ value, label, shortLabel }) => {
-                        const active = activeTab === value
+            {/* Two-row section bar: groups on top, the active group's sections
+                below. It replaced a 200px side nav so section content gets the
+                full width. Each section owns its own panels, so there is no
+                outer panel here (§3.1). Pinned flush to the top of
+                #main-content (§13.2): sticky insets by the container's padding
+                (p-4 sm:p-6), so the negative top and side margins cancel it and
+                no content shows above or beside the bar. */}
+            <div className="sticky -top-4 z-20 -mx-4 space-y-2 bg-background px-4 py-2 sm:-top-6 sm:-mx-6 sm:px-6">
+                <nav aria-label="Merchant section groups" className={TAB_RAIL}>
+                    {GROUPS.map((group) => {
+                        const active = group === activeGroup
                         return (
                             <button
-                                key={value}
+                                key={group}
                                 type="button"
-                                aria-current={active ? 'page' : undefined}
-                                data-state={active ? 'active' : 'inactive'}
-                                onClick={() => setActiveTab(value)}
-                                className={cn(
-                                    'shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors',
-                                    active
-                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                )}
+                                aria-current={active ? 'true' : undefined}
+                                onClick={() => selectGroup(group)}
+                                className={cn(TAB_PILL_BUTTON, active ? TAB_PILL_ACTIVE : TAB_PILL_INACTIVE)}
                             >
-                                {shortLabel ?? label}
+                                {group}
                             </button>
                         )
                     })}
                 </nav>
+
+                {/* Ghost pills, not a second rail, so this row reads as
+                    subordinate to the groups. Scrolls on phones with the
+                    active pill kept in view (§13.2). */}
+                <div ref={railRef} className="no-scrollbar relative -mx-1 overflow-x-auto px-1 py-0.5">
+                    <nav aria-label="Merchant sections" className="flex w-max flex-nowrap gap-1">
+                        {groupSections.map(({ value, icon: Icon, label, shortLabel }) => {
+                            const active = activeTab === value
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    aria-current={active ? 'page' : undefined}
+                                    data-state={active ? 'active' : 'inactive'}
+                                    onClick={() => setActiveTab(value)}
+                                    className={cn(
+                                        'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8125rem] transition-colors',
+                                        // Neutral active state (§4.5) — never brand text or fill.
+                                        active
+                                            ? cn('font-medium', TAB_PILL_ACTIVE)
+                                            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                                    )}
+                                >
+                                    <Icon className="hidden h-3.5 w-3.5 shrink-0 sm:block" />
+                                    {shortLabel ? (
+                                        <>
+                                            <span className="sm:hidden">{shortLabel}</span>
+                                            <span className="hidden sm:inline">{label}</span>
+                                        </>
+                                    ) : (
+                                        label
+                                    )}
+                                </button>
+                            )
+                        })}
+                    </nav>
+                </div>
             </div>
 
-            <div className="flex gap-8">
-                {/* Desktop: vertical section nav on the canvas. Each section
-                    below owns its own panels, so there is no outer panel here —
-                    that made every tab a panel inside a panel (§3.1). */}
-                <nav
-                    aria-label="Merchant sections"
-                    className="sticky top-7 hidden w-[200px] shrink-0 space-y-5 self-start md:block"
-                >
-                    {GROUPS.map((group) => (
-                        <div key={group} className="space-y-0.5">
-                            <p className="px-3 pb-1 text-xs font-medium text-muted-foreground">{group}</p>
-                            {sections
-                                .filter((s) => s.group === group)
-                                .map(({ value, icon: Icon, label }) => {
-                                    const active = activeTab === value
-                                    return (
-                                        <button
-                                            key={value}
-                                            type="button"
-                                            aria-current={active ? 'page' : undefined}
-                                            onClick={() => setActiveTab(value)}
-                                            className={cn(
-                                                'flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-[0.8125rem] transition-colors',
-                                                // Neutral active state (§4.5) — never brand text or fill.
-                                                active
-                                                    ? 'bg-background font-medium text-foreground shadow-sm ring-1 ring-border'
-                                                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                                            )}
-                                        >
-                                            <Icon className="h-3.5 w-3.5 shrink-0" />
-                                            {label}
-                                        </button>
-                                    )
-                                })}
-                        </div>
-                    ))}
-                </nav>
+            <div className="min-w-0">
+                {activeTab === 'overview' && (
+                    <div className="space-y-6">
+                        <OnboardingStatusCard merchant={merchantDetails} />
+                        <OverviewTab merchantInfo={merchantDetails} />
+                    </div>
+                )}
 
-                <div className="min-w-0 flex-1">
-                    {activeTab === 'overview' && (
-                        <div className="space-y-6">
-                            <OnboardingStatusCard merchant={merchantDetails} />
-                            <OverviewTab merchantInfo={merchantDetails} />
-                        </div>
-                    )}
+                {activeTab === 'business-info' && (
+                    <BusinessInfoTab merchantInfo={merchantDetails} />
+                )}
 
-                    {activeTab === 'business-info' && (
-                        <BusinessInfoTab merchantInfo={merchantDetails} />
-                    )}
+                {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
 
-                    {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
+                {activeTab === 'audit' && (
+                    <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                )}
 
-                    {activeTab === 'audit' && (
-                        <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                    )}
+                {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
 
-                    {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
+                {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
 
-                    {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
+                {activeTab === 'settlements' && (
+                    <SettlementsSection merchantId={merchantDetails.id} />
+                )}
 
-                    {activeTab === 'settlements' && (
-                        <SettlementsSection merchantId={merchantDetails.id} />
-                    )}
+                {activeTab === 'disputes' && (
+                    <DisputesSection merchantId={merchantDetails.id} />
+                )}
 
-                    {activeTab === 'disputes' && (
-                        <DisputesSection merchantId={merchantDetails.id} />
-                    )}
+                {activeTab === 'billing' && (
+                    <BillingTab
+                        merchantId={merchantDetails.id}
+                        merchantName={merchantDetails.name}
+                        canEdit={canManageMerchantStatus}
+                        locations={merchantDetails.locations}
+                    />
+                )}
 
-                    {activeTab === 'billing' && (
-                        <BillingTab
-                            merchantId={merchantDetails.id}
-                            merchantName={merchantDetails.name}
-                            canEdit={canManageMerchantStatus}
-                            locations={merchantDetails.locations}
-                        />
-                    )}
+                {activeTab === 'platform-billing' && (
+                    <PlatformBillingTab
+                        merchantId={merchantDetails.id}
+                        locations={merchantDetails.locations}
+                    />
+                )}
 
-                    {activeTab === 'platform-billing' && (
-                        <PlatformBillingTab
-                            merchantId={merchantDetails.id}
-                            locations={merchantDetails.locations}
-                        />
-                    )}
+                {activeTab === 'subscriptions' && canManageBilling && (
+                    <HqSubscriptionsWorkspace
+                        merchant={merchantDetails}
+                        canManageBilling={canManageBilling}
+                    />
+                )}
 
-                    {activeTab === 'subscriptions' && canManageBilling && (
-                        <HqSubscriptionsWorkspace
-                            merchant={merchantDetails}
-                            canManageBilling={canManageBilling}
-                        />
-                    )}
+                {activeTab === 'online-store' && (
+                    <OnlineStoreTab
+                        merchantId={merchantDetails.id}
+                        merchantName={merchantDetails.name}
+                        locations={merchantDetails.locations}
+                        locationsLoading={false}
+                    />
+                )}
 
-                    {activeTab === 'online-store' && (
-                        <OnlineStoreTab
-                            merchantId={merchantDetails.id}
-                            merchantName={merchantDetails.name}
-                            locations={merchantDetails.locations}
-                            locationsLoading={false}
-                        />
-                    )}
+                {activeTab === 'support' && (
+                    <SupportTicketsSection merchantId={merchantDetails.id} />
+                )}
 
-                    {activeTab === 'support' && (
-                        <SupportTicketsSection merchantId={merchantDetails.id} />
-                    )}
+                {canManageDevices && activeTab === 'devices' && (
+                    <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                )}
 
-                    {canManageDevices && activeTab === 'devices' && (
-                        <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
-                    )}
-
-                    {activeTab === 'locations' && (
-                        <LocationsSection locations={merchantDetails.locations} />
-                    )}
-                </div>
+                {activeTab === 'locations' && (
+                    <LocationsSection locations={merchantDetails.locations} />
+                )}
             </div>
         </PageShell>
     )

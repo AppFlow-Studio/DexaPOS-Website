@@ -191,13 +191,9 @@ export function PlatformBillingTab({ merchantId, locations }: PlatformBillingTab
             <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/30 px-4 py-16 text-center">
               <FileText className="mb-4 h-12 w-12 text-muted-foreground/30" />
               <h3 className="mb-1 text-lg font-semibold">No platform bills yet</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Create a bill to charge this merchant for hardware or services.
               </p>
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Bill
-              </Button>
             </div>
           ) : (
             <>

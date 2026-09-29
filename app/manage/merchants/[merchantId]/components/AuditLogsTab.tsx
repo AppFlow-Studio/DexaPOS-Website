@@ -534,8 +534,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
         label="Audit Logs"
         caption={`Track all administrative actions for ${merchantInfo.name}`}
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground tabular-nums">
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-muted-foreground tabular-nums sm:inline">
               {total.toLocaleString()} logs
             </span>
             <Button
@@ -606,13 +606,17 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   no collision padding, so the second month overflowed the
                   viewport. `collisionPadding` keeps it off the edge and the
                   panel is sized to the space between those gutters, which
-                  leaves Radix no room to favour a side. */}
+                  leaves Radix no room to favour a side. On a short phone
+                  screen the panel is also taller than the space under the
+                  trigger, so it is capped at Radix's measured available
+                  height and scrolls inside; mobile day cells drop the
+                  square aspect so it usually fits without scrolling. */}
               <PopoverContent
-                className="w-auto rounded-2xl p-0"
+                className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto overscroll-contain rounded-2xl p-0"
                 align="end"
                 collisionPadding={16}
               >
-                <div className="w-[calc(100vw-2rem)] space-y-3 p-4 sm:w-[19rem]">
+                <div className="w-[calc(100vw-2rem)] space-y-2 p-3 sm:w-[19rem] sm:space-y-3 sm:p-4">
                   <div className="flex items-baseline justify-between gap-2">
                     <label className="text-sm font-medium text-foreground">
                       Select range
@@ -632,6 +636,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                     onSelect={setDateRange}
                     numberOfMonths={1}
                     className="p-0"
+                    classNames={{
+                      day: "relative flex h-9 items-center justify-center p-0 text-center text-sm sm:aspect-square sm:h-auto",
+                    }}
                   />
                   <div className="flex gap-2">
                     <Button
@@ -835,7 +842,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
 
         {/* Logs Table */}
         <div className="mt-5 min-w-0">
-          <Table variant="data" className="min-w-[640px]" containerClassName="hidden lg:block">
+          {/* Unbounded: the log is already paged, so the page scrolls rather
+              than a second scroller nested under the pinned section bar. */}
+          <Table variant="data" bounded={false} className="min-w-[640px]" containerClassName="hidden lg:block">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-45">
@@ -984,14 +993,13 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             </TableBody>
           </Table>
 
-          {/* Mirrors the table's `hidden lg:block` (§5.3). Each card is the row
-              plus the same expandable detail, so mobile loses no information. */}
+          {/* Mirrors the table's `hidden lg:block` (§5.3). Phone cards are a
+              flat summary: no resource line and no expandable detail. */}
           <div className="grid min-w-0 grid-cols-1 gap-3 lg:hidden">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="space-y-3 rounded-2xl bg-muted/45 p-4">
                   <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/2" />
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     <Skeleton className="h-8 w-full" />
                     <Skeleton className="h-8 w-full" />
@@ -1007,60 +1015,41 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
               </div>
             ) : (
               logs.map((log) => (
-                <div key={log.id} className="min-w-0 overflow-hidden rounded-2xl bg-muted/45">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
-                    aria-expanded={expandedRow === log.id}
-                    className="flex w-full min-w-0 items-start justify-between gap-3 p-4 text-left"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{log.action}</p>
-                      {log.resource_name && (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {log.resource_type}: {log.resource_name}
-                        </p>
-                      )}
-                      {/* Plain text, not pills, on the muted card (§3.5). */}
-                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">When</p>
-                          <p className="truncate font-medium tabular-nums">
-                            {format(new Date(log.created_at), "MMM d, HH:mm")}
-                          </p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">Actor</p>
-                          <p className="truncate font-medium">{log.actor_name}</p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">Category</p>
-                          <p className="truncate font-medium capitalize">
-                            {log.action_category.replace("_", " ")}
-                          </p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">Severity</p>
-                          <p className="truncate font-medium capitalize">{log.severity}</p>
-                        </div>
-                        {isAllLocations && (
-                          <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">Location</p>
-                            <p className="truncate font-medium">
-                              {log.location?.name || "Global"}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                <div key={log.id} className="min-w-0 rounded-2xl bg-muted/45 p-4">
+                  <p className="truncate font-medium">{log.action}</p>
+                  {/* Plain text, not pills, on the muted card (§3.5). */}
+                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">When</p>
+                      <p className="truncate font-medium tabular-nums">
+                        {format(new Date(log.created_at), "MMM d, HH:mm")}
+                      </p>
                     </div>
-                    {expandedRow === log.id ? (
-                      <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Actor</p>
+                      <p className="truncate font-medium">{log.actor_name}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Category</p>
+                      <p className="truncate font-medium capitalize">
+                        {log.action_category.replace("_", " ")}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Severity</p>
+                      <p className="truncate font-medium capitalize">{log.severity}</p>
+                    </div>
+                    {/* Full row width so the name shows whole instead of
+                        truncating in a half-width column. */}
+                    {isAllLocations && (
+                      <div className="col-span-2 min-w-0">
+                        <p className="text-xs text-muted-foreground">Location</p>
+                        <p className="font-medium break-words">
+                          {log.location?.name || "Global"}
+                        </p>
+                      </div>
                     )}
-                  </button>
-
-                  {expandedRow === log.id && <AuditLogDetail log={log} />}
+                  </div>
                 </div>
               ))
             )}

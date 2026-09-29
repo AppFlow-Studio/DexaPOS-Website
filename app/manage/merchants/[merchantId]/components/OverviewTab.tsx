@@ -392,7 +392,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                                             <ShoppingCart className="h-4 w-4" />
                                         </div>
                                         <div className="min-w-0">
-                                            <div className="text-sm font-medium tabular-nums">Order #{order.order_number}</div>
+                                            <div className="text-sm font-medium tabular-nums">#{order.order_number}</div>
                                             <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
                                                 <Clock className="h-3 w-3" />
                                                 {format(new Date(order.created_at), 'MMM d, h:mm a')}

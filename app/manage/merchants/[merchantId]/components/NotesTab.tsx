@@ -133,7 +133,7 @@ export function NotesTab({ merchantId }: NotesTabProps) {
             rows={4}
             className="border-0 bg-muted/60 shadow-none focus-visible:bg-background dark:bg-muted/60 dark:focus-visible:bg-background"
           />
-          <div className="flex justify-end">
+          <div className="flex justify-center sm:justify-end">
             <Button onClick={() => void handleAddNote()} disabled={!newNote.trim() || addNoteMutation.isPending}>
               {addNoteMutation.isPending ? 'Adding...' : 'Add Note'}
             </Button>
@@ -258,7 +258,7 @@ export function NotesTab({ merchantId }: NotesTabProps) {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm whitespace-pre-wrap">{note.content}</p>
+                <p className="text-sm whitespace-pre-wrap max-sm:hidden">{note.content}</p>
               )}
             </div>
           ))}

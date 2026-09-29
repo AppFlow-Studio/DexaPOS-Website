@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import {
@@ -107,6 +107,26 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
     const queryClient = useQueryClient()
 
     const [activeStatus, setActiveStatus] = useState<string>('open')
+
+    // Keep the active status pill centred in the scrollable rail, same as the
+    // settlements tabs. Scroll the rail itself rather than `scrollIntoView`,
+    // which would also scroll the page vertically.
+    const railRef = useRef<HTMLDivElement>(null)
+    const railPositioned = useRef(false)
+    useEffect(() => {
+        const rail = railRef.current
+        const active = rail?.querySelector<HTMLElement>('[aria-pressed="true"]')
+        if (!rail || !active) return
+        const max = rail.scrollWidth - rail.clientWidth
+        if (max <= 0) return
+        const railBox = rail.getBoundingClientRect()
+        const tabBox = active.getBoundingClientRect()
+        const left = rail.scrollLeft + tabBox.left - railBox.left - (railBox.width - tabBox.width) / 2
+        const smooth = railPositioned.current && !matchMedia('(prefers-reduced-motion: reduce)').matches
+        rail.scrollTo({ left: Math.max(0, Math.min(left, max)), behavior: smooth ? 'smooth' : 'auto' })
+        railPositioned.current = true
+    }, [activeStatus])
+
     const [category, setCategory] = useState<string>('all')
     const [priority, setPriority] = useState<string>('all')
     const [search, setSearch] = useState('')
@@ -216,7 +236,7 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
 
                     <div className="space-y-3">
                         {/* §4.5 pill rail — TAB_PILL_BUTTON + active/inactive literals (C7). */}
-                        <div className="w-full min-w-0 overflow-x-auto pb-1">
+                        <div ref={railRef} className="w-full min-w-0 no-scrollbar overflow-x-auto pb-1">
                             <div className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                                 {STATUS_TABS.map((tab) => (
                                     <button
@@ -370,29 +390,35 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
                                             onClick={() => openTicket(t.id)}
                                             className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left transition-colors hover:bg-muted/70"
                                         >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <p className="font-mono text-xs text-muted-foreground">{t.ticket_number}</p>
-                                                    <p
-                                                        className={cn(
-                                                            'truncate',
-                                                            attention ? 'font-semibold text-foreground' : 'font-medium'
-                                                        )}
-                                                    >
-                                                        {t.subject}
-                                                    </p>
-                                                </div>
-                                                <span className="shrink-0 text-sm text-muted-foreground">{statusLabel(t)}</span>
+                                            {/* Lean phone card (§13.4): status is already the
+                                                active tab, so it only shows under "All"; category
+                                                and normal/low priority live on the ticket page. */}
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                                                    {t.ticket_number}
+                                                </p>
+                                                {activeStatus === 'all' && (
+                                                    <span className="shrink-0 text-xs text-muted-foreground">{statusLabel(t)}</span>
+                                                )}
                                             </div>
-                                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                                <CardField label="Priority" value={priorityLabel(t)} />
-                                                <CardField label="Assignee" value={assigneeLabel(t)} />
-                                                <CardField label="Category" value={categoryLine(t)} />
-                                                <CardField
-                                                    label="Last activity"
-                                                    value={formatDistanceToNow(new Date(t.last_message_at), { addSuffix: true })}
-                                                />
-                                            </div>
+                                            <p
+                                                className={cn(
+                                                    'mt-0.5 truncate',
+                                                    attention ? 'font-semibold text-foreground' : 'font-medium'
+                                                )}
+                                            >
+                                                {t.subject}
+                                            </p>
+                                            <p className="mt-1.5 truncate text-sm text-muted-foreground">
+                                                {attention && (
+                                                    <span className="font-medium text-foreground">{priorityLabel(t)} · </span>
+                                                )}
+                                                <span className={cn(!t.assigned_to && 'font-medium text-foreground')}>
+                                                    {assigneeLabel(t)}
+                                                </span>
+                                                {' · '}
+                                                {formatDistanceToNow(new Date(t.last_message_at), { addSuffix: true })}
+                                            </p>
                                         </button>
                                     )
                                 })}
@@ -414,14 +440,5 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
                 </div>
             </PanelSection>
         </Panel>
-    )
-}
-
-function CardField({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="truncate font-medium">{value}</p>
-        </div>
     )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Banknote, TrendingUp, AlertTriangle, Layers, CreditCard } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -74,6 +74,26 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
     const { data: result, isLoading } = usePlatformSettlementBatches(summaryFilters)
     const batches = useMemo(() => result?.data ?? [], [result])
 
+    // Keep the active tab pill centred in the scrollable rail, same as the
+    // merchant page's section row. Scroll the rail itself rather than
+    // `scrollIntoView`, which would also scroll the page vertically.
+    const [tab, setTab] = useState('ours')
+    const railRef = useRef<HTMLDivElement>(null)
+    const railPositioned = useRef(false)
+    useEffect(() => {
+        const rail = railRef.current
+        const active = rail?.querySelector<HTMLElement>('[data-state="active"]')
+        if (!rail || !active) return
+        const max = rail.scrollWidth - rail.clientWidth
+        if (max <= 0) return
+        const railBox = rail.getBoundingClientRect()
+        const tabBox = active.getBoundingClientRect()
+        const left = rail.scrollLeft + tabBox.left - railBox.left - (railBox.width - tabBox.width) / 2
+        const smooth = railPositioned.current && !matchMedia('(prefers-reduced-motion: reduce)').matches
+        rail.scrollTo({ left: Math.max(0, Math.min(left, max)), behavior: smooth ? 'smooth' : 'auto' })
+        railPositioned.current = true
+    }, [tab])
+
     const totals = useMemo(() => {
         const acc = { count: batches.length, gross: 0, net: 0, txns: 0, discrepancies: 0 }
         for (const b of batches) {
@@ -141,8 +161,8 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 </PanelSection>
             </Panel>
 
-            <Tabs defaultValue="ours" className="gap-0">
-                <div className="w-full min-w-0 overflow-x-auto pb-1">
+            <Tabs value={tab} onValueChange={setTab} className="gap-0">
+                <div ref={railRef} className="w-full min-w-0 overflow-x-auto pb-1">
                     <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                         <TabsTrigger value="ours" className={TAB_PILL_CLASS}>Our batches</TabsTrigger>
                         <TabsTrigger value="payments" className={TAB_PILL_CLASS}>Payments</TabsTrigger>

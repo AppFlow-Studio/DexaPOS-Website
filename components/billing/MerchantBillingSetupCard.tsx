@@ -281,8 +281,6 @@ export function MerchantBillingSetupCard({
       <Panel>
         <PanelSection
           label="Payment methods"
-          // The scope is what the list is filtered by, so it stays on phones (§13.4).
-          showCaptionOnMobile
           caption={
             <>
               Cards used for subscription billing on{' '}
@@ -319,10 +317,11 @@ export function MerchantBillingSetupCard({
                   return (
                     <div
                       key={profile.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border p-3.5"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-3.5"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        {/* Decorative; on a phone the name needs the room. */}
+                        <div className="hidden h-9 w-9 shrink-0 sm:flex items-center justify-center rounded-full bg-muted text-muted-foreground">
                           {profile.billing_method === 'ach' ? (
                             <Building2 className="h-4 w-4" />
                           ) : (
@@ -387,6 +386,7 @@ export function MerchantBillingSetupCard({
                       <Button
                         type="button"
                         size="sm"
+                        className="max-sm:justify-self-center"
                         onClick={handleProvisionSubscriptionRail}
                         disabled={isPending}
                       >

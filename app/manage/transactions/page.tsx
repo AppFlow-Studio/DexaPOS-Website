@@ -352,7 +352,7 @@ type TransactionSortBy = 'created_at' | 'order_number' | 'total_amount'
 type TransactionSortDirection = 'asc' | 'desc'
 
 /** A page's primary list pages 25 at a time (§5.7). */
-const PAGE_SIZE = 25
+const PAGE_SIZE = 10
 
 type TransactionColumnKey =
     | 'order'
@@ -1234,7 +1234,9 @@ function TransactionsPageInner() {
                             />
                         ) : (
                             <>
-                                <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+                                {/* Unbounded: 10 rows a page, so the table grows with the page
+                                    rather than scrolling inside its own well. */}
+                                <Table variant="data" bounded={false} containerClassName="hidden xl:block" className="min-w-[900px]">
                                     <TableHeader>
                                         <TableRow>
                                             {columnVisibility.order && (

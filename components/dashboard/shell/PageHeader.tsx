@@ -22,6 +22,8 @@ interface PageHeaderProps {
   /** Renders a ghost "Back to X" pill above the title (D-04). */
   backHref?: string
   backLabel?: string
+  /** Rendered directly after the title — e.g. a record's status pill. */
+  titleBadge?: React.ReactNode
   /** Right-aligned chip beside the title — usually `<LocationIndicator />`. */
   indicator?: React.ReactNode
   /** Right-aligned buttons. Sits after `indicator` on the same row. */
@@ -56,6 +58,7 @@ export function PageHeader({
   subtitleClassName,
   backHref,
   backLabel = 'Back',
+  titleBadge,
   indicator,
   actions,
   stackActionsBelowIndicatorOnMobile = false,
@@ -78,7 +81,14 @@ export function PageHeader({
           backHref && 'mt-2'
         )}
       >
-        <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
+        {titleBadge ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
+            {titleBadge}
+          </div>
+        ) : (
+          <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
+        )}
 
         {/* `flex-wrap` + `min-w-0`, NOT `shrink-0`: a non-shrinking, non-wrapping
             action row overflows the viewport on narrow screens (two buttons here

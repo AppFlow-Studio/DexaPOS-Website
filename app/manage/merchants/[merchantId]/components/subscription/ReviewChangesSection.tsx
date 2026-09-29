@@ -155,7 +155,7 @@ export function ReviewChangesSection({
   return (
     <Card className="rounded-3xl">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2 text-base text-[#0C4FD1] dark:text-[#6CA0FF]">
           <BellRing className="h-4 w-4" />
           Review changes
           {total > 0 && (

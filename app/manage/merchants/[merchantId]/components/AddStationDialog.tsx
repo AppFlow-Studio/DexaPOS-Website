@@ -381,20 +381,17 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                 </div>
 
                 <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
-                    <div className="flex w-full items-center justify-between gap-3">
-                        <div>
+                    {/* No Cancel: the header ✕ closes the dialog. Phones centre the
+                        pair; from sm, Back sits left and the forward action right. */}
+                    <div className="flex w-full items-center justify-center gap-3 sm:justify-between">
                         {step > 1 && (
                             <Button variant="outline" onClick={() => setStep(step - 1)}>
                                 Back
                             </Button>
                         )}
-                        </div>
-                        <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => onOpenChange(false)}>
-                            Cancel
-                        </Button>
                         {step < 3 ? (
                             <Button
+                                className="sm:ml-auto"
                                 onClick={() => setStep(step + 1)}
                                 disabled={step === 1 ? !canProceedStep1 : !canProceedStep2}
                             >
@@ -402,6 +399,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                             </Button>
                         ) : (
                             <Button
+                                className="sm:ml-auto"
                                 onClick={handleSubmit}
                                 disabled={createStationMutation.isPending}
                             >
@@ -411,7 +409,6 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                                 Create Station
                             </Button>
                         )}
-                    </div>
                     </div>
                 </DialogFooter>
             </DialogContent>

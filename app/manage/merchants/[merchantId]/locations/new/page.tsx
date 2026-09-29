@@ -12,7 +12,7 @@ export default function AdminNewLocationPage() {
     if (isLoading) {
         return (
             <div className="min-h-screen flex">
-                <div className="w-72 border-r bg-muted/30 p-6">
+                <div className="hidden w-72 border-r bg-muted/30 p-6 lg:block">
                     <Skeleton className="h-12 w-24 mb-8" />
                     <div className="space-y-2">
                         {[1, 2, 3, 4, 5, 6, 7].map(i => (
@@ -20,10 +20,10 @@ export default function AdminNewLocationPage() {
                         ))}
                     </div>
                 </div>
-                <div className="flex-1 p-8">
-                    <Skeleton className="h-4 w-48 mb-2" />
-                    <Skeleton className="h-8 w-64 mb-2" />
-                    <Skeleton className="h-4 w-96 mb-8" />
+                <div className="min-w-0 flex-1 p-4 md:p-8">
+                    <Skeleton className="h-4 w-48 max-w-full mb-2" />
+                    <Skeleton className="h-8 w-64 max-w-full mb-2" />
+                    <Skeleton className="h-4 w-96 max-w-full mb-8" />
                     <div className="space-y-4 max-w-2xl">
                         <Skeleton className="h-10 w-full" />
                         <Skeleton className="h-10 w-full" />

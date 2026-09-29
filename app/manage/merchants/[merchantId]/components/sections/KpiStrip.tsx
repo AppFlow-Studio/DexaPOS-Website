@@ -15,16 +15,23 @@ export interface KpiCell {
  * these figures is an HQ-2 alarm (§14.3), so no tone colouring.
  *
  * `StatRow` only takes 2|3|4 columns (§14.7 trap 6), so five or more figures
- * stack into two rows.
+ * stack into two rows. On phones those two rows would each wrap on their own
+ * (orphaning a tile, and a 2-tile row stacks to one column), so below `sm` the
+ * rows dissolve (`contents`) into one shared two-column grid.
  */
 export function KpiStrip({ cells, loading = false }: { cells: KpiCell[]; loading?: boolean }) {
     const split = Math.ceil(cells.length / 2)
     const rows = cells.length <= 4 ? [cells] : [cells.slice(0, split), cells.slice(split)]
+    const merged = rows.length > 1
 
     return (
-        <div className="space-y-6">
+        <div className={merged ? 'grid grid-cols-2 gap-x-4 gap-y-6 sm:block sm:space-y-6' : 'space-y-6'}>
             {rows.map((row, i) => (
-                <StatRow key={i} columns={Math.min(4, Math.max(2, row.length)) as 2 | 3 | 4}>
+                <StatRow
+                    key={i}
+                    columns={Math.min(4, Math.max(2, row.length)) as 2 | 3 | 4}
+                    className={merged ? 'max-sm:contents' : undefined}
+                >
                     {row.map((c) => {
                         const Icon = c.icon
                         return (

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { PageHeader } from '@/components/dashboard/shell'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { MerchantDetails } from '@/types/merchant'
 import { ImpersonateMerchantButton } from '@/components/admin/ImpersonateMerchantButton'
 import { MerchantLogoUpload } from './MerchantLogoUpload'
@@ -12,7 +13,7 @@ import { MerchantLogoUpload } from './MerchantLogoUpload'
 /**
  * The page header for the merchant workspace: `PageHeader` owns the one `<h1>`
  * (D-01) and the back pill (D-04, replacing the hand-rolled breadcrumb), and
- * the identity row beneath carries the record's metadata.
+ * the identity row beneath carries the record's metadata from `sm` up.
  */
 export function MerchantHeaderBar({
     merchant,
@@ -26,12 +27,22 @@ export function MerchantHeaderBar({
     const planLabel = (merchant.public_metadata as { plan?: string })?.plan || 'Starter'
     const locationLabel = `${merchant.total_locations} location${merchant.total_locations === 1 ? '' : 's'}`
 
+    const statusBadge = (className?: string) => (
+        // Status is a word in a neutral pill (§4.6b).
+        <Badge variant="outline" className={cn('capitalize', className)}>
+            {status.replace('_', ' ')}
+        </Badge>
+    )
+
     return (
         <div className="space-y-4">
             <PageHeader
                 title={merchant.name}
                 backHref="/manage/merchants"
                 backLabel="Back to Merchants"
+                // Phones drop the identity row below, so status moves up
+                // beside the name.
+                titleBadge={statusBadge('shrink-0 sm:hidden')}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
                         {actions}
@@ -51,10 +62,12 @@ export function MerchantHeaderBar({
                 }
             />
 
-            <div className="flex min-w-0 items-center gap-4">
+            {/* Desktop only: on phones this row cost two lines of height for
+                data the Business and Locations sections already show. */}
+            <div className="hidden min-w-0 items-center gap-4 sm:flex">
                 {/* The logo plate is the upload control, so it stays a control,
                     but like every brand mark it drops below `sm` (§13.4). */}
-                <div className="hidden shrink-0 sm:block">
+                <div className="shrink-0">
                     <MerchantLogoUpload
                         merchantId={merchant.id}
                         merchantName={merchant.name}
@@ -62,10 +75,7 @@ export function MerchantHeaderBar({
                     />
                 </div>
                 <div className="min-w-0 space-y-1.5">
-                    {/* Status is a word in a neutral pill (§4.6b). */}
-                    <Badge variant="outline" className="w-fit capitalize">
-                        {status.replace('_', ' ')}
-                    </Badge>
+                    {statusBadge('w-fit')}
                     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] text-muted-foreground">
                         <span className="max-w-full truncate font-mono">{merchant.clerk_org_id}</span>
                         <span aria-hidden>·</span>

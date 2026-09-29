@@ -24,20 +24,20 @@ export function BankingPayoutsStep({
 }: BankingPayoutsStepProps) {
     return (
         <div className="space-y-6">
-            <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                        <p className="text-sm font-medium">Use merchant billing ACH details</p>
-                        <p className="text-xs text-muted-foreground">
-                            UI is ready. Data copy wiring is intentionally deferred.
-                        </p>
-                    </div>
-                    <Switch
-                        checked={data.use_merchant_billing_profile}
-                        onCheckedChange={(checked) => onChange({ use_merchant_billing_profile: checked })}
-                    />
+            {/* Borderless tinted row (§5.8), not a bordered box. */}
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-muted/45 p-4">
+                <div className="min-w-0">
+                    <p className="text-sm font-medium">Use merchant billing ACH details</p>
+                    <p className="text-xs text-muted-foreground max-sm:hidden">
+                        UI is ready. Data copy wiring is intentionally deferred.
+                    </p>
                 </div>
-            </div>
+                <Switch
+                    checked={data.use_merchant_billing_profile}
+                    onCheckedChange={(checked) => onChange({ use_merchant_billing_profile: checked })}
+                    className="shrink-0"
+                />
+            </label>
 
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
@@ -113,22 +113,23 @@ export function BankingPayoutsStep({
                     onValueChange={(value: 'checking' | 'savings') => onChange({ account_type: value })}
                     className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                 >
-                    <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                    {/* Option cards: tinted, and the selected one gains a ring,
+                        not a border (§5.8). */}
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted/70 has-[[data-state=checked]]:bg-muted has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-border">
                         <RadioGroupItem value="checking" />
                         <span className="text-sm font-medium">Checking</span>
                     </label>
-                    <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted/70 has-[[data-state=checked]]:bg-muted has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-border">
                         <RadioGroupItem value="savings" />
                         <span className="text-sm font-medium">Savings</span>
                     </label>
                 </RadioGroup>
             </div>
 
-            <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-xs text-muted-foreground">
-                    Bank values entered here are UI-only at this stage. Backend save/tokenization wiring is intentionally paused.
-                </p>
-            </div>
+            {/* Neutral callout (§3.5); build-status notes stay off phones. */}
+            <p className="rounded-2xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground max-sm:hidden">
+                Bank values entered here are UI-only at this stage. Backend save/tokenization wiring is intentionally paused.
+            </p>
         </div>
     )
 }

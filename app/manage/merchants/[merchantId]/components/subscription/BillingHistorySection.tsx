@@ -1,12 +1,24 @@
 'use client'
 
-import { useMemo } from 'react'
-import { Download, Eye, Loader2, Zap } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Download, Eye, Loader2, MoreHorizontal, Zap } from 'lucide-react'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
 import {
   Table,
   TableBody,
@@ -21,6 +33,18 @@ import { InfoHint } from './InfoHint'
 import { formatDate, formatMoney } from './helpers'
 
 const PAGE_SIZE = 10
+
+// Invoice # and total identify the row and always show; on a phone everything
+// else starts hidden and is toggled from the mobile column picker. The row's
+// action menu isn't a column choice — it's always rendered.
+const COLUMNS: ReportColumn[] = [
+  { id: 'invoice', label: 'Invoice', locked: true },
+  { id: 'scope', label: 'Scope', defaultHidden: true },
+  { id: 'period', label: 'Period', defaultHidden: true },
+  { id: 'total', label: 'Total', locked: true },
+  { id: 'status', label: 'Status', defaultHidden: true },
+  { id: 'due', label: 'Due', defaultHidden: true },
+]
 
 interface BillingHistorySectionProps {
   invoices: SubscriptionInvoiceRecord[]
@@ -57,14 +81,24 @@ export function BillingHistorySection({
   }, [invoices, limit])
 
   const { pageRows, pagination, setPage } = useClientPagination(rows, PAGE_SIZE)
+  const [hiddenCols, setHiddenCols] = useState(() => initialHiddenColumns(COLUMNS))
+  const isMobile = useIsMobile()
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id)
 
   return (
     <Card className="rounded-3xl">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          Billing history
-          <InfoHint label="Recent subscription invoices across the merchant tier and every location. Use Charge to manually retry an open or failed card invoice." />
-        </CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-base text-[#0C4FD1] dark:text-[#6CA0FF]">
+            Billing history
+            <InfoHint label="Recent subscription invoices across the merchant tier and every location. Use Charge to manually retry an open or failed card invoice." />
+          </CardTitle>
+          {rows.length > 0 && (
+            <MobileColumnsButton columns={COLUMNS} hidden={hiddenCols} onChange={setHiddenCols} />
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {rows.length === 0 ? (
@@ -73,16 +107,26 @@ export function BillingHistorySection({
           </div>
         ) : (
           <>
-            <Table variant="data" className="min-w-[760px]">
+            {/* The 760px floor keeps desktop columns from crushing; on a phone
+                the picker trims columns instead, so the floor would only force
+                a sideways scroll. Unbounded: paged at 10 rows, so an inner
+                vertical scroll well only adds a second scrollbar. */}
+            <Table
+              variant="data"
+              bounded={false}
+              className={isMobile ? undefined : 'min-w-[760px]'}
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead>Invoice</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Period</TableHead>
+                  {isColVisible('scope') && <TableHead>Scope</TableHead>}
+                  {isColVisible('period') && <TableHead>Period</TableHead>}
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {isColVisible('status') && <TableHead>Status</TableHead>}
+                  {isColVisible('due') && <TableHead>Due</TableHead>}
+                  <TableHead className="w-10">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -96,47 +140,64 @@ export function BillingHistorySection({
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                      <TableCell>{isTier ? 'Merchant tier' : invoice.location_name}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                        {formatDate(invoice.billing_period_start)} – {formatDate(invoice.billing_period_end)}
-                      </TableCell>
+                      {isColVisible('scope') && (
+                        <TableCell>{isTier ? 'Merchant tier' : invoice.location_name}</TableCell>
+                      )}
+                      {isColVisible('period') && (
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(invoice.billing_period_start)} – {formatDate(invoice.billing_period_end)}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right font-medium tabular-nums">
                         {formatMoney(invoice.total_amount)}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {invoice.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                        {formatDate(invoice.due_date)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onPreview(invoice.id)}
-                            disabled={isBusy && busyRow}
-                            aria-label={`View invoice ${invoice.invoice_number}`}
-                          >
-                            {busyRow ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDownload(invoice.id)}
-                            aria-label={`Download invoice ${invoice.invoice_number}`}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                          {canCharge && (
-                            <Button variant="outline" size="sm" onClick={() => onCharge(invoice.id)} disabled={isBusy}>
-                              <Zap className="mr-1 h-3.5 w-3.5" />
-                              Charge
+                      {isColVisible('status') && (
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {invoice.status}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isColVisible('due') && (
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(invoice.due_date)}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 rounded-full p-0"
+                              aria-label={`Actions for invoice ${invoice.invoice_number}`}
+                            >
+                              {busyRow ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
                             </Button>
-                          )}
-                        </div>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => onPreview(invoice.id)}
+                              disabled={isBusy && busyRow}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onDownload(invoice.id)}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Download
+                            </DropdownMenuItem>
+                            {canCharge && (
+                              <DropdownMenuItem onClick={() => onCharge(invoice.id)} disabled={isBusy}>
+                                <Zap className="mr-2 h-4 w-4" />
+                                Charge
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   )

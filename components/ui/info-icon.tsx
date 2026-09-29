@@ -31,7 +31,7 @@ export function InfoIcon({ tip, className, side = 'top', asButton = false }: Inf
           </span>
         )}
       </TooltipTrigger>
-      <TooltipContent side={side} sideOffset={6} className="max-w-xs text-xs leading-snug">
+      <TooltipContent side={side} sideOffset={6} className="max-w-[min(20rem,calc(100vw-2rem))] text-xs leading-snug">
         {tip}
       </TooltipContent>
     </Tooltip>

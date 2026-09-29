@@ -189,9 +189,17 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {acquirerReady
-                      ? acquirerSummary()
-                      : 'Required before boarding — enter the MID / V-Number from underwriting. Each MID routes settlement to the merchant’s own bank account.'}
+                    {acquirerReady ? (
+                      acquirerSummary()
+                    ) : (
+                      <>
+                        <span className="sm:hidden">Needed before boarding.</span>
+                        <span className="hidden sm:inline">
+                          Required before boarding — enter the MID / V-Number from underwriting. Each
+                          MID routes settlement to the merchant’s own bank account.
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <Button
@@ -212,11 +220,20 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                   <span className="text-muted-foreground">2 ·</span> Board on Valor
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {data.valorMerchantId
-                    ? `Boarded — Valor merchant ${data.valorMerchantId}. ${data.boardedCount}/${data.locations.length} location(s) provisioned.`
-                    : acquirerReady
-                      ? 'Creates one Valor merchant, then a store + EPI per location.'
-                      : 'Add processing credentials above first.'}
+                  <span className="sm:hidden">
+                    {data.valorMerchantId
+                      ? `Merchant ${data.valorMerchantId} · ${data.boardedCount}/${data.locations.length} locations`
+                      : acquirerReady
+                        ? 'Sets up every location on Valor.'
+                        : 'Add credentials first.'}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {data.valorMerchantId
+                      ? `Boarded — Valor merchant ${data.valorMerchantId}. ${data.boardedCount}/${data.locations.length} location(s) provisioned.`
+                      : acquirerReady
+                        ? 'Creates one Valor merchant, then a store + EPI per location.'
+                        : 'Add processing credentials above first.'}
+                  </span>
                 </div>
               </div>
               <Button
@@ -272,7 +289,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <div className="truncate font-medium">{row.locationName}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="hidden text-xs text-muted-foreground sm:block">
                       {row.boarded
                         ? 'Provisioned on Valor with a store + EPI for online-order checkout.'
                         : 'Not provisioned on Valor yet.'}
@@ -290,8 +307,14 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                   <Cell label="API Keys" value={row.hasApiKeys ? 'Present' : 'Missing'} />
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1 basis-48 text-xs text-muted-foreground">
+                {/* Phone: status text drops (header already says Boarded/Not boarded)
+                    and the action centers. sm+ keeps the text + right-aligned action. */}
+                <div
+                  className={`mt-4 flex-wrap items-center justify-center gap-3 sm:flex sm:justify-between ${
+                    row.boarded ? 'flex' : 'hidden'
+                  }`}
+                >
+                  <div className="hidden min-w-0 flex-1 basis-48 text-xs text-muted-foreground sm:block">
                     {row.boarded
                       ? row.isPrimary
                         ? 'Active · primary online-order rail'

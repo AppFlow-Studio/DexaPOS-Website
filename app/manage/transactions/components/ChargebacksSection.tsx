@@ -63,6 +63,11 @@ function formatDateTime(value?: string): string {
   return format(new Date(value), 'MMM d, yyyy h:mm a')
 }
 
+function formatDate(value?: string): string {
+  if (!value) return '—'
+  return format(new Date(value), 'MMM d, yyyy')
+}
+
 function formatStatusLabel(value: string): string {
   return value
     .split('_')
@@ -136,8 +141,18 @@ function DetailLine({ label, children }: { label: string; children: React.ReactN
  * The expanded chargeback. The table row and the phone card render this same
  * component (§5.3), so the two views cannot drift apart. The tiles take the
  * card fill: they sit on a selected row or a selected (muted) card.
+ * `withPhoneFacts` shows, on phones only, the reason, network, reason code and
+ * defendable flag that the slimmed phone card leaves out.
  */
-function ChargebackDetail({ row, className }: { row: PlatformChargebackRow; className?: string }) {
+function ChargebackDetail({
+  row,
+  className,
+  withPhoneFacts = false,
+}: {
+  row: PlatformChargebackRow
+  className?: string
+  withPhoneFacts?: boolean
+}) {
   return (
     <div className={cn('grid min-w-0 gap-3 lg:grid-cols-3', className)}>
       <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
@@ -204,6 +219,16 @@ function ChargebackDetail({ row, className }: { row: PlatformChargebackRow; clas
       <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
         <h4 className="text-sm font-semibold">Resolution</h4>
         <div className="space-y-1 text-sm">
+          {withPhoneFacts && (
+            <div className="space-y-1 sm:hidden">
+              <DetailLine label="Reason">{row.reason_description || '—'}</DetailLine>
+              <DetailLine label="Network">{formatNetwork(row.card_network)}</DetailLine>
+              <DetailLine label="Reason code">
+                <span className="font-mono text-xs">{row.reason_code}</span>
+              </DetailLine>
+              <DetailLine label="Defendable">{row.defendable ? 'Yes' : 'No'}</DetailLine>
+            </div>
+          )}
           <DetailLine label="PSP reference">{row.dispute_psp_reference || '—'}</DetailLine>
           <DetailLine label="Defense submitted">{formatDateTime(row.defense_submitted_at)}</DetailLine>
           <DetailLine label="Resolved">{formatDateTime(row.resolved_at)}</DetailLine>
@@ -337,14 +362,14 @@ export function ChargebacksSection({
   return (
     <div className="min-w-0 space-y-4">
       {chargebacksResult ? (
-        <div className="flex items-center gap-1">
+        <div className="hidden items-center gap-1 sm:flex">
           <p className="text-sm text-muted-foreground tabular-nums">
             {pendingCount.toLocaleString()} pending or notified · {total.toLocaleString()} total
           </p>
           <InfoIcon tip="Chargebacks that are awaiting action — either just received (Notified) or actively being reviewed. These require attention before their defense deadline." side="bottom" />
         </div>
       ) : (
-        <Skeleton className="h-5 w-56" />
+        <Skeleton className="hidden h-5 w-56 sm:block" />
       )}
 
       {urgentCount > 0 && (
@@ -546,30 +571,40 @@ export function ChargebacksSection({
                     onClick={() => toggleExpanded(row.id)}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-base font-medium tabular-nums">{formatCurrency(row.amount)}</p>
-                        {!scopedMerchantId && (
-                          <p className="truncate text-sm text-muted-foreground">
-                            {row.merchant_name || row.merchant_id}
-                          </p>
-                        )}
-                      </div>
+                      <p className="text-base font-medium tabular-nums">{formatCurrency(row.amount)}</p>
                       <p className="shrink-0 text-sm text-muted-foreground">{formatStatusLabel(row.status)}</p>
                     </div>
+                    {/* Full card width, and wraps rather than truncates, so the
+                        status beside the amount never cuts the name short. */}
+                    {!scopedMerchantId && (
+                      <p className="break-words text-sm text-muted-foreground">
+                        {row.merchant_name || row.merchant_id}
+                      </p>
+                    )}
+                    {/* Phones keep only amount, merchant, deadline and received;
+                        the rest moves to the expanded view (withPhoneFacts). */}
                     <CardFields>
-                      <CardField label="Chargeback ID" value={row.original_payment_id} mono />
-                      <CardField label="Reason code" value={row.reason_code} mono />
-                      <CardField label="Reason" value={row.reason_description || '—'} />
-                      <CardField label="Network" value={formatNetwork(row.card_network)} />
-                      <CardField label="Defendable" value={row.defendable ? 'Yes' : 'No'} />
+                      <CardField label="Chargeback ID" value={row.original_payment_id} mono className="hidden sm:block" />
+                      <CardField label="Reason code" value={row.reason_code} mono className="hidden sm:block" />
+                      <CardField label="Reason" value={row.reason_description || '—'} className="hidden sm:block" />
+                      <CardField label="Network" value={formatNetwork(row.card_network)} className="hidden sm:block" />
+                      <CardField label="Defendable" value={row.defendable ? 'Yes' : 'No'} className="hidden sm:block" />
                       <CardField
                         label="Defense deadline"
                         value={renderDeadline(row.defense_deadline, row.status)}
                       />
-                      <CardField label="Received" value={formatDateTime(row.received_at)} />
+                      <CardField
+                        label="Received"
+                        value={
+                          <>
+                            <span className="sm:hidden">{formatDate(row.received_at)}</span>
+                            <span className="hidden sm:inline">{formatDateTime(row.received_at)}</span>
+                          </>
+                        }
+                      />
                     </CardFields>
                   </button>
-                  {isExpanded && <ChargebackDetail row={row} className="mt-4" />}
+                  {isExpanded && <ChargebackDetail row={row} className="mt-4" withPhoneFacts />}
                 </RecordCard>
               )
             })

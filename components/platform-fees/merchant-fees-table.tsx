@@ -131,12 +131,7 @@ export function MerchantFeesTable({
                       className="flex items-center gap-3 rounded-full hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <MerchantAvatar name={r.merchant_name} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate">{r.merchant_name}</span>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {r.merchant_id.slice(0, 8)}…
-                        </span>
-                      </span>
+                      <span className="min-w-0 truncate">{r.merchant_name}</span>
                     </Link>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{r.location_count}</TableCell>
@@ -182,12 +177,7 @@ export function MerchantFeesTable({
               >
                 <div className="flex items-center gap-3">
                   <MerchantAvatar name={r.merchant_name} className="hidden sm:inline-flex" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{r.merchant_name}</p>
-                    <p className="font-mono text-[11px] text-muted-foreground">
-                      {r.merchant_id.slice(0, 8)}…
-                    </p>
-                  </div>
+                  <p className="min-w-0 flex-1 truncate font-medium">{r.merchant_name}</p>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                 </div>
                 <CardFields>

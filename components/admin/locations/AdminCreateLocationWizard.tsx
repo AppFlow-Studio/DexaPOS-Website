@@ -3,6 +3,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
     Dialog,
     DialogContent,
@@ -478,25 +480,25 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                             onChange={updateFormData}
                             errors={errors}
                         />
-                        <div className="space-y-3 rounded-lg border bg-card p-4">
+                        {/* Borderless tinted group (§5.8) with the shared
+                            Input, matching the fields above it. */}
+                        <div className="space-y-4 rounded-2xl bg-muted/45 p-4">
                             <div>
                                 <p className="text-sm font-medium">Luqra acquiring MID</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-muted-foreground max-sm:hidden">
                                     Optional. Bind this location to a Luqra MID so admins can pull
                                     transactions and chargebacks from the reports API. You can also
                                     set this later from the merchant&apos;s MIDs section.
                                 </p>
                             </div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                                <div className="space-y-1.5">
-                                    <label htmlFor="wiz-luqra-mid" className="text-xs font-medium">
-                                        MID
-                                    </label>
-                                    <input
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="wiz-luqra-mid">MID</Label>
+                                    <Input
                                         id="wiz-luqra-mid"
                                         inputMode="numeric"
                                         placeholder="584600000103655"
-                                        className="font-mono h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                        className="font-mono bg-background"
                                         value={formData.luqra_mid ?? ''}
                                         onChange={(e) =>
                                             updateFormData({
@@ -508,17 +510,12 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                                         <p className="text-xs text-destructive">{errors.luqra_mid}</p>
                                     )}
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label
-                                        htmlFor="wiz-luqra-descriptor"
-                                        className="text-xs font-medium"
-                                    >
-                                        Descriptor
-                                    </label>
-                                    <input
+                                <div className="space-y-2">
+                                    <Label htmlFor="wiz-luqra-descriptor">Descriptor</Label>
+                                    <Input
                                         id="wiz-luqra-descriptor"
                                         placeholder="MTECH DISTRIBUTORS"
-                                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                        className="bg-background"
                                         value={formData.luqra_mid_descriptor ?? ''}
                                         onChange={(e) =>
                                             updateFormData({
@@ -565,57 +562,75 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
 
     return (
         <>
-            <div className="h-[92vh] flex">
-                {/* Sidebar */}
-                <WizardSidebar
-                    currentStep={currentStep}
-                    completedSteps={completedSteps}
-                    onStepClick={handleStepClick}
-                />
+            {/* Same responsive layout as the merchant-side CreateLocationWizard:
+                the step sidebar only fits from `lg` up; below that a step
+                count and progress bar stand in for it. */}
+            <div className="h-[calc(92vh-3.5rem)] sm:h-[92vh] flex">
+                <div className="hidden lg:flex">
+                    <WizardSidebar
+                        currentStep={currentStep}
+                        completedSteps={completedSteps}
+                        onStepClick={handleStepClick}
+                    />
+                </div>
 
                 {/* Main Content */}
-                <div className="flex-1 h-full flex flex-col">
+                <div className="flex flex-1 h-full flex-col min-w-0">
                     {/* Header */}
-                    <div className="border-b px-8 py-4 flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-1">Adding location for: {merchantName}</p>
-                            <h1 className="text-2xl font-semibold">{STEP_TITLES[currentStep - 1].title}</h1>
-                            <p className="text-muted-foreground">{STEP_TITLES[currentStep - 1].description}</p>
+                    <div className="border-b border-border/60 px-4 md:px-8 py-4 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground mb-1 truncate">Adding location for: {merchantName}</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5 lg:hidden">
+                                Step {currentStep} of {TOTAL_STEPS}
+                            </p>
+                            <h1 className="text-lg md:text-2xl font-semibold truncate">{STEP_TITLES[currentStep - 1].title}</h1>
+                            <p className="text-sm text-muted-foreground hidden sm:block">{STEP_TITLES[currentStep - 1].description}</p>
                         </div>
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={handleExit}
-                            className="text-muted-foreground hover:text-foreground"
+                            aria-label="Exit"
+                            className="text-muted-foreground hover:text-foreground shrink-0"
                         >
                             <X className="h-5 w-5" />
                         </Button>
                     </div>
 
+                    <div className="lg:hidden px-4 pt-2 pb-1">
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-foreground/70 rounded-full transition-all duration-500"
+                                style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }}
+                            />
+                        </div>
+                    </div>
+
                     {/* Form Content */}
-                    <div className="flex-1 overflow-auto p-8">
+                    <div className="flex-1 overflow-auto p-4 md:p-8">
                         <div className="max-w-3xl">
                             {renderStep()}
                         </div>
                     </div>
 
                     {/* Footer */}
-                    <div className="border-t px-8 py-4 flex items-center justify-between">
+                    <div className="border-t border-border/60 px-4 md:px-8 py-4 flex items-center justify-between">
                         <Button
                             variant="ghost"
                             onClick={handleBack}
                             disabled={currentStep === 1}
+                            aria-label="Back"
                             className="gap-2"
                         >
                             <ArrowLeft className="h-4 w-4" />
-                            Back
+                            <span className="hidden sm:inline">Back</span>
                         </Button>
 
                         {currentStep === TOTAL_STEPS ? (
                             <Button
                                 onClick={handleSubmit}
                                 disabled={isSubmitting}
-                                className="gap-2 min-w-[160px]"
+                                className="gap-2 min-w-35 md:min-w-40"
                             >
                                 {isSubmitting ? (
                                     <>

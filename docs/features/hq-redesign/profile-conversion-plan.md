@@ -34,7 +34,7 @@ The merchant page now renders through the same component, so it picks up two rul
 
 ## Verification
 
-- [ ] `tsc --noEmit --incremental false`: no errors in changed files
-- [ ] ESLint: no new findings against `HEAD`
+- [x] `tsc --noEmit --incremental false`: 820 project errors (the baseline), **0 in any changed file**
+- [x] ESLint: no findings in any changed file (the `HEAD` merchant page had none either)
 - [x] §3.5, §5.5 and §8 greps return nothing for the changed files; `PageShell` on the HQ route carries `as="div"`
 - [ ] Browser check was **not run**, because the Chrome DevTools MCP would not connect. Look at: the Clerk widget in dark mode on `/manage/profile` (it had never had the theming), the role pill, 375px with no avatar, and one `<main>` on the HQ route

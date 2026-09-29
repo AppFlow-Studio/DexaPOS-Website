@@ -45,6 +45,8 @@ interface MobileColumnsButtonProps {
   hidden: Set<string>;
   onChange: (next: Set<string>) => void;
   className?: string;
+  /** Trigger text. Card layouts pick fields rather than columns ("Info"). */
+  label?: string;
 }
 
 /**
@@ -62,6 +64,7 @@ export function MobileColumnsButton({
   hidden,
   onChange,
   className,
+  label = "Columns",
 }: MobileColumnsButtonProps) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [alignOffset, setAlignOffset] = React.useState(0);
@@ -114,7 +117,7 @@ export function MobileColumnsButton({
             className,
           )}
         >
-          Columns
+          {label}
           <span className="tabular-nums text-muted-foreground">
             {visibleCount}/{toggleable.length}
           </span>
@@ -127,7 +130,7 @@ export function MobileColumnsButton({
         className="w-52 max-w-[calc(100vw-2rem)]"
       >
         <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Visible columns
+          Visible {label.toLowerCase()}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {toggleable.map((column) => {

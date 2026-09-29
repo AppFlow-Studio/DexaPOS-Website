@@ -60,18 +60,20 @@ export function AssignManagerStep({
 
     return (
         <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground max-sm:hidden">
                 Choose how you want to assign a location manager. This replaces menu setup in onboarding.
             </p>
 
             <div className="space-y-3">
                 <Label>Manager Assignment</Label>
+                {/* Option cards: tinted, and the selected one gains a ring,
+                    not a border (§5.8). */}
                 <RadioGroup
                     value={data.manager_assignment_type}
                     onValueChange={(value: 'skip' | 'invite_new' | 'assign_existing') => onChange({ manager_assignment_type: value })}
                     className="space-y-2"
                 >
-                    <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted/70 has-[[data-state=checked]]:bg-muted has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-border">
                         <RadioGroupItem value="skip" />
                         <div>
                             <p className="text-sm font-medium">Skip for now</p>
@@ -79,7 +81,7 @@ export function AssignManagerStep({
                         </div>
                     </label>
 
-                    <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted/70 has-[[data-state=checked]]:bg-muted has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-border">
                         <RadioGroupItem value="invite_new" />
                         <div>
                             <p className="text-sm font-medium">Invite a new manager</p>
@@ -87,7 +89,7 @@ export function AssignManagerStep({
                         </div>
                     </label>
 
-                    <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted/70 has-[[data-state=checked]]:bg-muted has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-border">
                         <RadioGroupItem value="assign_existing" />
                         <div>
                             <p className="text-sm font-medium">Assign an existing user</p>
@@ -141,15 +143,16 @@ export function AssignManagerStep({
                                 role="combobox"
                                 aria-expanded={isManagerPickerOpen}
                                 className={cn(
-                                    'w-full justify-between',
-                                    errors?.existing_manager_identifier ? 'border-destructive' : ''
+                                    'w-full justify-between border-0 bg-muted/60 font-normal shadow-none hover:bg-muted',
+                                    // Filled like the Inputs; an error re-gains a border, as Input does.
+                                    errors?.existing_manager_identifier ? 'border border-destructive' : ''
                                 )}
                             >
                                 <span className="truncate text-left">{managerDisplay}</span>
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[420px] p-0">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] rounded-2xl p-0">
                             <Command>
                                 <CommandInput placeholder="Search by name or email..." />
                                 <CommandList>

@@ -43,17 +43,19 @@ export function MerchantBillingSection({
 
   return (
     <Card className="rounded-3xl">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
+      <CardHeader className="pb-3 max-sm:px-4">
+        <CardTitle className="flex items-center gap-2 text-base text-[#0C4FD1] dark:text-[#6CA0FF]">
           Merchant subscription
           <InfoHint label="One merchant tier is billed to the merchant's card. The tier is selected automatically by how many active locations the merchant runs." />
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Tier + price */}
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-muted/60 p-4">
+      <CardContent className="space-y-4 max-sm:px-4">
+        {/* Tier + price. Phone: tier on top, then price and renewal on one
+            ruled line below, instead of a right-aligned price wrapping into
+            a ragged second column. */}
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-muted/60 p-4 max-sm:flex-col">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-lg font-semibold">{tierName}</span>
               {status && (
                 <Badge variant="outline" className="capitalize">
@@ -68,10 +70,12 @@ export function MerchantBillingSection({
               )}
             </div>
           </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-1 text-2xl font-semibold tabular-nums">
+          <div className="text-right max-sm:flex max-sm:w-full max-sm:flex-wrap max-sm:items-baseline max-sm:justify-between max-sm:gap-x-3 max-sm:border-t max-sm:border-border/60 max-sm:pt-3 max-sm:text-left">
+            <div className="flex items-center justify-end gap-1 text-2xl font-semibold tabular-nums max-sm:text-lg">
               {formatTierPrice(priceCents)}
-              <span className="text-sm font-normal text-muted-foreground">/mo</span>
+              {priceCents > 0 && (
+                <span className="text-sm font-normal text-muted-foreground">/mo</span>
+              )}
             </div>
             {periodEnd && (
               <div className="text-xs text-muted-foreground">Renews {formatDate(periodEnd)}</div>
@@ -106,7 +110,7 @@ export function MerchantBillingSection({
                 Fine Dining — not enabled
               </Badge>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground max-sm:hidden">
               Billing wiring pending — unlocks are display-only for now.
             </p>
           </div>

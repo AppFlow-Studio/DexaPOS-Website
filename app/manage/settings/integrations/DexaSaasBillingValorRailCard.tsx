@@ -26,23 +26,18 @@ interface Props {
 }
 
 /**
- * The central Dexa SaaS billing rail (Valor). One Panel, three sections: what
- * is saved, the credentials form, and the subscription-rail cutover.
+ * The central Dexa SaaS billing rail (Valor). One Panel, two sections: what is
+ * saved and the credentials form. The one-off cutover that moves merchants onto
+ * this rail is its own card (SubscriptionRailCutoverCard), rendered beneath it.
  *
- * Status is words in a muted well (§3.5). The cutover's only colour is its
- * destructive button (§3.5, use 3).
+ * Status is words in a muted well (§3.5).
  */
 export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
   const [isSaving, startSaving] = useTransition()
-  const [isCutting, startCutover] = useTransition()
 
   const [epi, setEpi] = useState(config.epi ?? '')
   const [appid, setAppid] = useState(config.appid ?? '')
   const [appkey, setAppkey] = useState('')
-
-  const [confirmed, setConfirmed] = useState(false)
-  const [runningDry, setRunningDry] = useState(true)
-  const [result, setResult] = useState<CutoverResult | null>(null)
 
   const missing = [!config.epi && 'EPI', !config.appKeyConfigured && 'app key'].filter(
     Boolean
@@ -75,30 +70,6 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
     })
   }
 
-  const runCutover = (dryRun: boolean) => {
-    setRunningDry(dryRun)
-    startCutover(async () => {
-      try {
-        const res = await cutoverSubscriptionRailsToCentral({ dryRun })
-        setResult(res)
-        if (!res.success) {
-          toast.error(res.error ?? 'Cutover failed.')
-          return
-        }
-        if (!dryRun) setConfirmed(false)
-        toast.success(
-          dryRun
-            ? 'Dry run complete — no changes were made.'
-            : `Cutover complete — ${res.railsMigrated} rail(s) migrated, ${res.cardsInvalidated} card(s) invalidated.`,
-        )
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Cutover failed.')
-      }
-    })
-  }
-
-  const cutoverBlocked = isCutting || !canEdit || !config.configured
-
   return (
     <Panel>
       <PanelSection
@@ -123,10 +94,13 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
         caption="The boarded DEXA POS AI EPI with its generated app id and app key. The app key is stored in Supabase Vault and is never shown again."
       >
         <form onSubmit={handleSave} className="grid gap-6 md:grid-cols-2">
+          {/* EPI takes its own row so the generated app id + app key pair sits
+              side by side and the grid has no empty cell above the save row. */}
           <Field
             id="valor-saas-epi"
             label="Valor EPI"
             hint="10 digits, starting with 2. On staging, use the sandbox EPI that can process recurring."
+            className="md:col-span-2"
           >
             <Input
               id="valor-saas-epi"
@@ -174,7 +148,55 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
           </div>
         </form>
       </PanelSection>
+    </Panel>
+  )
+}
 
+/**
+ * The one-off move of every merchant's subscription rail onto the central
+ * credentials. Its own card: it is a destructive migration, not configuration,
+ * and stays blocked until the central rail above is saved.
+ *
+ * Its only colour is the destructive button (§3.5, use 3).
+ */
+export function SubscriptionRailCutoverCard({
+  configured,
+  canEdit,
+}: {
+  configured: boolean
+  canEdit: boolean
+}) {
+  const [isCutting, startCutover] = useTransition()
+  const [confirmed, setConfirmed] = useState(false)
+  const [runningDry, setRunningDry] = useState(true)
+  const [result, setResult] = useState<CutoverResult | null>(null)
+
+  const runCutover = (dryRun: boolean) => {
+    setRunningDry(dryRun)
+    startCutover(async () => {
+      try {
+        const res = await cutoverSubscriptionRailsToCentral({ dryRun })
+        setResult(res)
+        if (!res.success) {
+          toast.error(res.error ?? 'Cutover failed.')
+          return
+        }
+        if (!dryRun) setConfirmed(false)
+        toast.success(
+          dryRun
+            ? 'Dry run complete — no changes were made.'
+            : `Cutover complete — ${res.railsMigrated} rail(s) migrated, ${res.cardsInvalidated} card(s) invalidated.`,
+        )
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Cutover failed.')
+      }
+    })
+  }
+
+  const cutoverBlocked = isCutting || !canEdit || !configured
+
+  return (
+    <Panel>
       <PanelSection
         label="Cut over subscription rails"
         caption="Moves every merchant's subscription rail onto the central credentials: deactivates native schedules on old EPIs, re-points each rail, and invalidates cards vaulted under an old EPI, so those merchants must re-add their card. Rails already on the central EPI are left untouched. Preview with a dry run first."
@@ -189,7 +211,7 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
               id="valor-cutover-confirm"
               className="mt-0.5"
               checked={confirmed}
-              disabled={!canEdit || !config.configured}
+              disabled={!canEdit || !configured}
               onCheckedChange={(checked) => setConfirmed(checked === true)}
             />
             <Label
@@ -201,9 +223,9 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
             </Label>
           </div>
 
-          {!config.configured && (
+          {!configured && (
             <p className="text-sm text-muted-foreground">
-              Save the central credentials before running a cutover.
+              Save the central SaaS billing credentials above before running a cutover.
             </p>
           )}
 

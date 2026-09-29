@@ -2,7 +2,6 @@
 
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BusinessHours, DayHours, DEFAULT_BUSINESS_HOURS } from '@/types/merchant_locations'
@@ -75,18 +74,20 @@ function DayHoursRow({
     }
 
     return (
-        <div className={cn('rounded-xl border p-4', hours.is_closed && 'bg-muted/40')}>
+        // Borderless tinted card (§5.8); a closed day is quieter, not coloured.
+        <div className={cn('rounded-2xl p-4', hours.is_closed ? 'bg-muted/25' : 'bg-muted/45')}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 
                 {/* Left: day name + open/closed toggle */}
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col gap-0.5 w-28 shrink-0">
                         <span className="text-sm font-medium">{label}</span>
+                        {/* Plain words on a tinted card, not an orange pill (§3.5). */}
                         {isOvernight && !hours.is_closed && (
-                            <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5 w-fit">
-                                <Moon className="h-2.5 w-2.5" />
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <Moon className="h-3 w-3" />
                                 Overnight
-                            </Badge>
+                            </span>
                         )}
                     </div>
                     <Switch
@@ -107,7 +108,7 @@ function DayHoursRow({
                             value={hours.open}
                             onValueChange={(value) => onChange({ ...hours, open: value })}
                         >
-                            <SelectTrigger className="w-full sm:w-36">
+                            <SelectTrigger className="w-full border-0 bg-background shadow-none sm:w-36">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -124,7 +125,7 @@ function DayHoursRow({
                             onValueChange={(value) => onChange({ ...hours, close: value })}
                         >
                             {/* w-48 ensures "12:00 AM (next day)" fits without truncation */}
-                            <SelectTrigger className="w-full sm:w-48">
+                            <SelectTrigger className="w-full border-0 bg-background shadow-none sm:w-48">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -189,21 +190,16 @@ export function BusinessHoursStep({ data, onChange, errors }: BusinessHoursStepP
 
     return (
         <div className="space-y-6">
-            {/* Toolbar */}
-            <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                    Set your regular business hours for this location
-                </p>
-                <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={copyToAllDays} className="gap-1.5">
-                        <Copy className="h-3.5 w-3.5" />
-                        Copy Monday to all
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={resetToDefaults} className="gap-1.5">
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Reset
-                    </Button>
-                </div>
+            {/* Toolbar — wraps rather than overflowing on phones. */}
+            <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={copyToAllDays} className="gap-1.5">
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy Monday to all
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={resetToDefaults} className="gap-1.5">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset
+                </Button>
             </div>
 
             {/* Day rows */}
@@ -224,13 +220,13 @@ export function BusinessHoursStep({ data, onChange, errors }: BusinessHoursStepP
                 <p className="text-sm text-destructive">{errors.business_hours}</p>
             )}
 
-            {/* Tips */}
-            <div className="bg-muted/50 rounded-lg p-4">
+            {/* Tips — a neutral callout (§3.5), desktop only (§13.4). */}
+            <div className="rounded-2xl bg-muted/60 px-4 py-3 max-sm:hidden">
                 <h4 className="text-sm font-medium mb-2">Tips</h4>
                 <ul className="text-xs text-muted-foreground space-y-1">
                     <li>• Toggle the switch to mark a day as open or closed</li>
-                    <li>• Enable "Closes next day" for overnight hours (e.g. 12 PM – 2 AM)</li>
-                    <li>• Use "Copy Monday to all" for consistent hours</li>
+                    <li>• Enable &ldquo;Closes next day&rdquo; for overnight hours (e.g. 12 PM – 2 AM)</li>
+                    <li>• Use &ldquo;Copy Monday to all&rdquo; for consistent hours</li>
                     <li>• Times are in 30-minute intervals</li>
                     <li>• For 24-hour operation, set open: 12:00 AM, close: 11:30 PM</li>
                 </ul>

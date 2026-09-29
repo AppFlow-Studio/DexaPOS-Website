@@ -127,6 +127,7 @@ export function SubscriptionCatalogAdmin() {
   const servicePage = useClientPagination(services, 10)
   const devicePage = useClientPagination(deviceRows, 10)
 
+  // The first load failed (§4.9: a worded error with Retry, never red text).
   // A failed refetch after a save keeps the last good catalog on screen.
   if (!catalog && !isLoading) {
     return (

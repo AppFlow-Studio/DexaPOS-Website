@@ -226,7 +226,7 @@ export function LuqraTransactionsTable({
             )}
 
             {!isDrilldown && (
-                <p className="text-xs text-muted-foreground">
+                <p className="hidden text-xs text-muted-foreground sm:block">
                     Reading from local cache. To sync, set a <strong>date range</strong> or a{' '}
                     <strong>max row count</strong> — Luqra returns slowly when neither is set.
                 </p>
