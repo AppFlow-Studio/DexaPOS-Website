@@ -9,6 +9,7 @@ import { Location } from "@/types/merchant_locations";
 interface LocationState {
   // Core state
   selectedLocationId: string; // 'all' or UUID
+  lastBranchLocationId: string | null;
   locations: Location[];
   isLoading: boolean;
   isInitialized: boolean;
@@ -25,6 +26,7 @@ interface LocationState {
 // Initial state
 const initialState = {
   selectedLocationId: "all",
+  lastBranchLocationId: null,
   locations: [],
   isLoading: false,
   isInitialized: false,
@@ -36,7 +38,10 @@ export const useLocationStore = create<LocationState>()(
       ...initialState,
 
       setSelectedLocation: (id: string) => {
-        set({ selectedLocationId: id });
+        set({
+          selectedLocationId: id,
+          ...(id !== "all" ? { lastBranchLocationId: id } : {}),
+        });
         // Sync to cookie for server-side access (e.g. audit logging)
         if (typeof document !== "undefined") {
           document.cookie = `x-location-id=${id}; path=/; max-age=31536000; SameSite=Lax`;
@@ -91,7 +96,7 @@ export const useLocationStore = create<LocationState>()(
             (l) => (l as any).is_primary_location === true,
           );
           const fallbackId = primaryLocation?.id || locations[0].id;
-          set({ selectedLocationId: fallbackId });
+          set({ selectedLocationId: fallbackId, lastBranchLocationId: fallbackId });
 
           // Sync to cookie
           if (typeof document !== "undefined") {
@@ -124,6 +129,7 @@ export const useLocationStore = create<LocationState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         selectedLocationId: state.selectedLocationId,
+        lastBranchLocationId: state.lastBranchLocationId,
       }),
       onRehydrateStorage: () => (state) => {
         // Validate persisted state after rehydration

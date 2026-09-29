@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Empty } from "@/components/ui/empty";
 import {
@@ -25,11 +24,9 @@ import {
   Star,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
-import { MenuChannelVisibilityControls } from "./MenuChannelVisibilityControls";
-import { MenuStationCoverage } from "./MenuStationCoverage";
+import { MenuChannelVisibilityIndicators } from "./MenuChannelVisibilityControls";
 import {
   normalizeMenuChannelVisibility,
-  type MenuChannelVisibility,
 } from "@/lib/menu/menu-channel-visibility";
 import { useIsSingleLocation } from "@/stores/location-store";
 import {
@@ -80,12 +77,10 @@ interface MenuListViewProps {
   menus: MenuWithLocation[];
   isLoading?: boolean;
   viewMode: "grid" | "list";
-  onToggleActive: (menuId: string) => void;
   onDelete: (menuId: string) => void;
   onCreateNew?: () => void;
   /** Duplicate menu handler - receives menuId and target locationId (null = global) */
   onDuplicate?: (menuId: string, targetLocationId: string | null) => void;
-  onSettings?: (menuId: string) => void;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
   hasOrderChanges?: boolean;
@@ -93,31 +88,14 @@ interface MenuListViewProps {
   isFiltered?: boolean;
   /** The location's canonical OrderOut online-ordering menu id (null = none/n-a) */
   onlineMenuId?: string | null;
-  /** Menu ids linked+active on OrderOut for the location (eligible to become primary) */
-  linkedMenuIds?: string[];
-  onSetOnlineMenu?: (menuId: string) => void;
-  /** Returns false when the write failed, so the switch can roll back. */
-  onChannelVisibilityChange?: (
-    menuId: string,
-    visibility: MenuChannelVisibility,
-  ) => void | Promise<boolean | void>;
-  channelVisibilityDisabled?: boolean;
   /** Show effective menu availability across locations in the table view. */
   showLocations?: boolean;
-  /**
-   * Location whose stations the "N of M stations" pill reports on. Null or
-   * 'all' hides the pill: per-station scope is a per-location question.
-   */
-  stationCoverageLocationId?: string | null;
 }
 
 // Internal Helper Interface for Actions
 interface MenuActions {
-  onToggleActive: (menuId: string) => void;
   onDelete: (menuId: string) => void;
   onDuplicate?: (menuId: string, targetLocationId: string | null) => void;
-  onSettings?: (menuId: string) => void;
-  onSetOnlineMenu?: (menuId: string) => void;
 }
 
 function SortableGridCard({
@@ -126,25 +104,15 @@ function SortableGridCard({
   actions,
   isFiltered,
   onlineMenuId,
-  linkedMenuIds,
-  onChannelVisibilityChange,
-  channelVisibilityDisabled,
-  stationCoverageLocationId,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
   actions: MenuActions;
   isFiltered?: boolean;
   onlineMenuId?: string | null;
-  linkedMenuIds?: string[];
-  onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
-  channelVisibilityDisabled?: boolean;
-  stationCoverageLocationId?: string | null;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const visibility = normalizeMenuChannelVisibility(menu);
-  const canSetOnlineMenu = visibility.is_visible_online &&
-    (linkedMenuIds?.includes(menu.id) ?? false);
   const {
     attributes,
     listeners,
@@ -194,31 +162,14 @@ function SortableGridCard({
             <MenuActionsDropdown
               menuId={menu.id}
               menuName={menu.name}
-              isActive={menu.is_active}
               menuLocationId={menu.location_id}
-              isOnlineMenu={isOnlineMenu}
-              canSetOnlineMenu={canSetOnlineMenu}
               {...actions}
             />
           </div>
         </div>
 
-        <div className="pt-3" onClick={(event) => event.stopPropagation()}>
-          <MenuChannelVisibilityControls
-            compact
-            value={visibility}
-            // Only "no location selected" disables these. The control is
-            // optimistic and rolls back on failure, so there is nothing to
-            // wait for — see MenuChannelVisibilityControls.
-            disabled={channelVisibilityDisabled}
-            onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
-          />
-          <MenuStationCoverage
-            menuId={menu.id}
-            visibility={visibility}
-            locationId={stationCoverageLocationId}
-            className="mt-2"
-          />
+        <div className="pt-3">
+          <MenuChannelVisibilityIndicators value={visibility} />
         </div>
 
         <div className="mt-auto flex min-w-0 flex-wrap items-center gap-2 pt-3">
@@ -264,27 +215,17 @@ function SortableTableRow({
   actions,
   isFiltered,
   onlineMenuId,
-  linkedMenuIds,
-  onChannelVisibilityChange,
-  channelVisibilityDisabled,
   showLocations,
-  stationCoverageLocationId,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
   actions: MenuActions;
   isFiltered?: boolean;
   onlineMenuId?: string | null;
-  linkedMenuIds?: string[];
-  onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
-  channelVisibilityDisabled?: boolean;
   showLocations: boolean;
-  stationCoverageLocationId?: string | null;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const visibility = normalizeMenuChannelVisibility(menu);
-  const canSetOnlineMenu = visibility.is_visible_online &&
-    (linkedMenuIds?.includes(menu.id) ?? false);
   const {
     attributes,
     listeners,
@@ -348,6 +289,9 @@ function SortableTableRow({
                 {menu.description}
               </div>
             )}
+            <div className="mt-1.5 md:hidden">
+              <MenuChannelVisibilityIndicators value={visibility} />
+            </div>
           </div>
         </div>
       </TableCell>
@@ -357,48 +301,24 @@ function SortableTableRow({
         </TableCell>
       )}
       <TableCell>
-        <div onClick={(event) => event.stopPropagation()}>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Switch
-              checked={menu.is_active}
-              onCheckedChange={() => actions.onToggleActive(menu.id)}
-              aria-label={`${menu.is_active ? "Deactivate" : "Activate"} ${menu.name}`}
-            />
-            <span
-              className={cn(
-                "text-[11px] font-medium sm:text-sm",
-                menu.is_active
-                  ? "text-green-600"
-                  : "text-muted-foreground",
-              )}
-            >
-              {menu.is_active ? "Active" : "Inactive"}
-            </span>
-            {isOnlineMenu && (
-              <span className="hidden sm:inline-flex">
-                <OnlineMenuBadge />
-              </span>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span
+            className={cn(
+              "text-[11px] font-medium sm:text-sm",
+              menu.is_active ? "text-green-600" : "text-muted-foreground",
             )}
-          </div>
+          >
+            {menu.is_active ? "Active" : "Inactive"}
+          </span>
+          {isOnlineMenu && (
+            <span className="hidden sm:inline-flex">
+              <OnlineMenuBadge />
+            </span>
+          )}
         </div>
       </TableCell>
-      <TableCell
-        className="hidden md:table-cell"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <MenuChannelVisibilityControls
-          compact
-          value={visibility}
-          // Only "no location selected" disables these — see the grid card above.
-          disabled={channelVisibilityDisabled}
-          onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
-        />
-        <MenuStationCoverage
-          menuId={menu.id}
-          visibility={visibility}
-          locationId={stationCoverageLocationId}
-          className="mt-1.5"
-        />
+      <TableCell className="hidden md:table-cell">
+        <MenuChannelVisibilityIndicators value={visibility} />
       </TableCell>
       <TableCell className="hidden text-muted-foreground sm:table-cell">
         {new Date(menu.created_at).toLocaleDateString()}
@@ -407,10 +327,7 @@ function SortableTableRow({
         <MenuActionsDropdown
           menuId={menu.id}
           menuName={menu.name}
-          isActive={menu.is_active}
           menuLocationId={menu.location_id}
-          isOnlineMenu={isOnlineMenu}
-          canSetOnlineMenu={canSetOnlineMenu}
           {...actions}
         />
       </TableCell>
@@ -422,26 +339,19 @@ export function MenuListView({
   menus,
   isLoading = false,
   viewMode,
-  onToggleActive,
   onDelete,
   onCreateNew,
   onDuplicate,
-  onSettings,
   emptyStateTitle = "No menus yet",
   emptyStateDescription = "Get started by creating your first menu",
   hasOrderChanges = false,
   onReorder,
   isFiltered = false,
   onlineMenuId,
-  linkedMenuIds,
-  onSetOnlineMenu,
-  onChannelVisibilityChange,
-  channelVisibilityDisabled = false,
   showLocations = false,
-  stationCoverageLocationId = null,
 }: MenuListViewProps) {
   const router = useRouter();
-  const actions = { onToggleActive, onDelete, onDuplicate, onSettings, onSetOnlineMenu };
+  const actions = { onDelete, onDuplicate };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -529,10 +439,6 @@ export function MenuListView({
                 actions={actions}
                 isFiltered={isFiltered}
                 onlineMenuId={onlineMenuId}
-                linkedMenuIds={linkedMenuIds}
-                onChannelVisibilityChange={onChannelVisibilityChange}
-                channelVisibilityDisabled={channelVisibilityDisabled}
-                stationCoverageLocationId={stationCoverageLocationId}
               />
             ))}
           </div>
@@ -578,11 +484,7 @@ export function MenuListView({
                     actions={actions}
                     isFiltered={isFiltered}
                     onlineMenuId={onlineMenuId}
-                    linkedMenuIds={linkedMenuIds}
-                    onChannelVisibilityChange={onChannelVisibilityChange}
-                    channelVisibilityDisabled={channelVisibilityDisabled}
                     showLocations={showLocations}
-                    stationCoverageLocationId={stationCoverageLocationId}
                   />
                 ))}
               </SortableContext>

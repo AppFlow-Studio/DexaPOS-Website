@@ -10,25 +10,17 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreVertical, Eye, Trash2, Power, Settings, Copy, ExternalLink, Lock, Globe, Star } from 'lucide-react'
+import { MoreVertical, Eye, Trash2, Copy, ExternalLink, Lock, Globe } from 'lucide-react'
 import { useLocationStore, useIsSingleLocation } from '@/stores/location-store'
 
 interface MenuActionsDropdownProps {
     menuId: string
     menuName: string
-    isActive: boolean
     /** The location_id of the menu itself (null = global menu) */
     menuLocationId: string | null
-    onToggleActive: (menuId: string) => void
     onDelete: (menuId: string) => void
     /** Duplicate menu - passes menuId and target locationId (null = global) */
     onDuplicate?: (menuId: string, targetLocationId: string | null) => void
-    onSettings?: (menuId: string) => void
-    /** True when this menu is the location's canonical online-ordering menu */
-    isOnlineMenu?: boolean
-    /** True when this menu is linked to OrderOut for the location (eligible to become primary) */
-    canSetOnlineMenu?: boolean
-    onSetOnlineMenu?: (menuId: string) => void
     align?: 'start' | 'end' | 'center'
     triggerClassName?: string
 }
@@ -36,15 +28,9 @@ interface MenuActionsDropdownProps {
 export function MenuActionsDropdown({
     menuId,
     menuName,
-    isActive,
     menuLocationId,
-    onToggleActive,
     onDelete,
     onDuplicate,
-    onSettings,
-    isOnlineMenu,
-    canSetOnlineMenu,
-    onSetOnlineMenu,
     align = 'end',
     triggerClassName,
 }: MenuActionsDropdownProps) {
@@ -72,11 +58,6 @@ export function MenuActionsDropdown({
         router.push(`/dashboard/menu/${menuId}`)
     }
 
-    const handleToggleActive = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        onToggleActive(menuId)
-    }
-
     const handleDelete = (e: React.MouseEvent) => {
         e.stopPropagation()
         onDelete(menuId)
@@ -93,17 +74,6 @@ export function MenuActionsDropdown({
         // Duplicate as a new global menu
         onDuplicate?.(menuId, null)
     }
-
-    const handleSettings = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        onSettings?.(menuId)
-    }
-
-    const handleSetOnlineMenu = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        onSetOnlineMenu?.(menuId)
-    }
-
 
     return (
         <DropdownMenu>
@@ -162,43 +132,6 @@ export function MenuActionsDropdown({
                     </DropdownMenuItem>
                 )}
 
-                {/* Toggle Active Status - Only if can edit */}
-                {canEditOrDelete ? (
-                    <DropdownMenuItem onClick={handleToggleActive}>
-                        <Power className="mr-2 h-4 w-4" />
-                        {isActive ? 'Deactivate Menu' : 'Activate Menu'}
-                    </DropdownMenuItem>
-                ) : (
-                    <DropdownMenuItem disabled className="opacity-50">
-                        <Lock className="mr-2 h-4 w-4" />
-                        {isActive ? 'Deactivate' : 'Activate'}
-                        <span className="ml-auto text-xs text-muted-foreground">Global</span>
-                    </DropdownMenuItem>
-                )}
-
-                {/* Settings - Only if can edit */}
-                {onSettings && canEditOrDelete && (
-                    <DropdownMenuItem onClick={handleSettings}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Menu Settings
-                    </DropdownMenuItem>
-                )}
-
-                {/* OrderOut online-ordering menu designation */}
-                {isOnlineMenu ? (
-                    <DropdownMenuItem disabled className="opacity-70">
-                        <Star className="mr-2 h-4 w-4 fill-amber-400 text-amber-500" />
-                        Online ordering menu
-                    </DropdownMenuItem>
-                ) : canSetOnlineMenu && onSetOnlineMenu ? (
-                    <DropdownMenuItem onClick={handleSetOnlineMenu}>
-                        <Star className="mr-2 h-4 w-4" />
-                        Set as online menu
-                    </DropdownMenuItem>
-                ) : null}
-
-                <DropdownMenuSeparator />
-
                 {/* Delete - Only if can edit */}
                 {canEditOrDelete ? (
                     <DropdownMenuItem
@@ -221,7 +154,7 @@ export function MenuActionsDropdown({
                     <>
                         <DropdownMenuSeparator />
                         <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                            Global menus can only be modified from "All Locations" view.
+                            Global menus can only be modified from &quot;All Locations&quot; view.
                             Duplicate to edit locally.
                         </div>
                     </>
