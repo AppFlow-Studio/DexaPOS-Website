@@ -189,9 +189,10 @@ Deno.serve(async (req) => {
 
   // Anything that isn't a batch_summary or recurring event (validation POST, empty body, other
   // event) is ack'd 200 without a signature — so URL validation passes even
-  // before the secret is set.
+  // before the secret is set. Unsigned and never processed, so log the event
+  // name, not the body (raw bodies here were most of the table's size).
   if (!looksLikeBatchSummary && !looksLikeRecurring) {
-    await logEvent('ignored', false, 200, { epi, batchNo, raw: payload })
+    await logEvent('ignored', false, 200, { epi, batchNo, detail: eventName || null })
     return json({ ok: true, ignored: true }, 200)
   }
 
@@ -206,7 +207,8 @@ Deno.serve(async (req) => {
 
   const verified = await verifyValorSignature(rawBody, signature, timestamp)
   if (!verified) {
-    await logEvent('invalid_signature', false, 401, { epi, batchNo, detail: 'HMAC verification failed or stale timestamp', raw: payload })
+    // No body: it failed verification, so it is never processed.
+    await logEvent('invalid_signature', false, 401, { epi, batchNo, detail: 'HMAC verification failed or stale timestamp' })
     return json({ error: 'invalid_signature' }, 401)
   }
 

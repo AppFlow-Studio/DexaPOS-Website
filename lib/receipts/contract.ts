@@ -125,7 +125,7 @@ export interface ReceiptData {
 export interface RawPublicReceipt {
   order: ReceiptContractOrder;
   location: ReceiptContractLocation;
-  /** Active sale receipt_templates.header_text — header precedence source. */
+  /** Active sale receipt template (template_type 'receipt') header_text — header precedence source. */
   template_header: string | null;
   template_footer: string | null;
   logo_url: string | null;

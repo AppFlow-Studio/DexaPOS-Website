@@ -4,8 +4,10 @@
 // printers.receipt_header, the locations record). For web receipts there must be
 // exactly ONE rendered header block with a documented precedence:
 //
-//   1. Active "sale" receipt_templates.header_text (location-scoped, non-empty)
-//      → use it verbatim. It is free-form, store-authored text.
+//   1. Active sale receipt template's header_text (location-scoped, non-empty)
+//      → use it verbatim. It is free-form, store-authored text. The sale
+//      receipt is the receipt_templates row with template_type 'receipt',
+//      shared with the POS (see lib/receipts/template-type.ts).
 //   2. Else → build from the locations record: name + one address + one phone.
 //
 // Renderers display ONLY the returned block — never location fields AND

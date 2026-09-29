@@ -127,22 +127,6 @@ export interface KdsDisplaySummary {
   kds_workflow_mode: string;
 }
 
-export interface KdsBoardSnapshotIndexEntry {
-  id: string;
-  captured_at: string;
-  reason: "item_arrived" | "item_ready" | "item_served" | "manual";
-  order_id: string | null;
-  ticket_count: number;
-  item_count: number;
-  board_hash: string;
-}
-
-export interface KdsBoardSnapshotDetail extends KdsBoardSnapshotIndexEntry {
-  location_id: string;
-  kds_display_id: string;
-  board: KdsMirrorTicket[];
-}
-
 export interface KdsRoutingHealth {
   merchant_id: string;
   location_id: string;
@@ -455,74 +439,6 @@ export async function hqGetKdsBoardMirror(
     };
   } catch (err) {
     return fail("hqGetKdsBoardMirror", err);
-  }
-}
-
-/**
- * Snapshot index for the replay scrubber. Metadata only -- boards are whole
- * jsonb documents and a busy hour would be megabytes over the wire.
- */
-export async function hqGetKdsBoardSnapshots(
-  kdsDisplayId: string,
-  fromIso: string | null,
-  toIso: string | null,
-  limit = 200
-): Promise<ActionResult<KdsBoardSnapshotIndexEntry[]>> {
-  try {
-    await assertHQPermission("hq.support.view");
-
-    if (!kdsDisplayId) {
-      return { success: true, error: null, data: [] };
-    }
-
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase.rpc("hq_get_kds_board_snapshots_v1", {
-      p_kds_display_id: kdsDisplayId,
-      p_from: fromIso,
-      p_to: toIso,
-      p_limit: limit,
-    });
-
-    if (error) throw new Error(error.message);
-
-    return {
-      success: true,
-      error: null,
-      data: (data ?? []) as unknown as KdsBoardSnapshotIndexEntry[],
-    };
-  } catch (err) {
-    return fail("hqGetKdsBoardSnapshots", err);
-  }
-}
-
-/**
- * One full snapshot, including the stored board, for the scrubber's current
- * position.
- */
-export async function hqGetKdsBoardSnapshot(
-  snapshotId: string
-): Promise<ActionResult<KdsBoardSnapshotDetail | null>> {
-  try {
-    await assertHQPermission("hq.support.view");
-
-    if (!snapshotId) {
-      return { success: true, error: null, data: null };
-    }
-
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase.rpc("hq_get_kds_board_snapshot_v1", {
-      p_snapshot_id: snapshotId,
-    });
-
-    if (error) throw new Error(error.message);
-
-    return {
-      success: true,
-      error: null,
-      data: (data ?? null) as unknown as KdsBoardSnapshotDetail | null,
-    };
-  } catch (err) {
-    return fail("hqGetKdsBoardSnapshot", err);
   }
 }
 
