@@ -22,7 +22,12 @@ import { LogAuditEvent } from "./audit-logs";
 // `template_type` below is always the Website's name for the template. The
 // Sale Receipt is stored as 'receipt' (the row the POS prints from); that
 // mapping happens only in this file, where rows cross the database boundary.
-export type { TemplateType };
+//
+// Do NOT re-export the TemplateType type from this "use server" file: Next's
+// server-action loader treats every `export { ... }` specifier as an action and
+// emits registerServerReference(TemplateType, ...), which throws
+// "ReferenceError: TemplateType is not defined" at module load (the type has no
+// runtime binding). Import TemplateType from "@/lib/receipts/template-type".
 
 export interface ReceiptTemplate {
   id: string;
