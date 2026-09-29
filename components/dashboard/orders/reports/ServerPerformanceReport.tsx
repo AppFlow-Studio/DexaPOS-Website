@@ -9,7 +9,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
 import { DollarSign, ShoppingBag } from 'lucide-react'
-import type { ServerLeaderboardRow } from '@/types/analytics'
+import {
+  buildServerPerformanceRows,
+  summarizeServerPerformance,
+  type ServerPerformanceTableRow,
+} from '@/lib/reporting/server-performance'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface ServerPerformanceReportProps {
@@ -29,12 +33,17 @@ export function ServerPerformanceReport({
   const [searchQuery, setSearchQuery] = useState('')
   const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['order_count', 'total_sales', 'total_tips', 'tables_turned']))
 
-  const filteredData = useMemo(() => {
-    if (!data?.leaderboard) return []
-    return data.leaderboard.filter((row) =>
-      String(row.staff_name).toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [data, searchQuery])
+  // Staff rows plus one row per channel nobody rang up (kiosk, online, ...),
+  // so the table adds up to the period's recognized sales.
+  const rows = useMemo(() => buildServerPerformanceRows(data), [data])
+
+  const filteredData = useMemo(
+    () =>
+      rows.filter((row) =>
+        String(row.staff_name).toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [rows, searchQuery]
+  )
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -50,7 +59,7 @@ export function ServerPerformanceReport({
       maximumFractionDigits: 1,
     }).format(value / 100)
 
-  const columns: ColumnDef<ServerLeaderboardRow>[] = [
+  const columns: ColumnDef<ServerPerformanceTableRow>[] = [
     {
       accessorKey: 'staff_name',
       header: 'Server Name',
@@ -138,15 +147,12 @@ export function ServerPerformanceReport({
     return <Skeleton className="h-[400px] w-full" />
   }
 
-  if (!data || !data.leaderboard || data.leaderboard.length === 0) {
+  if (rows.length === 0) {
     return <Empty description="No server performance data for selected period" />
   }
 
   // Calculate summary metrics
-  const topServerRow = data.leaderboard.reduce((max, row) => (row.total_sales || 0) > (max.total_sales || 0) ? row : max)
-  const topServerName = topServerRow?.staff_name || 'N/A'
-  const totalTips = data.leaderboard.reduce((sum, row) => sum + (row.total_tips || 0), 0)
-  const totalSales = data.leaderboard.reduce((sum, row) => sum + (row.total_sales || 0), 0)
+  const { topServerName, totalTips } = summarizeServerPerformance(rows)
 
   const summaryCardsData = [
     { label: 'Top Server', value: topServerName },
@@ -173,7 +179,7 @@ export function ServerPerformanceReport({
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         filteredCount={filteredData.length}
-        totalCount={data.leaderboard.length}
+        totalCount={rows.length}
         data={filteredData}
         exportColumns={exportColumns}
         filename={`Server Performance - ${formatReportDateRange(dateFrom, dateTo)}`}

@@ -16893,6 +16893,7 @@ export type Database = {
           logo_url: string | null
           merchant_id: string
           modifier_style: string
+          print_signature_line: boolean
           show_allergy_alert: boolean | null
           show_approved_by: boolean | null
           show_barcode: boolean | null
@@ -16909,6 +16910,7 @@ export type Database = {
           show_tax_breakdown: boolean | null
           show_tip_line: boolean | null
           show_void_reason: boolean | null
+          signature_line_disclaimer: string | null
           template_name: string
           template_type: string
           updated_at: string | null
@@ -16926,6 +16928,7 @@ export type Database = {
           logo_url?: string | null
           merchant_id: string
           modifier_style?: string
+          print_signature_line?: boolean
           show_allergy_alert?: boolean | null
           show_approved_by?: boolean | null
           show_barcode?: boolean | null
@@ -16942,6 +16945,7 @@ export type Database = {
           show_tax_breakdown?: boolean | null
           show_tip_line?: boolean | null
           show_void_reason?: boolean | null
+          signature_line_disclaimer?: string | null
           template_name: string
           template_type: string
           updated_at?: string | null
@@ -16959,6 +16963,7 @@ export type Database = {
           logo_url?: string | null
           merchant_id?: string
           modifier_style?: string
+          print_signature_line?: boolean
           show_allergy_alert?: boolean | null
           show_approved_by?: boolean | null
           show_barcode?: boolean | null
@@ -16975,6 +16980,7 @@ export type Database = {
           show_tax_breakdown?: boolean | null
           show_tip_line?: boolean | null
           show_void_reason?: boolean | null
+          signature_line_disclaimer?: string | null
           template_name?: string
           template_type?: string
           updated_at?: string | null

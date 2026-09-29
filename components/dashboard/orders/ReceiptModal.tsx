@@ -255,6 +255,7 @@ export function ReceiptModal({
     order.order_type === "dine_in" || order.order_type === "qr_dine_in";
 
   // ─── Config-driven presentation (receipt_templates → sale template) ───
+  // "sale" resolves to the 'receipt' row, the one the POS prints from.
   const { data: template } = useQuery<ReceiptTemplate | null>({
     queryKey: ["receipt-template", locationId, "sale"],
     queryFn: async () => {
@@ -268,7 +269,6 @@ export function ReceiptModal({
 
   const showMods = template ? template.show_item_modifiers : true;
   const showTip = template ? template.show_tip_line : true;
-  const showTaxBreakdown = template ? template.show_tax_breakdown : true;
   const showServer = template ? template.show_server_name : true;
   const showOrderType = template ? template.show_order_type : true;
   const modsLarge = template?.show_mods_large ?? false;
@@ -574,7 +574,9 @@ export function ReceiptModal({
                   <span>{formatCurrency(lane.serviceCharge)}</span>
                 </div>
               )}
-              {showTaxBreakdown && lane.tax > 0 && (
+              {/* Always shown: the POS prints the tax line regardless of the
+                  template, and the Sale Receipt settings no longer offer a toggle. */}
+              {lane.tax > 0 && (
                 <div className="totals-row flex justify-between">
                   <span>Tax</span>
                   <span>{formatCurrency(lane.tax)}</span>

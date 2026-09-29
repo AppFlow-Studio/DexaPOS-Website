@@ -6,20 +6,23 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  DB_TEMPLATE_TYPES,
+  TEMPLATE_TYPE_IDS,
+  fromDbTemplateType,
+  toDbTemplateType,
+  type TemplateType,
+} from "@/lib/receipts/template-type";
 import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type TemplateType =
-  | "sale"
-  | "kitchen"
-  | "void_refund"
-  | "no_sale"
-  | "end_of_day"
-  | "cash_drawer"
-  | "online_order";
+// `template_type` below is always the Website's name for the template. The
+// Sale Receipt is stored as 'receipt' (the row the POS prints from); that
+// mapping happens only in this file, where rows cross the database boundary.
+export type { TemplateType };
 
 export interface ReceiptTemplate {
   id: string;
@@ -35,6 +38,8 @@ export interface ReceiptTemplate {
   show_tip_line: boolean;
   show_server_name: boolean;
   show_order_type: boolean;
+  print_signature_line: boolean;
+  signature_line_disclaimer: string | null;
   show_barcode: boolean;
   show_qr_code: boolean;
   large_item_text: boolean;
@@ -57,6 +62,8 @@ export interface UpsertReceiptTemplateInput {
   show_tip_line?: boolean;
   show_server_name?: boolean;
   show_order_type?: boolean;
+  print_signature_line?: boolean;
+  signature_line_disclaimer?: string | null;
   show_barcode?: boolean;
   show_qr_code?: boolean;
   large_item_text?: boolean;
@@ -64,6 +71,13 @@ export interface UpsertReceiptTemplateInput {
   group_by_station?: boolean;
   show_allergy_alert?: boolean;
   show_ready_by_time?: boolean;
+}
+
+/** A stored row under the Website's template name, or null if it isn't a Website template. */
+function toWebTemplate(row: { template_type: string }): ReceiptTemplate | null {
+  const templateType = fromDbTemplateType(row.template_type);
+  if (!templateType) return null;
+  return { ...row, template_type: templateType } as ReceiptTemplate;
 }
 
 // ============================================================================
@@ -81,6 +95,7 @@ export async function getReceiptTemplates(locationId: string) {
       .from("receipt_templates")
       .select("*")
       .eq("location_id", locationId)
+      .in("template_type", DB_TEMPLATE_TYPES)
       .order("template_type", { ascending: true });
 
     if (error) {
@@ -88,7 +103,11 @@ export async function getReceiptTemplates(locationId: string) {
       return { success: false, error: error.message, data: null };
     }
 
-    return { success: true, data: data as ReceiptTemplate[], error: null };
+    const templates = (data ?? [])
+      .map(toWebTemplate)
+      .filter((t): t is ReceiptTemplate => t !== null);
+
+    return { success: true, data: templates, error: null };
   } catch (error) {
     console.error("[getReceiptTemplates] Exception:", error);
     return {
@@ -113,7 +132,7 @@ export async function getReceiptTemplate(
       .from("receipt_templates")
       .select("*")
       .eq("location_id", locationId)
-      .eq("template_type", templateType)
+      .eq("template_type", toDbTemplateType(templateType))
       .single();
 
     if (error && error.code !== "PGRST116") {
@@ -124,7 +143,7 @@ export async function getReceiptTemplate(
 
     return {
       success: true,
-      data: (data as ReceiptTemplate) || null,
+      data: data ? toWebTemplate(data) : null,
       error: null,
     };
   } catch (error) {
@@ -141,16 +160,6 @@ export async function getReceiptTemplate(
 // Defaults (mirrors client-side DEFAULT_TEMPLATE_VALUES)
 // ============================================================================
 
-const ALL_TEMPLATE_TYPES: TemplateType[] = [
-  "sale",
-  "kitchen",
-  "void_refund",
-  "no_sale",
-  "end_of_day",
-  "cash_drawer",
-  "online_order",
-];
-
 const TEMPLATE_TYPE_NAMES: Record<TemplateType, string> = {
   sale: "Sale Receipt",
   kitchen: "Kitchen Ticket",
@@ -166,7 +175,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
   Omit<UpsertReceiptTemplateInput, "location_id" | "template_type">
 > = {
   sale: {
-    show_logo: true,
+    show_logo: false,
     header_text: "",
     footer_text: "Thank you for your purchase!",
     show_item_modifiers: true,
@@ -174,7 +183,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_tip_line: true,
     show_server_name: true,
     show_order_type: true,
-    show_barcode: true,
+    show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
     show_mods_large: false,
@@ -287,15 +296,20 @@ const DEFAULT_TEMPLATE_VALUES: Record<
 };
 
 // ============================================================================
-// INITIALIZE ALL DEFAULTS
+// INITIALIZE DEFAULTS
 // ============================================================================
 
 /**
- * Initialize all 8 default receipt templates for a location in one call
+ * Create the default receipt templates for a location: every type, or only
+ * the ones named. Insert-only. A type that already has a row is left exactly
+ * as it is, so this can never overwrite a template the merchant (or the POS)
+ * has already saved. Returns the rows it created, which is empty when every
+ * requested type already existed.
  */
 export async function initializeDefaultTemplates(
   clerkOrgId: string,
   locationId: string,
+  templateTypes: TemplateType[] = [...TEMPLATE_TYPE_IDS],
 ) {
   try {
     const supabase = createServerSupabaseClient();
@@ -317,12 +331,12 @@ export async function initializeDefaultTemplates(
 
     const now = new Date().toISOString();
 
-    const rows = ALL_TEMPLATE_TYPES.map((templateType) => {
+    const rows = templateTypes.map((templateType) => {
       const defaults = DEFAULT_TEMPLATE_VALUES[templateType];
       return {
         merchant_id: merchant.id,
         location_id: locationId,
-        template_type: templateType,
+        template_type: toDbTemplateType(templateType),
         template_name: TEMPLATE_TYPE_NAMES[templateType],
         show_logo: defaults.show_logo ?? true,
         header_text: defaults.header_text ?? null,
@@ -347,6 +361,7 @@ export async function initializeDefaultTemplates(
       .from("receipt_templates")
       .upsert(rows, {
         onConflict: "merchant_id,location_id,template_type",
+        ignoreDuplicates: true,
       })
       .select();
 
@@ -355,21 +370,28 @@ export async function initializeDefaultTemplates(
       return { success: false, error: error.message, data: null };
     }
 
-    // Log audit event
-    await LogAuditEvent({
-      merchantId: merchant.id,
-      action: "Initialized default receipt templates",
-      actionCategory: "settings",
-      resourceType: "receipt_template",
-      resourceId: locationId,
-      resourceName: "all_defaults",
-      locationId: locationId,
-      metadata: {
-        template_count: ALL_TEMPLATE_TYPES.length,
-      },
-    });
+    // Only the rows this call inserted come back; existing ones were skipped.
+    const created = (data ?? [])
+      .map(toWebTemplate)
+      .filter((t): t is ReceiptTemplate => t !== null);
 
-    return { success: true, data: data as ReceiptTemplate[], error: null };
+    if (created.length > 0) {
+      await LogAuditEvent({
+        merchantId: merchant.id,
+        action: "Initialized default receipt templates",
+        actionCategory: "settings",
+        resourceType: "receipt_template",
+        resourceId: locationId,
+        resourceName: "defaults",
+        locationId: locationId,
+        metadata: {
+          template_count: created.length,
+          template_types: created.map((t) => t.template_type),
+        },
+      });
+    }
+
+    return { success: true, data: created, error: null };
   } catch (error) {
     console.error("[initializeDefaultTemplates] Exception:", error);
     return {
@@ -412,10 +434,12 @@ export async function upsertReceiptTemplate(
 
     const now = new Date().toISOString();
 
+    const dbTemplateType = toDbTemplateType(input.template_type);
+
     const upsertData = {
       merchant_id: merchant.id,
       location_id: input.location_id,
-      template_type: input.template_type,
+      template_type: dbTemplateType,
       template_name: TEMPLATE_TYPE_NAMES[input.template_type],
       show_logo: input.show_logo ?? true,
       header_text: input.header_text ?? null,
@@ -432,6 +456,15 @@ export async function upsertReceiptTemplate(
       group_by_station: input.group_by_station ?? false,
       show_allergy_alert: input.show_allergy_alert ?? false,
       show_ready_by_time: input.show_ready_by_time ?? false,
+      // Sent only when the caller provides them, so a save that doesn't know
+      // about the signature line can't switch a merchant's setting off.
+      ...(input.print_signature_line !== undefined && {
+        print_signature_line: input.print_signature_line,
+      }),
+      ...(input.signature_line_disclaimer !== undefined && {
+        signature_line_disclaimer:
+          input.signature_line_disclaimer?.trim() || null,
+      }),
       updated_at: now,
     };
 
@@ -467,10 +500,11 @@ export async function upsertReceiptTemplate(
       metadata: {
         location_name: location?.name,
         template_type: input.template_type,
+        db_template_type: dbTemplateType,
       },
     });
 
-    return { success: true, data: data as ReceiptTemplate, error: null };
+    return { success: true, data: toWebTemplate(data), error: null };
   } catch (error) {
     console.error("[upsertReceiptTemplate] Exception:", error);
     return {
