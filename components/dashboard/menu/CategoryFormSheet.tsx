@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { AffectsTag } from "./AffectsTag";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -40,6 +40,7 @@ import {
   useIsAllLocations,
   useGatedLocation,
   useGatedLocationId,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 import {
   useCategorySchedules,
@@ -104,6 +105,7 @@ interface CategoryFormSheetProps {
   schedules?: SchedulesModel[];
   onSuccess?: () => void;
   editCategory?: any;
+  canCreateSharedCategory?: boolean;
 }
 
 export function CategoryFormSheet({
@@ -114,14 +116,25 @@ export function CategoryFormSheet({
   schedules = [],
   onSuccess,
   editCategory,
+  canCreateSharedCategory,
 }: CategoryFormSheetProps) {
   const queryClient = useQueryClient();
   const [selectedMenu, setSelectedMenu] = React.useState<string | null>(null);
+  const [createForAllLocations, setCreateForAllLocations] = React.useState(true);
   const [selectedSchedules, setSelectedSchedules] = React.useState<string[]>(
     [],
   );
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
+  const createsSharedCategory =
+    !editCategory &&
+    (canCreateSharedCategory === undefined
+      ? isAllLocations
+      : canCreateSharedCategory && (isAllLocations || createForAllLocations));
+  const affectsEveryLocation =
+    !isSingleLocation &&
+    (editCategory ? editCategory.is_global : createsSharedCategory);
   // Gated location for prep-station (Kitchen Routing) only. Single-location
   // accounts are locked to 'all' (selectedLocation is null), but their one
   // location still has prep stations — resolve it concretely so Kitchen Routing
@@ -187,6 +200,7 @@ export function CategoryFormSheet({
       });
       setSelectedMenu(null);
       setSelectedSchedules([]);
+      setCreateForAllLocations(true);
     }
     setActiveSection("basic");
   }, [editCategory, form]);
@@ -326,13 +340,17 @@ export function CategoryFormSheet({
             display_order: values.display_order ?? undefined,
             is_active: values.is_active,
           },
-          selectedLocation?.id ?? null,
+          editCategory.is_global
+            ? null
+            : selectedLocation?.id ?? gatedLocation?.id ?? null,
         );
       } else {
         // Create new category
         result = await CreateCategory(
           clerkOrgId,
-          selectedLocation?.id ?? null,
+          createsSharedCategory
+            ? null
+            : selectedLocation?.id ?? gatedLocation?.id ?? null,
           {
             name: values.name,
             description: values.description,
@@ -362,6 +380,7 @@ export function CategoryFormSheet({
       form.reset();
       setSelectedMenu(null);
       setSelectedSchedules([]);
+      setCreateForAllLocations(true);
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
@@ -379,6 +398,7 @@ export function CategoryFormSheet({
     form.reset();
     setSelectedMenu(null);
     setSelectedSchedules([]);
+    setCreateForAllLocations(true);
     onOpenChange(false);
   };
 
@@ -412,6 +432,13 @@ export function CategoryFormSheet({
           <DialogDescription className="min-w-0 break-words text-sm leading-6 sm:max-w-[60ch]">
             Categories help organize your menu items for easy navigation.
           </DialogDescription>
+          {affectsEveryLocation && (
+            <p role="note" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+              {editCategory
+                ? "Saving shared category details will update every location. Branch-specific settings stay separate."
+                : "This category will be available at every location."}
+            </p>
+          )}
         </DialogHeader>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -464,6 +491,23 @@ export function CategoryFormSheet({
                   {/* Basic Info Section */}
                   {activeSection === "basic" && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    {!editCategory && canCreateSharedCategory && !isAllLocations && !isSingleLocation && selectedLocation && (
+                      <div className="space-y-2">
+                        <Label>Available at</Label>
+                        <Select
+                          value={createForAllLocations ? "all" : "branch"}
+                          onValueChange={(value) => setCreateForAllLocations(value === "all")}
+                        >
+                          <SelectTrigger className="rounded-2xl bg-muted/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All locations</SelectItem>
+                            <SelectItem value="branch">{selectedLocation.name} only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <FormField
                       control={form.control}
                       name="name"
@@ -777,7 +821,7 @@ export function CategoryFormSheet({
                                 Active
                               </FormLabel>
                               <FormDescription>
-                                Inactive categories won't appear in the POS
+                                Inactive categories won&apos;t appear in the POS
                               </FormDescription>
                             </div>
                             <FormControl>
@@ -850,12 +894,13 @@ export function CategoryFormSheet({
               </>
             ) : (
               <>
-                {editCategory ? "Save Changes" : "Create Category"}
-                {/* The "affects all locations" note needs room it doesn't have
-                    on a phone-width button. */}
-                <span className="hidden sm:contents">
-                  <AffectsTag ctx={{ level: 1 }} variant="save-button" />
-                </span>
+                {editCategory
+                  ? affectsEveryLocation
+                    ? "Save shared details"
+                    : "Save Changes"
+                  : affectsEveryLocation
+                    ? "Create for all locations"
+                    : "Create Category"}
               </>
             )}
           </Button>
