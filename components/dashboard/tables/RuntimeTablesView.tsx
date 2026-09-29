@@ -55,7 +55,7 @@ export function RuntimeTablesView ({
     data: floorPlanStatus,
     isLoading: isLoadingStatus,
     refetch: refetchFloorPlanStatus
-  } = useFloorPlanStatus(activeFloorPlanId)
+  } = useFloorPlanStatus(activeFloorPlanId, locationId)
 
   const {
     data: waitlistInfo,

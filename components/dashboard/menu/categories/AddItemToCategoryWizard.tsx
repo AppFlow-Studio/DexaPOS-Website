@@ -176,7 +176,7 @@ export function AddItemToCategoryWizard({
   const merchantId = propMerchantId || userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const selectedLocationId = propLocationId !== undefined ? propLocationId : locationStore.selectedLocationId;
   const isAllLocations = propIsAllLocations !== undefined ? propIsAllLocations : dashboardIsAllLocations;
-  const { pricingStrategy, dualPricingPercentage } = useEffectivePricing();
+  const { pricingStrategy, dualPricingPercentage } = useEffectivePricing(isAllLocations);
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: "menu-items",
@@ -499,6 +499,11 @@ export function AddItemToCategoryWizard({
               <DialogDescription className="max-w-[60ch] text-sm leading-6">
                 Add existing items from your library or create new ones
               </DialogDescription>
+              {isAllLocations && (
+                <p role="note" className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                  Items added here appear in this category at every location.
+                </p>
+              )}
             </div>
           </DialogHeader>
 

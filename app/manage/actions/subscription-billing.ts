@@ -569,6 +569,7 @@ async function chargeSubscriptionInvoiceViaValor(
 ): Promise<SubscriptionChargeResult> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const internalSecret = process.env.INTERNAL_NOTIFICATION_SECRET?.trim()
 
   if (!supabaseUrl || !serviceRoleKey) {
     return { success: false, error: 'Missing Supabase server configuration.' }
@@ -582,6 +583,10 @@ async function chargeSubscriptionInvoiceViaValor(
         headers: {
           Authorization: `Bearer ${serviceRoleKey}`,
           apikey: serviceRoleKey,
+          // The function string-compares the bearer to its own injected
+          // service-role key, which differs in format (legacy JWT vs
+          // sb_secret_) between environments. The internal secret does not.
+          ...(internalSecret ? { 'x-internal-secret': internalSecret } : {}),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ invoice_id: invoiceId, mode }),

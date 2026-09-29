@@ -8,7 +8,10 @@ import {
   DEFAULT_MENU_CHANNEL_VISIBILITY,
   type MenuChannelVisibility,
 } from "@/lib/menu/menu-channel-visibility";
-import { MenuChannelVisibilityControls } from "../MenuChannelVisibilityControls";
+import {
+  MenuChannelVisibilityControls,
+  MenuChannelVisibilityIndicators,
+} from "../MenuChannelVisibilityControls";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
@@ -220,5 +223,24 @@ describe("MenuChannelVisibilityControls", () => {
     ui.setServerValue(elsewhere);
 
     expect(ui.shown()).toEqual(elsewhere);
+  });
+
+  it("shows platform icons without controls in the menu list", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+
+    act(() =>
+      root.render(
+        <MenuChannelVisibilityIndicators
+          value={{ ...ALL_ON, is_visible_on_kiosk: false }}
+        />,
+      ),
+    );
+
+    expect(container.querySelectorAll('[role="img"]')).toHaveLength(3);
+    expect(container.querySelector('[aria-label="Kiosk: off"]')).not.toBeNull();
+    expect(container.querySelector("button")).toBeNull();
   });
 });
