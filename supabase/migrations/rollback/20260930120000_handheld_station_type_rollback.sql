@@ -1,4 +1,4 @@
--- Rollback for 20260921120000_handheld_station_type.sql
+-- Rollback for 20260930120000_handheld_station_type.sql
 -- Removes 'handheld' from chk_station_type and restores set_station_capabilities()
 -- to its four pre-handheld branches (body taken from production before the
 -- migration). SET search_path is kept: every function sets it.
