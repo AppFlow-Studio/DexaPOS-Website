@@ -55,7 +55,7 @@ function AuthorizationEvidence({ rows }: { rows: Array<{ label: string; value: s
   const visible = rows.filter((row) => row.value) as Array<{ label: string; value: string }>
   if (visible.length === 0) return null
   return (
-    <details className="mt-2 rounded-lg border bg-muted/30 p-2 text-xs">
+    <details className="mt-2 rounded-2xl bg-muted/60 px-3 py-2 text-xs">
       <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
         Authorization evidence
       </summary>
@@ -153,13 +153,13 @@ export function ReviewChangesSection({
     (pendingTierRequest ? 1 : 0) + pendingServiceRequests.length + pendingHardwareRequests.length
 
   return (
-    <Card>
+    <Card className="rounded-3xl">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <BellRing className="h-4 w-4" />
           Review changes
           {total > 0 && (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted/60 px-1.5 text-xs font-semibold tabular-nums text-muted-foreground">
               {total}
             </span>
           )}
@@ -168,17 +168,17 @@ export function ReviewChangesSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {total === 0 && (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl bg-muted/30 p-6 text-center text-sm text-muted-foreground">
             No pending changes to review.
           </div>
         )}
 
         {/* Tier change request */}
         {pendingTierRequest && (
-          <div className="rounded-xl border p-4">
+          <div className="rounded-2xl border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{pendingTierRequest.request_number}</Badge>
-              <Badge variant="secondary">Tier change</Badge>
+              <Badge variant="outline">Tier change</Badge>
             </div>
             <div className="mt-2 text-sm">
               <span className="font-medium">{pendingTierRequest.requested_plan_name}</span>{' '}
@@ -219,10 +219,10 @@ export function ReviewChangesSection({
 
         {/* Paid add-on requests */}
         {pendingServiceRequests.map((request) => (
-          <div key={request.id} className="rounded-xl border p-4">
+          <div key={request.id} className="rounded-2xl border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{request.request_number}</Badge>
-              <Badge variant="secondary">Add-on</Badge>
+              <Badge variant="outline">Add-on</Badge>
               {request.status === 'processing' && <Badge variant="outline">Processing</Badge>}
             </div>
             <div className="mt-2 text-sm">
@@ -265,10 +265,10 @@ export function ReviewChangesSection({
 
         {/* Hardware requests */}
         {pendingHardwareRequests.map((request) => (
-          <div key={request.id} className="rounded-xl border p-4">
+          <div key={request.id} className="rounded-2xl border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{request.request_number}</Badge>
-              <Badge variant="secondary">Hardware</Badge>
+              <Badge variant="outline">Hardware</Badge>
             </div>
             <div className="mt-2 text-sm">
               <span className="text-muted-foreground">

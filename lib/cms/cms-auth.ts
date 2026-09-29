@@ -4,7 +4,8 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID;
 
 /**
- * Authorization gate for the marketing CMS admin (`/admin`, `/api/cms/*`).
+ * Authorization gate for the marketing CMS editor (`/manage/website-editor`,
+ * `/api/cms/*`).
  *
  * The CMS is gated by Clerk HQ: only members of the internal Dexa team
  * (DEXA_POS_INTERNAL_TEAM_ID) may read/write CMS content. All CMS mutations run

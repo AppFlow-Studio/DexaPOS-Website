@@ -205,7 +205,7 @@ const navMain: NavGroup[] = [
             },
             {
                 title: 'Website Editor',
-                url: '/admin',
+                url: '/manage/website-editor',
                 icon: Globe,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },

@@ -1,6 +1,7 @@
 import { requireAdminAuth } from '@/lib/admin/auth'
 import { getPlatformNmiBillingConfigSummary } from '@/app/manage/actions/platform-billing-config'
 import { DexaBillingNmiRailCard } from '@/app/manage/settings/integrations/DexaBillingNmiRailCard'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,15 +11,15 @@ export default async function NmiIntegrationPage() {
   const billingConfig = await getPlatformNmiBillingConfigSummary()
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">NMI Integration</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure the Dexa-owned NMI merchant account used for subscription billing and vault-backed merchant billing cards.
-        </p>
-      </div>
+    /* `as="div"`: app/manage/layout.tsx already owns this surface's <main> (§14.1).
+       `width="narrow"`: a settings/form page (§2 D). */
+    <PageShell as="div" width="narrow">
+      <PageHeader
+        title="NMI Integration"
+        subtitle="Configure the Dexa-owned NMI merchant account used for subscription billing and vault-backed merchant billing cards."
+      />
 
       <DexaBillingNmiRailCard config={billingConfig} canEdit={canManageConfig} />
-    </div>
+    </PageShell>
   )
 }

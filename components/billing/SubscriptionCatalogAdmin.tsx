@@ -1,660 +1,561 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
-import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Pencil, Plus } from 'lucide-react'
+
+import { Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  CardField,
+  CardFields,
+  CardGridEmpty,
+  LoadError,
+  RecordCardSkeletons,
+  TableEmptyRow,
+} from '@/app/manage/transactions/components/ledger-primitives'
 import {
   getBillableServices,
   getDeviceBillingServiceMappings,
   getSubscriptionPlans,
-  upsertBillableService,
-  upsertDeviceBillingServiceMapping,
-  upsertSubscriptionPlan,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
   type SubscriptionPlanRecord,
 } from '@/app/manage/actions/subscription-billing'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { formatCurrency } from '@/lib/utils'
+import { BillableServiceDialog } from './catalog/BillableServiceDialog'
+import { MutedSelectTrigger } from './catalog/CatalogFormDialog'
+import { DeviceMappingDialog } from './catalog/DeviceMappingDialog'
+import { PlanPricingDialog } from './catalog/PlanPricingDialog'
+import {
+  BILLABLE_DEVICE_CATEGORIES,
+  PRICING_MODEL_LABELS,
+  SERVICE_CATEGORY_LABELS,
+  deviceCategoryLabel,
+  formatPercent,
+} from './catalog/catalog-format'
 
-const BILLABLE_DEVICE_CATEGORIES = [
-  'pos_tablet',
-  'cfd',
-  'kds',
-  'payment_terminal',
-  'receipt_printer',
-  'kitchen_printer',
-  'cash_drawer',
-] as const
-
-type ServicePlanFormState = {
-  planId: string | null
-  planCode: string
-  displayName: string
-  basePriceMonthly: string
-  includedStations: string
-  perExtraStationPrice: string
-  cardSurchargePct: string
-  isActive: boolean
+type Catalog = {
+  plans: SubscriptionPlanRecord[]
+  services: BillableServiceRecord[]
+  mappings: DeviceBillingServiceMappingRecord[]
 }
 
-type BillableServiceFormState = {
-  serviceId: string | null
-  serviceCode: string
-  displayName: string
-  serviceCategory: BillableServiceRecord['service_category']
-  pricingModel: BillableServiceRecord['pricing_model']
-  basePriceMonthly: string
-  additionalUnitPrice: string
-  includedQuantity: string
-  cardSurchargePct: string
-  unitLabel: string
-  isActive: boolean
+type DeviceRow = {
+  category: string
+  mapping: DeviceBillingServiceMappingRecord | null
+  /** The service the mapping bills as; `null` when unmapped or the code is not in the catalog. */
+  service: BillableServiceRecord | null
 }
 
-type DeviceBillingMappingFormState = {
-  deviceCategory: string
-  serviceCode: string
-  isActive: boolean
-}
+const SERVICE_COLUMNS = 9
+const DEVICE_COLUMNS = 4
 
-function planToFormState(plan?: SubscriptionPlanRecord | null): ServicePlanFormState {
-  return {
-    planId: plan?.id ?? null,
-    planCode: plan?.plan_code ?? 'SERVICE_CATALOG',
-    displayName: plan?.display_name ?? 'Dexa POS Base',
-    basePriceMonthly: String(plan?.base_price_monthly ?? 99),
-    includedStations: String(plan?.included_stations ?? 1),
-    perExtraStationPrice: String(plan?.per_extra_station_price ?? 49),
-    cardSurchargePct: String(plan?.card_surcharge_pct ?? 4),
-    isActive: plan?.is_active ?? true,
-  }
-}
-
-function serviceToFormState(service?: BillableServiceRecord | null): BillableServiceFormState {
-  return {
-    serviceId: service?.id ?? null,
-    serviceCode: service?.service_code ?? '',
-    displayName: service?.display_name ?? '',
-    serviceCategory: service?.service_category ?? 'software',
-    pricingModel: service?.pricing_model ?? 'flat',
-    basePriceMonthly: String(service?.base_price_monthly ?? 0),
-    additionalUnitPrice:
-      service?.additional_unit_price === null || service?.additional_unit_price === undefined
-        ? ''
-        : String(service.additional_unit_price),
-    includedQuantity: String(service?.included_quantity ?? 0),
-    cardSurchargePct: String(service?.card_surcharge_pct ?? 4),
-    unitLabel: service?.unit_label ?? 'unit',
-    isActive: service?.is_active ?? true,
-  }
-}
-
-function mappingToFormState(
-  mapping?: DeviceBillingServiceMappingRecord | null,
-  fallbackServiceCode = '',
-): DeviceBillingMappingFormState {
-  return {
-    deviceCategory: mapping?.device_category ?? 'pos_tablet',
-    serviceCode: mapping?.service_code ?? fallbackServiceCode,
-    isActive: mapping?.is_active ?? true,
-  }
-}
-
-function parseMoneyInput(value: string): number {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? Math.max(0, Number(parsed.toFixed(2))) : 0
-}
-
-function parsePercentInput(value: string): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return 0
-  return Math.min(100, Math.max(0, Number(parsed.toFixed(4))))
-}
-
-function parsePositiveInteger(value: string | undefined): number {
-  const parsed = Number(value ?? 0)
-  if (!Number.isFinite(parsed)) return 0
-  return Math.max(0, Math.floor(parsed))
-}
+// Stable empties, so memos keyed on them do not recompute every render while loading.
+const NO_PLANS: SubscriptionPlanRecord[] = []
+const NO_SERVICES: BillableServiceRecord[] = []
+const NO_MAPPINGS: DeviceBillingServiceMappingRecord[] = []
 
 /**
- * HQ-global billing catalog editors — plan pricing, billable services/add-ons,
- * and device→service mappings. This config is platform-wide (not per-merchant),
- * so it lives on the HQ settings page rather than inside each merchant's flow.
+ * HQ-global billing catalog — the station plan, billable services/add-ons,
+ * and device→service mappings. Platform-wide (not per-merchant), so it lives
+ * on the HQ settings route rather than inside each merchant's flow.
+ *
+ * A read view: every price is visible at once, and each record opens a
+ * centred editor (UI-DESIGN-SYSTEM §12). Rendered inside the page's
+ * `PageShell`, so each panel is one of its top-level blocks.
  */
 export function SubscriptionCatalogAdmin() {
-  const [isPending, startTransition] = useTransition()
-  const [services, setServices] = useState<BillableServiceRecord[]>([])
-  const [servicePlans, setServicePlans] = useState<SubscriptionPlanRecord[]>([])
-  const [deviceBillingMappings, setDeviceBillingMappings] = useState<DeviceBillingServiceMappingRecord[]>([])
-  const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
-  const [servicePlanForm, setServicePlanForm] = useState<ServicePlanFormState>(() => planToFormState(null))
-  const [selectedCatalogServiceId, setSelectedCatalogServiceId] = useState('')
-  const [billableServiceForm, setBillableServiceForm] = useState<BillableServiceFormState>(() => serviceToFormState(null))
-  const [selectedDeviceMappingCategory, setSelectedDeviceMappingCategory] = useState('pos_tablet')
-  const [deviceMappingForm, setDeviceMappingForm] = useState<DeviceBillingMappingFormState>(() => mappingToFormState(null))
+  const {
+    data: catalog,
+    error: loadError,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['hq-billing-catalog'],
+    queryFn: async (): Promise<Catalog> => {
+      const [plans, services, mappings] = await Promise.all([
+        getSubscriptionPlans(),
+        // Inactive services stay listed, so switching one off does not make it vanish.
+        getBillableServices(true),
+        getDeviceBillingServiceMappings(),
+      ])
+      return { plans, services, mappings }
+    },
+  })
 
-  const load = () => {
-    startTransition(async () => {
-      try {
-        const [nextServices, nextServicePlans, nextMappings] = await Promise.all([
-          getBillableServices(),
-          getSubscriptionPlans(),
-          getDeviceBillingServiceMappings(),
-        ])
+  const [selectedPlanId, setSelectedPlanId] = useState('')
+  const [planDialogOpen, setPlanDialogOpen] = useState(false)
+  const [serviceDialog, setServiceDialog] = useState<{ open: boolean; service: BillableServiceRecord | null }>({
+    open: false,
+    service: null,
+  })
+  const [deviceDialog, setDeviceDialog] = useState<{ open: boolean; row: DeviceRow | null }>({
+    open: false,
+    row: null,
+  })
+  // Bumped on every open, and used as the editors' `key`: each open mounts a
+  // fresh form seeded from the record, with no reset effect to keep in sync.
+  const [editorSession, setEditorSession] = useState(0)
 
-        setServices(nextServices)
-        setServicePlans(nextServicePlans)
-        setDeviceBillingMappings(nextMappings)
+  const plans = catalog?.plans ?? NO_PLANS
+  const services = catalog?.services ?? NO_SERVICES
+  const mappings = catalog?.mappings ?? NO_MAPPINGS
 
-        const defaultServicePlan =
-          nextServicePlans.find((plan) => plan.id === selectedServicePlanId) ??
-          nextServicePlans.find((plan) => plan.plan_code === 'SERVICE_CATALOG') ??
-          nextServicePlans[0] ??
-          null
-        setSelectedServicePlanId(defaultServicePlan?.id || '')
-        setServicePlanForm(planToFormState(defaultServicePlan))
+  const plan =
+    plans.find((item) => item.id === selectedPlanId) ??
+    plans.find((item) => item.plan_code === 'SERVICE_CATALOG') ??
+    plans[0] ??
+    null
 
-        const defaultCatalogService =
-          nextServices.find((service) => service.id === selectedCatalogServiceId) ?? nextServices[0] ?? null
-        setSelectedCatalogServiceId(defaultCatalogService?.id || '')
-        setBillableServiceForm(serviceToFormState(defaultCatalogService))
-
-        const defaultMappingCategory = selectedDeviceMappingCategory || 'pos_tablet'
-        const defaultDeviceMapping =
-          nextMappings.find((mapping) => mapping.device_category === defaultMappingCategory) ??
-          nextMappings[0] ??
-          null
-        const fallbackServiceCode =
-          nextServices.find((service) => service.service_code === defaultMappingCategory)?.service_code ??
-          nextServices[0]?.service_code ??
-          ''
-        setSelectedDeviceMappingCategory(defaultDeviceMapping?.device_category ?? defaultMappingCategory)
-        setDeviceMappingForm(mappingToFormState(defaultDeviceMapping, fallbackServiceCode))
-      } catch (error: any) {
-        toast.error(error?.message || 'Failed to load billing catalog.')
-      }
+  const deviceRows = useMemo<DeviceRow[]>(() => {
+    const known = new Set<string>(BILLABLE_DEVICE_CATEGORIES)
+    // Categories with a mapping but outside the known list still get a row.
+    const extra = mappings.map((m) => m.device_category).filter((c) => !known.has(c))
+    return [...BILLABLE_DEVICE_CATEGORIES, ...extra].map((category) => {
+      const mapping = mappings.find((m) => m.device_category === category) ?? null
+      const service = mapping ? services.find((s) => s.service_code === mapping.service_code) ?? null : null
+      return { category, mapping, service }
     })
-  }
+  }, [mappings, services])
 
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const servicePage = useClientPagination(services, 10)
+  const devicePage = useClientPagination(deviceRows, 10)
 
-  useEffect(() => {
-    const plan = servicePlans.find((item) => item.id === selectedServicePlanId)
-    if (plan) setServicePlanForm(planToFormState(plan))
-  }, [selectedServicePlanId, servicePlans])
-
-  useEffect(() => {
-    const service = services.find((item) => item.id === selectedCatalogServiceId)
-    if (service) setBillableServiceForm(serviceToFormState(service))
-  }, [selectedCatalogServiceId, services])
-
-  useEffect(() => {
-    const mapping = deviceBillingMappings.find(
-      (item) => item.device_category === selectedDeviceMappingCategory,
+  // A failed refetch after a save keeps the last good catalog on screen.
+  if (!catalog && !isLoading) {
+    return (
+      <Panel padded>
+        <LoadError
+          title="We hit a snag loading the billing catalog"
+          detail={loadError?.message}
+          onRetry={() => void refetch()}
+        />
+      </Panel>
     )
-    const fallbackServiceCode =
-      services.find((service) => service.service_code === selectedDeviceMappingCategory)?.service_code ??
-      services[0]?.service_code ??
-      ''
-    setDeviceMappingForm(mappingToFormState(mapping, fallbackServiceCode))
-  }, [selectedDeviceMappingCategory, deviceBillingMappings, services])
-
-  const handleSaveServicePlan = () => {
-    startTransition(async () => {
-      const result = await upsertSubscriptionPlan({
-        planId: servicePlanForm.planId,
-        planCode: servicePlanForm.planCode.trim(),
-        displayName: servicePlanForm.displayName.trim(),
-        basePriceMonthly: parseMoneyInput(servicePlanForm.basePriceMonthly),
-        includedStations: parsePositiveInteger(servicePlanForm.includedStations),
-        perExtraStationPrice: parseMoneyInput(servicePlanForm.perExtraStationPrice),
-        cardSurchargePct: parsePercentInput(servicePlanForm.cardSurchargePct),
-        isActive: servicePlanForm.isActive,
-        metadata: { source: 'hq_billing_catalog', pricingModel: 'service_catalog' },
-      })
-      if (!result.success) {
-        toast.error(result.error || 'Failed to save subscription plan.')
-        return
-      }
-      if (result.planId) setSelectedServicePlanId(result.planId)
-      toast.success('Subscription plan pricing saved.')
-      load()
-    })
   }
 
-  const handleSaveBillableService = () => {
-    startTransition(async () => {
-      const result = await upsertBillableService({
-        serviceId: billableServiceForm.serviceId,
-        serviceCode: billableServiceForm.serviceCode.trim(),
-        displayName: billableServiceForm.displayName.trim(),
-        serviceCategory: billableServiceForm.serviceCategory,
-        pricingModel: billableServiceForm.pricingModel,
-        basePriceMonthly: parseMoneyInput(billableServiceForm.basePriceMonthly),
-        additionalUnitPrice:
-          billableServiceForm.additionalUnitPrice.trim().length > 0
-            ? parseMoneyInput(billableServiceForm.additionalUnitPrice)
-            : null,
-        includedQuantity: parsePositiveInteger(billableServiceForm.includedQuantity),
-        cardSurchargePct: parsePercentInput(billableServiceForm.cardSurchargePct),
-        unitLabel: billableServiceForm.unitLabel.trim() || 'unit',
-        isActive: billableServiceForm.isActive,
-        metadata: { source: 'hq_billing_catalog' },
-      })
-      if (!result.success) {
-        toast.error(result.error || 'Failed to save billable service.')
-        return
-      }
-      if (result.serviceId) setSelectedCatalogServiceId(result.serviceId)
-      toast.success('Billable service pricing saved.')
-      load()
-    })
-  }
+  const activeServices = services.filter((service) => service.is_active).length
+  const mappedDevices = deviceRows.filter((row) => row.mapping).length
 
-  const handleSaveDeviceBillingMapping = () => {
-    startTransition(async () => {
-      const result = await upsertDeviceBillingServiceMapping({
-        deviceCategory: deviceMappingForm.deviceCategory,
-        serviceCode: deviceMappingForm.serviceCode,
-        isActive: deviceMappingForm.isActive,
-        metadata: { source: 'hq_billing_catalog' },
-      })
-      if (!result.success) {
-        toast.error(result.error || 'Failed to save device billing mapping.')
-        return
-      }
-      setSelectedDeviceMappingCategory(deviceMappingForm.deviceCategory)
-      toast.success('Device billing mapping saved.')
-      load()
-    })
+  const openPlan = () => {
+    setEditorSession((session) => session + 1)
+    setPlanDialogOpen(true)
+  }
+  const openService = (service: BillableServiceRecord | null) => {
+    setEditorSession((session) => session + 1)
+    setServiceDialog({ open: true, service })
+  }
+  const openDevice = (row: DeviceRow) => {
+    setEditorSession((session) => session + 1)
+    setDeviceDialog({ open: true, row })
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Billing Catalog Controls</CardTitle>
-        <CardDescription>
-          Configure reusable plan prices, billable services, and device-to-service mappings. Changes affect future
-          calculations; existing invoice snapshots remain unchanged.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-6 xl:grid-cols-2">
-        <div className="min-w-0 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="font-medium">Service Billing Plan</div>
+    <>
+      {/* ── Station plan ─────────────────────────────────────────────── */}
+      <Panel>
+        <PanelSection
+          label="Station plan"
+          // The plan's name, code and state say which plan the figures belong to — scope, so it stays on phones.
+          caption={
+            plan ? (
+              <>
+                {plan.display_name} · <span className="font-mono text-xs">{plan.plan_code}</span>
+                {!plan.is_active && ' · Inactive'}
+              </>
+            ) : undefined
+          }
+          showCaptionOnMobile
+          action={
+            plan && (
+              <div className="flex flex-wrap items-center gap-2">
+                {plans.length > 1 && (
+                  <Select value={plan.id} onValueChange={setSelectedPlanId}>
+                    <MutedSelectTrigger aria-label="Plan" className="h-9 text-[0.8125rem] sm:w-56">
+                      <SelectValue />
+                    </MutedSelectTrigger>
+                    <SelectContent>
+                      {plans.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.display_name}
+                          {!item.is_active && ' · Inactive'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
+                  onClick={openPlan}
+                >
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  Edit pricing
+                </Button>
+              </div>
+            )
+          }
+        >
+          {isLoading ? (
+            <StatRow columns={4}>
+              {['Base price', 'Included stations', 'Each extra station', 'Card surcharge'].map((label) => (
+                <StatTile key={label} label={label} value="—" isLoading />
+              ))}
+            </StatRow>
+          ) : plan ? (
+            <StatRow columns={4}>
+              <StatTile
+                label="Base price"
+                value={formatCurrency(Number(plan.base_price_monthly))}
+                meta={`Per month · covers ${plan.included_stations} ${Number(plan.included_stations) === 1 ? 'station' : 'stations'}`}
+              />
+              <StatTile label="Included stations" value={Number(plan.included_stations)} meta="In the base price" />
+              <StatTile
+                label="Each extra station"
+                value={formatCurrency(Number(plan.per_extra_station_price))}
+                meta="Per month"
+              />
+              <StatTile
+                label="Card surcharge"
+                value={formatPercent(Number(plan.card_surcharge_pct))}
+                meta="On card payments"
+              />
+            </StatRow>
+          ) : (
+            <div className="flex min-h-40 flex-col items-center justify-center gap-1 rounded-2xl bg-muted/30 px-4 text-center">
+              <p className="text-sm font-medium">No station plan yet</p>
               <p className="text-xs text-muted-foreground">
-                Base station price, included stations, extra-station price, and card surcharge.
+                Create one to set the base price, included stations, extra-station price and card surcharge.
               </p>
+              <Button size="sm" className="mt-3 h-9 px-4" onClick={openPlan}>
+                Create plan
+              </Button>
             </div>
-            <Badge variant={servicePlanForm.isActive ? 'default' : 'secondary'}>
-              {servicePlanForm.isActive ? 'Active' : 'Inactive'}
-            </Badge>
-          </div>
+          )}
+        </PanelSection>
+      </Panel>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Plan</Label>
-              <Select value={selectedServicePlanId} onValueChange={setSelectedServicePlanId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {servicePlans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.display_name} ({plan.plan_code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Plan Code</Label>
-              <Input
-                value={servicePlanForm.planCode}
-                onChange={(event) => setServicePlanForm((current) => ({ ...current, planCode: event.target.value }))}
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Display Name</Label>
-              <Input
-                value={servicePlanForm.displayName}
-                onChange={(event) => setServicePlanForm((current) => ({ ...current, displayName: event.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>First Station Price</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={servicePlanForm.basePriceMonthly}
-                onChange={(event) =>
-                  setServicePlanForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Included Stations</Label>
-              <Input
-                type="number"
-                min={0}
-                step="1"
-                value={servicePlanForm.includedStations}
-                onChange={(event) =>
-                  setServicePlanForm((current) => ({ ...current, includedStations: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Additional Station Price</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={servicePlanForm.perExtraStationPrice}
-                onChange={(event) =>
-                  setServicePlanForm((current) => ({ ...current, perExtraStationPrice: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Card Surcharge %</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step="0.01"
-                value={servicePlanForm.cardSurchargePct}
-                onChange={(event) =>
-                  setServicePlanForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                }
-              />
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={servicePlanForm.isActive}
-              onCheckedChange={(checked) =>
-                setServicePlanForm((current) => ({ ...current, isActive: Boolean(checked) }))
-              }
-            />
-            Active plan
-          </label>
-
-          <Button onClick={handleSaveServicePlan} disabled={isPending}>
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Plan Pricing
-          </Button>
-        </div>
-
-        <div className="min-w-0 space-y-4 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="font-medium">Billable Services & Add-ons</div>
-              <p className="text-xs text-muted-foreground">
-                Edit POS tablet, KDS, online ordering, loyalty, delivery integration, franchise, and future services.
-              </p>
-            </div>
+      {/* ── Services & add-ons ───────────────────────────────────────── */}
+      <Panel>
+        <PanelSection
+          label="Services & add-ons"
+          caption="Hardware, software and services billed on each location's subscription. Inactive services stay listed so they can be switched back on."
+          action={
             <Button
-              type="button"
-              variant="outline"
               size="sm"
-              onClick={() => {
-                setSelectedCatalogServiceId('')
-                setBillableServiceForm(serviceToFormState(null))
-              }}
+              className="h-9 px-4 text-[0.8125rem] font-medium"
+              disabled={isLoading}
+              onClick={() => openService(null)}
             >
-              New Service
+              <Plus className="mr-1.5 h-4 w-4" />
+              New service
             </Button>
+          }
+        >
+          {/* §5.3: nine columns need ~900px, which fits the content column from `xl`; cards below that. */}
+          <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Service</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Pricing</TableHead>
+                <TableHead className="text-right">Monthly</TableHead>
+                <TableHead className="text-right">Included</TableHead>
+                <TableHead className="text-right">Extra unit</TableHead>
+                <TableHead className="text-right">Card surcharge</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-12">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={SERVICE_COLUMNS} className="h-24 text-center text-sm text-muted-foreground">
+                    Loading services…
+                  </TableCell>
+                </TableRow>
+              ) : services.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={SERVICE_COLUMNS}
+                  title="No billable services yet"
+                  hint="Add POS tablets, KDS, online ordering and other add-ons with New service."
+                />
+              ) : (
+                servicePage.pageRows.map((service) => (
+                  <TableRow key={service.id} className="cursor-pointer" onClick={() => openService(service)}>
+                    <TableCell className="max-w-[260px]">
+                      <p className="truncate font-medium">{service.display_name}</p>
+                      <p className="truncate font-mono text-xs text-muted-foreground">{service.service_code}</p>
+                    </TableCell>
+                    <TableCell>{SERVICE_CATEGORY_LABELS[service.service_category] ?? service.service_category}</TableCell>
+                    <TableCell>{PRICING_MODEL_LABELS[service.pricing_model] ?? service.pricing_model}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(service.base_price_monthly)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{service.included_quantity}</TableCell>
+                    <TableCell className="text-right tabular-nums">{extraUnitPrice(service)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPercent(service.card_surcharge_pct)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{service.is_active ? 'Active' : 'Inactive'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full p-0"
+                        aria-label={`Edit ${service.display_name}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openService(service)
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          {/* §5.3 below `xl`: record cards, never a scrolling table. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+            {isLoading ? (
+              <RecordCardSkeletons count={4} />
+            ) : services.length === 0 ? (
+              <CardGridEmpty
+                title="No billable services yet"
+                hint="Add POS tablets, KDS, online ordering and other add-ons with New service."
+              />
+            ) : (
+              servicePage.pageRows.map((service) => (
+                <RecordShell key={service.id} label={`Edit ${service.display_name}`} onOpen={() => openService(service)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{service.display_name}</p>
+                      <p className="truncate font-mono text-xs text-muted-foreground">{service.service_code}</p>
+                    </div>
+                    {/* Values on the tinted card are plain text, not pills (§3.5). */}
+                    <p className="shrink-0 text-sm text-muted-foreground">{service.is_active ? 'Active' : 'Inactive'}</p>
+                  </div>
+                  <CardFields>
+                    <CardField label="Category" value={SERVICE_CATEGORY_LABELS[service.service_category] ?? service.service_category} />
+                    <CardField label="Pricing" value={PRICING_MODEL_LABELS[service.pricing_model] ?? service.pricing_model} />
+                    <CardField label="Monthly" value={formatCurrency(service.base_price_monthly)} />
+                    <CardField label="Included" value={service.included_quantity} />
+                    <CardField label="Extra unit" value={extraUnitPrice(service)} />
+                    <CardField label="Card surcharge" value={formatPercent(service.card_surcharge_pct)} />
+                  </CardFields>
+                </RecordShell>
+              ))
+            )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Service</Label>
-              <Select value={selectedCatalogServiceId} onValueChange={setSelectedCatalogServiceId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.display_name} ({service.service_code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Service Code</Label>
-              <Input
-                value={billableServiceForm.serviceCode}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, serviceCode: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Display Name</Label>
-              <Input
-                value={billableServiceForm.displayName}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, displayName: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select
-                value={billableServiceForm.serviceCategory}
-                onValueChange={(value) =>
-                  setBillableServiceForm((current) => ({
-                    ...current,
-                    serviceCategory: value as BillableServiceRecord['service_category'],
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hardware">Hardware</SelectItem>
-                  <SelectItem value="software">Software</SelectItem>
-                  <SelectItem value="service">Service</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Pricing Model</Label>
-              <Select
-                value={billableServiceForm.pricingModel}
-                onValueChange={(value) =>
-                  setBillableServiceForm((current) => ({
-                    ...current,
-                    pricingModel: value as BillableServiceRecord['pricing_model'],
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="flat">Flat</SelectItem>
-                  <SelectItem value="per_unit">Per unit</SelectItem>
-                  <SelectItem value="tiered">Tiered</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Base Monthly Price</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={billableServiceForm.basePriceMonthly}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Additional Unit Price</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={billableServiceForm.additionalUnitPrice}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, additionalUnitPrice: event.target.value }))
-                }
-                placeholder="Only for tiered pricing"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Included Quantity</Label>
-              <Input
-                type="number"
-                min={0}
-                step="1"
-                value={billableServiceForm.includedQuantity}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, includedQuantity: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Unit Label</Label>
-              <Input
-                value={billableServiceForm.unitLabel}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, unitLabel: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Card Surcharge %</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step="0.01"
-                value={billableServiceForm.cardSurchargePct}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                }
-              />
-            </div>
+          <PaginationBar pagination={servicePage.pagination} onPageChange={servicePage.setPage} itemLabel="services" />
+          {/* The pager hides when everything fits on one page; the count still shows (§5.2). */}
+          {!isLoading && services.length > 0 && servicePage.pagination.totalPages <= 1 && (
+            <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
+              {services.length} {services.length === 1 ? 'service' : 'services'} · {activeServices} active
+            </p>
+          )}
+        </PanelSection>
+      </Panel>
+
+      {/* ── Device billing ───────────────────────────────────────────── */}
+      <Panel>
+        <PanelSection
+          label="Device billing"
+          caption="Which service each deployed device adds to a location's subscription. Quantities recalculate when devices are assigned or removed."
+        >
+          {/* §5.3: four short columns fit the content column from `lg`; cards below that. */}
+          <Table variant="data" containerClassName="hidden lg:block" className="min-w-[560px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Device</TableHead>
+                <TableHead>Billed as</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-12">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={DEVICE_COLUMNS} className="h-24 text-center text-sm text-muted-foreground">
+                    Loading device billing…
+                  </TableCell>
+                </TableRow>
+              ) : (
+                devicePage.pageRows.map((row) => {
+                  const label = deviceCategoryLabel(row.category)
+                  return (
+                    <TableRow key={row.category} className="cursor-pointer" onClick={() => openDevice(row)}>
+                      <TableCell className="font-medium">{label}</TableCell>
+                      <TableCell className="max-w-[320px]">
+                        <BilledAs row={row} />
+                      </TableCell>
+                      <TableCell>
+                        {row.mapping ? (
+                          <Badge variant="outline">{row.mapping.is_active ? 'Active' : 'Inactive'}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full p-0"
+                          aria-label={row.mapping ? `Edit ${label} billing` : `Map ${label}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openDevice(row)
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {isLoading ? (
+              <RecordCardSkeletons count={4} />
+            ) : (
+              devicePage.pageRows.map((row) => {
+                const label = deviceCategoryLabel(row.category)
+                return (
+                  <RecordShell
+                    key={row.category}
+                    label={row.mapping ? `Edit ${label} billing` : `Map ${label}`}
+                    onOpen={() => openDevice(row)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 truncate font-semibold">{label}</p>
+                      <p className="shrink-0 text-sm text-muted-foreground">
+                        {row.mapping ? (row.mapping.is_active ? 'Active' : 'Inactive') : 'Not mapped'}
+                      </p>
+                    </div>
+                    {row.mapping && (
+                      <div className="mt-3 min-w-0 text-sm">
+                        <p className="text-xs text-muted-foreground">Billed as</p>
+                        <BilledAs row={row} />
+                      </div>
+                    )}
+                  </RecordShell>
+                )
+              })
+            )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={billableServiceForm.isActive}
-              onCheckedChange={(checked) =>
-                setBillableServiceForm((current) => ({ ...current, isActive: Boolean(checked) }))
-              }
-            />
-            Active service
-          </label>
+          <PaginationBar pagination={devicePage.pagination} onPageChange={devicePage.setPage} itemLabel="devices" />
+          {!isLoading && devicePage.pagination.totalPages <= 1 && (
+            <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
+              {deviceRows.length} device {deviceRows.length === 1 ? 'category' : 'categories'} · {mappedDevices} mapped
+            </p>
+          )}
+        </PanelSection>
+      </Panel>
 
-          <Button onClick={handleSaveBillableService} disabled={isPending}>
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Service Pricing
-          </Button>
-        </div>
+      <PlanPricingDialog
+        key={`plan-${editorSession}`}
+        open={planDialogOpen}
+        plan={plan}
+        onOpenChange={setPlanDialogOpen}
+        onSaved={(planId) => {
+          if (planId) setSelectedPlanId(planId)
+          setPlanDialogOpen(false)
+          void refetch()
+        }}
+      />
+      <BillableServiceDialog
+        key={`service-${editorSession}`}
+        open={serviceDialog.open}
+        service={serviceDialog.service}
+        onOpenChange={(open) => setServiceDialog((current) => ({ ...current, open }))}
+        onSaved={() => {
+          setServiceDialog((current) => ({ ...current, open: false }))
+          void refetch()
+        }}
+      />
+      {deviceDialog.row && (
+        <DeviceMappingDialog
+          key={`device-${editorSession}`}
+          open={deviceDialog.open}
+          deviceCategory={deviceDialog.row.category}
+          mapping={deviceDialog.row.mapping}
+          services={services}
+          onOpenChange={(open) => setDeviceDialog((current) => ({ ...current, open }))}
+          onSaved={() => {
+            setDeviceDialog((current) => ({ ...current, open: false }))
+            void refetch()
+          }}
+        />
+      )}
+    </>
+  )
+}
 
-        <div className="space-y-4 border-t pt-6 xl:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="font-medium">Device Billing Mappings</div>
-              <p className="text-xs text-muted-foreground">
-                Controls which deployed device categories automatically adjust billable service quantities.
-              </p>
-            </div>
-            <Badge variant={deviceMappingForm.isActive ? 'default' : 'secondary'}>
-              {deviceMappingForm.isActive ? 'Active mapping' : 'Inactive mapping'}
-            </Badge>
-          </div>
+/** `$10.00 / tablet`, or `—` when the service has no per-unit price. */
+function extraUnitPrice(service: BillableServiceRecord): string {
+  if (service.additional_unit_price === null) return '—'
+  return `${formatCurrency(service.additional_unit_price)} / ${service.unit_label || 'unit'}`
+}
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Device Category</Label>
-              <Select
-                value={deviceMappingForm.deviceCategory}
-                onValueChange={(value) => {
-                  setSelectedDeviceMappingCategory(value)
-                  setDeviceMappingForm((current) => ({ ...current, deviceCategory: value }))
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {BILLABLE_DEVICE_CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category.replace(/_/g, ' ')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Billable Service</Label>
-              <Select
-                value={deviceMappingForm.serviceCode}
-                onValueChange={(value) => setDeviceMappingForm((current) => ({ ...current, serviceCode: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select billable service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.service_code}>
-                      {service.display_name} ({service.service_code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+function BilledAs({ row }: { row: DeviceRow }) {
+  if (!row.mapping) return <span className="text-muted-foreground">Not mapped</span>
+  if (!row.service) {
+    // The mapping names a code the catalog no longer has — say so rather than show a bare slug.
+    return (
+      <span className="block truncate">
+        <span className="font-mono text-xs">{row.mapping.service_code}</span>
+        <span className="text-muted-foreground"> · not in catalog</span>
+      </span>
+    )
+  }
+  return (
+    <span className="block truncate">
+      {row.service.display_name}
+      {!row.service.is_active && <span className="text-muted-foreground"> · inactive service</span>}
+    </span>
+  )
+}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={deviceMappingForm.isActive}
-                onCheckedChange={(checked) =>
-                  setDeviceMappingForm((current) => ({ ...current, isActive: Boolean(checked) }))
-                }
-              />
-              Active mapping
-            </label>
-            <div className="text-xs text-muted-foreground">
-              Device assignment sync recalculates subscription quantities after deployed device changes.
-            </div>
-          </div>
-
-          <Button onClick={handleSaveDeviceBillingMapping} disabled={isPending || !deviceMappingForm.serviceCode}>
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Device Mapping
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+/**
+ * A record card that opens its editor. The whole card is one stretched
+ * button (§5.3: a clickable card is a real `<button>`), with the content
+ * laid over it as plain text.
+ */
+function RecordShell({
+  label,
+  onOpen,
+  children,
+}: {
+  label: string
+  onOpen: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted">
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onOpen}
+        className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div className="pointer-events-none relative">{children}</div>
+    </div>
   )
 }

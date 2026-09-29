@@ -7,6 +7,7 @@
 // per-platform status back to orderout-push-menu-webhook.
 // ============================================================================
 
+import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
@@ -73,6 +74,9 @@ export async function registerOrderOutPushMenuWebhook(): Promise<RegisterPushMen
       },
     })
 
+    // The integrations card reads "Last registered" from this audit row.
+    revalidatePath('/manage/settings/integrations')
+
     return {
       success: true,
       endpoint: data?.endpoint,
@@ -96,7 +100,8 @@ export interface OrderOutPushMenuWebhookStatus {
   expectedEndpoint: string | null
   lastRegisteredAt: string | null
   lastRegisteredBy: string | null
-  dlqCount: number
+  /** Live (pending or retrying) push_menu entries; null when the count failed. */
+  dlqCount: number | null
 }
 
 export async function getOrderOutPushMenuWebhookStatus(): Promise<{
@@ -113,7 +118,7 @@ export async function getOrderOutPushMenuWebhookStatus(): Promise<{
       ? `${supabaseUrl}/functions/v1/orderout-push-menu-webhook`
       : null
 
-    const [{ data: auditRow }, { count: dlqCount }] = await Promise.all([
+    const [{ data: auditRow }, { count: dlqCount, error: dlqError }] = await Promise.all([
       supabase
         .from('audit_logs')
         .select('created_at, actor_name, actor_user_id')
@@ -127,8 +132,14 @@ export async function getOrderOutPushMenuWebhookStatus(): Promise<{
         .eq('source', 'orderout')
         // Single-service channel callbacks are logged as 'push_menu_channels';
         // legacy array-shape results as 'push_menu'. Count both.
-        .in('event_type', ['push_menu', 'push_menu_channels']),
+        .in('event_type', ['push_menu', 'push_menu_channels'])
+        // "Unprocessed" = still live. Resolved and abandoned entries are done.
+        .in('status', ['pending', 'retrying']),
     ])
+
+    if (dlqError) {
+      console.error('[getOrderOutPushMenuWebhookStatus] DLQ count error:', dlqError)
+    }
 
     return {
       success: true,
@@ -137,7 +148,8 @@ export async function getOrderOutPushMenuWebhookStatus(): Promise<{
         lastRegisteredAt: auditRow?.created_at ?? null,
         lastRegisteredBy:
           (auditRow as { actor_name?: string | null } | null)?.actor_name ?? null,
-        dlqCount: dlqCount ?? 0,
+        // Unknown is not zero: a failed count must not read as "All clear".
+        dlqCount: dlqError ? null : (dlqCount ?? 0),
       },
       error: null,
     }

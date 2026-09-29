@@ -133,14 +133,14 @@ export default function NewHQSupportTicketPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-blue-950">
+      <div className="rounded-xl border bg-muted/30 p-4">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-blue-100 p-2">
-            <LockKeyhole className="h-4 w-4 text-blue-700" />
+          <div className="mt-0.5 rounded-lg bg-muted p-2">
+            <LockKeyhole className="h-4 w-4 text-muted-foreground" />
           </div>
           <div>
             <p className="text-sm font-semibold">DEXA HQ developer ticket</p>
-            <p className="mt-1 text-xs leading-relaxed text-blue-800">
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               Website-created developer tickets are platform-scoped. They are
               not assigned to a merchant, location, or carrier.
             </p>

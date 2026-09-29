@@ -117,7 +117,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                         <div className="space-y-2">
                             <Label>Location *</Label>
                             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select location" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -132,7 +132,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                         <div className="space-y-2">
                             <Label>Assign to Station</Label>
                             <Select value={selectedStationId} onValueChange={setSelectedStationId}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Unassigned" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -161,7 +161,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                         <div className="space-y-2">
                             <Label>Terminal Type *</Label>
                             <Select value={terminalType} onValueChange={(v) => setTerminalType(v as TerminalType)}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>

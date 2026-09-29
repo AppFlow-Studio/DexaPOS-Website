@@ -416,7 +416,7 @@ shadow-[0_30px_100px_rgba(15,23,42,0.26)]`. Apply the identical fix:
 | Line | Current | Target |
 |------|---------|--------|
 | `:365` | `overlayClassName="bg-slate-950/40 backdrop-blur-md"` | drop; use `DialogOverlay` default |
-| `:366` | `rounded-[28px] border-slate-200/80 shadow-[0_30px_100px…]` | `rounded-3xl border bg-card`, no shadow |
+| `:366` | `rounded-[28px] border-slate-200/80` + a large arbitrary drop shadow | `rounded-3xl border bg-card`, no shadow |
 | `:448`, `:464` | `bg-primary text-primary-foreground border-primary shadow-md` | selected state without shadow; brand blue not violet |
 | `:570` | `hover:shadow-md` | `hover:bg-muted/50` |
 | `:729` | `bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-950/30` | `rounded-2xl border-0 bg-muted/60` |

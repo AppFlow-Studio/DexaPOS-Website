@@ -118,7 +118,7 @@ export function MerchantSearchSelect({
           </div>
         </Button>
       </PopoverTrigger>
-      {/* `w-[var(…)]`: Tailwind v4 reads `w-[--x]` as a literal, not a variable.
+      {/* `w-[var(--radix-popover-trigger-width)]`: Tailwind v4 reads `w-[--x]` as a literal, not a variable.
           `rounded-2xl` at the call site because popover.tsx has no data-slot for
           the global overlay rule to reach (§4.6). */}
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-2xl p-0" align="start">

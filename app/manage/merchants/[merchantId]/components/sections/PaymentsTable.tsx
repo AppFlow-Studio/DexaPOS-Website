@@ -75,7 +75,7 @@ export function MerchantPaymentsTab({
     const [unsettledOnly, setUnsettledOnly] = useState(false)
     const [unmatchedOnly, setUnmatchedOnly] = useState(false)
     const [page, setPage] = useState(1)
-    const count = 50
+    const count = 10
 
     const dateFrom = toIsoDate(range?.from)
     const dateTo = toIsoDate(range?.to)

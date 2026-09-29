@@ -61,7 +61,7 @@ export function DateRangePicker({
             {date?.from ? format(date.from, "MMM dd, y") : <span>Start date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
+        <PopoverContent className="w-auto min-w-[280px] overflow-hidden rounded-2xl p-0" align="start">
           <Calendar
             initialFocus
             mode="single"
@@ -88,7 +88,7 @@ export function DateRangePicker({
             {date?.to ? format(date.to, "MMM dd, y") : <span>End date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
+        <PopoverContent className="w-auto min-w-[280px] overflow-hidden rounded-2xl p-0" align="start">
           <Calendar
             initialFocus
             mode="single"

@@ -504,6 +504,7 @@ export async function setPlatformValorSaasBillingCredentials(params: {
   }
 
   revalidatePath('/manage/settings/billing-catalog')
+  revalidatePath('/manage/settings/integrations')
   return { success: true, configId: data as string }
 }
 

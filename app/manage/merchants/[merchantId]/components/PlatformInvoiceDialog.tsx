@@ -255,10 +255,10 @@ export function PlatformInvoiceDialog({
             <div className="space-y-1">
               <Label>Location (optional)</Label>
               <Select value={locationId} onValueChange={setLocationId}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="Merchant-wide" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   <SelectItem value="none">Merchant-wide</SelectItem>
                   {locations.map((loc) => (
                     <SelectItem key={loc.id} value={loc.id}>
@@ -274,10 +274,10 @@ export function PlatformInvoiceDialog({
                 value={paymentDueType}
                 onValueChange={(v) => setPaymentDueType(v as PaymentDueType)}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9 w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   {DUE_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}

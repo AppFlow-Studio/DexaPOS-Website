@@ -22,7 +22,7 @@ the §11 item "a shared mobile record card + `CardField`": promote the file to `
 - [x] Shell: `PageShell as="div"` + `PageHeader`, with Refresh / Export CSV as pill controls (§4.1, §14.1)
 - [x] Tabs: the underline strip became the pill rail (§4.5). Counts are plain muted `tabular-nums`, with no `bg-primary/10` chip
 - [x] Filters: the `Card` became a toolbar inside `Panel > PanelSection` (§5.2). Raw `<select>`s became `FilterSelect`, native date inputs became `FilterDate`, and the checkbox became a DS-CTL-03 toggle chip. Visible labels and the card description went; each control has an `aria-label`. Controls sit two to a row on phones. "Clear filters" shows only while a filter is set
-- [x] Merchant picker: a muted, borderless trigger (§4.2) and a `rounded-2xl` popover (§4.6). Also fixes the width class: `w-[--radix-popover-trigger-width]` compiles to `width: --radix-…` in Tailwind 4.3, so the popover never matched the trigger. It is now `w-[var(…)]`
+- [x] Merchant picker: a muted, borderless trigger (§4.2) and a `rounded-2xl` popover (§4.6). Also fixes the width class: `w-[--radix-popover-trigger-width]` compiles to `width: --radix-…` in Tailwind 4.3, so the popover never matched the trigger. It is now `w-[var(--radix-popover-trigger-width)]`
 - [x] Table: `variant="data"`. The `max-h-[62vh]` wrapper well, the `rounded-md border` frame and the `bg-card` header override are gone (§5.2, §5.7). It shows from `2xl`, where `min-w-[1150px]` fits
 - [x] Record cards below `2xl` (§5.3): the sentence and time lead, fields sit underneath, and the card has Flag and Details controls. The row and the card render the same `AuditEventDetail`
 - [x] Colour (§3.5, §4.6b): per-type org, severity, status and role pills became neutral words. Tinted failed, anomaly and flagged rows became weight. The amber flag icon is now neutral, with `aria-pressed`. The anomaly banner and the error box are now neutral wells with words. The red/green diff wells became old value struck through → new value (§14.6.4)
@@ -53,5 +53,5 @@ the §11 item "a shared mobile record card + `CardField`": promote the file to `
 - [x] `tsc --noEmit --incremental false`: 0 errors in either changed file (841 project-wide, from other uncommitted work in the tree)
 - [x] ESLint compared with `HEAD`: the page went from 2 errors + 3 warnings to 2 errors. The remaining two are the same pre-existing "reset page in an effect" pattern. `MerchantSearchSelect` is unchanged (2 pre-existing)
 - [x] §3.5, §4.6b, §5.5, §8 and §12 greps are clean for both files. No bare `<Badge>`, no `Card`, no raw `<select>`, no `rounded-md`
-- [x] Tailwind 4.3 compile check for the new variants (`aria-pressed:`, `@md:`, `@3xl:`, `@container`) and for the `w-[var(…)]` fix
+- [x] Tailwind 4.3 compile check for the new variants (`aria-pressed:`, `@md:`, `@3xl:`, `@container`) and for the `w-[var(--radix-popover-trigger-width)]` fix
 - [ ] Browser: light + dark at 1536 / 1280 / 375 — **not run** (the Chrome DevTools MCP failed to connect this session). Worth checking: the `2xl` table/card switch, the expanded detail in a card at 375px, the toolbar grid on phones, and the pressed "Has error" chip in dark mode

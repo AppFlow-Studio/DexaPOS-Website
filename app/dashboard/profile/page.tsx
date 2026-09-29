@@ -1,66 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { UserProfile, useUser } from "@clerk/nextjs";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
-import { useIsDarkTheme } from "@/app/sign-in/clerk-form";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
-import { Skeleton } from "@/components/ui/skeleton";
-import { UserProfileFallback } from "@/components/profile/UserProfileFallback";
+import { PageShell, PageHeader } from "@/components/dashboard/shell";
+import { ClerkAccountPanel, ProfileIdentityPanel } from "@/components/profile/AccountProfile";
 
 export default function ProfilePage() {
-  const { data: userInfo, isLoading } = useUserInfo();
-  const isDark = useIsDarkTheme();
-  // Clerk renders nothing until its script boots, leaving the Panel below an
-  // empty box for seconds. Hold its shape until the widget can paint.
-  const { isLoaded: isClerkLoaded } = useUser();
-  const [isProfilePainted, setIsProfilePainted] = useState(false);
-  const profileWidgetRef = useRef<HTMLDivElement>(null);
+  const { data: userInfo, isLoading, isError, refetch } = useUserInfo();
+  // `GetUserInfo` reports some failures by resolving to an Error, not throwing.
+  const loaded = userInfo && !(userInfo instanceof Error) ? userInfo : null;
 
-  // `useUser().isLoaded` only means Clerk's user resource is ready. The
-  // `<UserProfile>` widget mounts in a later pass, so using that flag alone
-  // briefly exposes an empty, collapsed Panel. Keep the in-panel fallback
-  // visible until the widget has actually painted meaningful content.
-  useEffect(() => {
-    if (!isClerkLoaded) return;
-
-    const host = profileWidgetRef.current;
-    if (!host) return;
-
-    const markPainted = () => {
-      if (host.textContent?.trim()) {
-        setIsProfilePainted(true);
-        return true;
-      }
-      return false;
-    };
-
-    if (markPainted()) return;
-
-    const observer = new MutationObserver(() => {
-      if (markPainted()) observer.disconnect();
-    });
-    observer.observe(host, { childList: true, subtree: true, characterData: true });
-
-    return () => observer.disconnect();
-  }, [isClerkLoaded]);
-
-  // `UserProfile` types `appearance` as `Theme`, which omits `baseTheme` — and
-  // passing it anyway had no effect (Clerk set none of its `--clerk-color-*`
-  // variables and the widget stayed light-on-dark). The colours are therefore
-  // driven through `variables`, which this component does honour, mapped to the
-  // dashboard's own dark surfaces (C4: `--card` is `#1c1f26` in the dashboard).
-  const clerkColors = isDark
-    ? {
-        colorPrimary: "#6ca0ff",
-        colorBackground: "transparent",
-        colorText: "#e5e7eb",
-        colorTextSecondary: "#9ca3af",
-        colorInputBackground: "#242833",
-        colorInputText: "#e5e7eb",
-      }
-    : { colorPrimary: "#0c4fd1" };
+  // An org name is a label, not a status, so it never carries its own colour.
+  const orgLabels: string[] = (loaded?.members ?? []).map(
+    (member: any) =>
+      member.organizations?.name ||
+      member.organizations?.merchants?.name ||
+      "Organization"
+  );
 
   return (
     <PageShell width="narrow">
@@ -69,129 +24,24 @@ export default function ProfilePage() {
         subtitle="Manage your account information and preferences"
       />
 
-      {/* Identity summary — tier 1 panel, not a <Card> (C6/§3.1). */}
-      <Panel padded>
-        <div className="flex items-center gap-4">
-          {isLoading || !userInfo || userInfo instanceof Error ? (
-            <>
-              <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-5 w-40 max-w-full" />
-                <Skeleton className="h-4 w-56 max-w-full" />
-                <Skeleton className="h-5 w-28 max-w-full rounded-full" />
-              </div>
-            </>
-          ) : (
-            <>
-              <Avatar className="h-16 w-16 shrink-0">
-                <AvatarImage
-                  src={userInfo.avatar_url}
-                  alt={userInfo.first_name}
-                />
-                <AvatarFallback className="text-lg">
-                  {userInfo.first_name?.charAt(0)}
-                  {userInfo.last_name?.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 space-y-1">
-                <h2 className="truncate text-[1.0625rem] font-semibold">
-                  {userInfo.first_name} {userInfo.last_name}
-                </h2>
-                <p className="truncate text-sm text-muted-foreground">
-                  {userInfo.email}
-                </p>
-                {userInfo.members && userInfo.members.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {/* Neutral pill per §4.6b — an org name is a label, not a
-                        status, so it never carries its own colour. */}
-                    {userInfo.members.map((member: any) => (
-                      <span
-                        key={member.id}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium"
-                      >
-                        {member.organizations?.name ||
-                          member.organizations?.merchants?.name ||
-                          "Organization"}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </Panel>
+      <ProfileIdentityPanel
+        identity={
+          loaded
+            ? {
+                firstName: loaded.first_name,
+                lastName: loaded.last_name,
+                email: loaded.email,
+                avatarUrl: loaded.avatar_url,
+              }
+            : null
+        }
+        labels={orgLabels}
+        isLoading={isLoading}
+        isError={isError || userInfo instanceof Error}
+        onRetry={() => void refetch()}
+      />
 
-      {/* Clerk's account UI. The Panel owns the surface, so Clerk's own card is
-          stripped bare — otherwise it renders a second bordered, shadowed box
-          inside ours. Its inputs are restyled to the DS-CTL-02 material
-          (muted, borderless, rounded) since Clerk ships bordered fields.
-
-          `!` throughout because Clerk injects its styles at runtime with higher
-          specificity than a plain utility class — the same failure the sign-in
-          Continue button hit. Kept inline in this `.tsx` rather than extracted
-          to a constants module so Tailwind is guaranteed to scan every class
-          (C7): a class living only in a `.ts` file generates no CSS rule. */}
-      <Panel padded>
-        <div className="relative min-w-0">
-          {!isProfilePainted ? <UserProfileFallback /> : null}
-          <div
-            ref={profileWidgetRef}
-            aria-hidden={!isProfilePainted}
-            className={
-              isProfilePainted
-                ? "min-w-0"
-                : "invisible pointer-events-none absolute inset-0 min-w-0"
-            }
-          >
-            <UserProfile
-              routing="hash"
-              appearance={{
-                variables: {
-                  ...clerkColors,
-                  borderRadius: "0.625rem",
-                },
-                elements: {
-              // `clerk-themed` hands text colour back to the app's tokens —
-              // Clerk bakes its palette into generated classes and honours
-              // neither `baseTheme` nor `variables` here, so in dark mode its
-              // near-black type sat on our dark card. Rule lives in
-              // globals.css, scoped to this class so it cannot leak.
-              rootBox: "w-full clerk-themed",
-              cardBox: "w-full !shadow-none !border-0 !bg-transparent",
-              card: "w-full !shadow-none !border-0 !bg-transparent",
-              navbar: "!border-0 !bg-transparent",
-              // §5.5 — no dividing lines anywhere.
-              navbarMobileMenuRow: "!border-0",
-              // Clerk paints this opaque white, so it ignores the dark palette
-              // and reads as a second card sitting inside the Panel.
-              scrollBox: "!bg-transparent !shadow-none !rounded-none",
-              pageScrollBox: "!p-0",
-              // DS-CTL-02: muted, borderless, rounded fields.
-              formFieldInput:
-                "!rounded-full !border-0 !bg-muted/60 !shadow-none focus-visible:!bg-background",
-              formButtonPrimary:
-                "!bg-foreground hover:!bg-foreground/90 !text-background !border-0 !shadow-none normal-case text-sm font-medium",
-              formButtonReset:
-                "!rounded-full !border-0 !bg-muted/60 !text-foreground !shadow-none",
-              profileSectionPrimaryButton: "!rounded-full",
-              badge:
-                "!rounded-full !border-0 !bg-muted/60 !text-xs !font-medium",
-              // Clerk draws a rule under every section; §5.5 bans them.
-              profileSection: "!border-0",
-              profileSectionContent: "!border-0",
-              accordionTriggerButton: "!rounded-full",
-              // Clerk tints the active item with a hardcoded black alpha that
-              // does not track the theme; use the muted token instead.
-              navbarButton:
-                "!rounded-full !text-muted-foreground hover:!bg-muted/60 hover:!text-foreground",
-                  footer: "hidden",
-                },
-              }}
-            />
-          </div>
-        </div>
-      </Panel>
+      <ClerkAccountPanel />
     </PageShell>
   );
 }

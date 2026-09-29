@@ -9,7 +9,7 @@ import type {
 } from '@/app/manage/actions/subscription-billing'
 import type { MerchantBillingProfileRecord } from '@/app/manage/actions/merchant-billing'
 import { InfoHint } from './InfoHint'
-import { formatDate, formatMoney, subscriptionStatusVariant } from './helpers'
+import { formatDate, formatMoney } from './helpers'
 
 interface LocationBillingListProps {
   subscriptions: MerchantSubscriptionRecord[]
@@ -30,7 +30,7 @@ function AssignmentChips({
   return (
     <div className="flex flex-wrap gap-1.5">
       {assignments.map((assignment) => (
-        <Badge key={assignment.id} variant="secondary" className="font-normal">
+        <Badge key={assignment.id} variant="outline" className="font-normal">
           {assignment.display_name}
           {assignment.quantity > 1 ? ` ×${assignment.quantity}` : ''}
         </Badge>
@@ -50,7 +50,7 @@ export function LocationBillingList({
   billingProfilesByLocation,
 }: LocationBillingListProps) {
   return (
-    <Card>
+    <Card className="rounded-3xl">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           Location billing
@@ -65,17 +65,17 @@ export function LocationBillingList({
           const cardReady = Boolean(billingProfilesByLocation[subscription.location_id])
 
           return (
-            <div key={subscription.id} className="rounded-xl border p-4">
+            <div key={subscription.id} className="rounded-2xl border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate font-medium">{subscription.location_name || 'Location'}</span>
-                  <Badge variant={subscriptionStatusVariant(subscription.status)} className="capitalize">
+                  <Badge variant="outline" className="capitalize">
                     {subscription.status.replace('_', ' ')}
                   </Badge>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-semibold">
+                  <div className="text-lg font-semibold tabular-nums">
                     {formatMoney(subscription.monthly_amount)}
                     <span className="text-sm font-normal text-muted-foreground">/mo</span>
                   </div>
@@ -110,9 +110,9 @@ export function LocationBillingList({
 
               <div className="mt-3 text-xs">
                 {cardReady ? (
-                  <span className="text-emerald-600">Location card ready</span>
+                  <span className="text-muted-foreground">Location card ready</span>
                 ) : (
-                  <span className="text-amber-600">No location card on file</span>
+                  <span className="font-medium text-foreground">No location card on file</span>
                 )}
               </div>
             </div>

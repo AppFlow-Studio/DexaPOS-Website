@@ -223,7 +223,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                         <div className="space-y-2">
                             <Label>Location *</Label>
                             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select a location" />
                                 </SelectTrigger>
                                 <SelectContent>

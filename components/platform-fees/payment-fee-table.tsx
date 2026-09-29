@@ -35,7 +35,6 @@ const filters: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'collected', label: 'Collected' },
   { key: 'refunded', label: 'Refunded' },
-  { key: 'disputed', label: 'Disputed' },
 ]
 
 const PAGE_SIZE = 10

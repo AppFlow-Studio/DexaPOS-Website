@@ -1,16 +1,52 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useId, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  GripVertical,
+  Images,
+  MoreHorizontal,
+  Trash2,
+  Upload,
+} from "lucide-react";
+
 import TipTapEditor from "./TipTapEditor";
+import { ImageLibraryDialog, useCmsImageUpload } from "./ImageLibraryDialog";
+import { AddButton, Field, IconAction, MutedSelect, MutedTextarea } from "./cms-fields";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Section, SectionField, SectionType, SECTION_META, createSection } from "@/lib/cms/cms-sections";
 import { CARD_ICONS, CARD_ICON_NAMES } from "@/lib/cms/card-icons";
+import { cn } from "@/lib/utils";
 
 interface SectionEditorProps {
   sections: Section[];
   onChange: (sections: Section[]) => void;
 }
 
-function SectionTypeIcon({ type }: { type: SectionType }) {
+type ButtonItem = { text: string; link: string; style: string };
+type CardItem = {
+  title?: string;
+  description?: string;
+  image?: string;
+  image_alt?: string;
+  icon?: string;
+  link?: string;
+  link_text?: string;
+  tags?: string[];
+};
+
+export function SectionTypeIcon({ type, className }: { type: SectionType; className?: string }) {
   const paths = (() => {
     switch (type) {
       case "hero":
@@ -44,7 +80,7 @@ function SectionTypeIcon({ type }: { type: SectionType }) {
       case "core_features":
         return <><circle cx="8" cy="8" r="2" /><circle cx="3" cy="4" r="1.25" /><circle cx="13" cy="4" r="1.25" /><circle cx="3" cy="12" r="1.25" /><circle cx="13" cy="12" r="1.25" /><path d="m4 5 2.5 2M12 5 9.5 7M4 11l2.5-2M12 11 9.5 9" /></>;
       case "capabilities":
-        return <><path d="M3 4h10M3 8h10M3 12h10" /><circle cx="6" cy="4" r="1.25" fill="var(--paper)" /><circle cx="10" cy="8" r="1.25" fill="var(--paper)" /><circle cx="7" cy="12" r="1.25" fill="var(--paper)" /></>;
+        return <><path d="M3 4h10M3 8h10M3 12h10" /><circle cx="6" cy="4" r="1.25" fill="currentColor" /><circle cx="10" cy="8" r="1.25" fill="currentColor" /><circle cx="7" cy="12" r="1.25" fill="currentColor" /></>;
       case "compare_strip":
         return <><rect x="2" y="4" width="12" height="8" rx="1.5" /><path d="M8 4v8M4.5 7h1.75M9.75 9h1.75M5.5 6l1 1-1 1M10.5 8l-1 1 1 1" /></>;
     }
@@ -53,7 +89,7 @@ function SectionTypeIcon({ type }: { type: SectionType }) {
   return (
     <svg
       aria-hidden="true"
-      className="section-type-icon"
+      className={cn("h-4 w-4 shrink-0", className)}
       focusable="false"
       viewBox="0 0 16 16"
       fill="none"
@@ -67,10 +103,27 @@ function SectionTypeIcon({ type }: { type: SectionType }) {
   );
 }
 
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm font-medium">{children}</p>;
+}
+
+/** Field types that take the full width of a section's two-column field grid. */
+const WIDE_FIELD_TYPES = new Set<SectionField["type"]>(["richtext", "textarea", "image", "buttons"]);
+
+function sectionPreview(section: Section) {
+  const text = section.heading || (section.body || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return text.slice(0, 80) || "No heading yet";
+}
+
+/**
+ * The page's content sections: a reorderable list of tier-2 cards
+ * (UI-DESIGN-SYSTEM §3.1), each opening in place into its fields.
+ */
 export default function SectionEditor({ sections, onChange }: SectionEditorProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const gripDrag = useRef(false);
+  const baseId = useId();
 
   const updateSection = (id: string, patch: Partial<Section>) => {
     onChange(sections.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -117,75 +170,126 @@ export default function SectionEditor({ sections, onChange }: SectionEditorProps
   };
 
   return (
-    <div className="section-editor">
-      <div className="section-list">
-        {sections.map((section, i) => {
-          const meta = SECTION_META[section.type];
-          const isOpen = expanded === section.id;
-          return (
-            <div
-              key={section.id}
-              className={`section-block ${isOpen ? "is-open" : ""} ${dragIndex === i ? "dragging" : ""}`}
-              draggable
-              onDragStart={(e) => handleDragStart(e, i)}
-              onDragOver={(e) => handleDragOver(e, i)}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="section-block-header" onClick={() => setExpanded(isOpen ? null : section.id)}>
-                <div className="section-block-grip" onMouseDown={() => { gripDrag.current = true; }}>⠿</div>
-                <div className="section-block-type">{meta.icon} {meta.label}</div>
-                <div className="section-block-preview">
-                  {section.heading || section.body?.slice(0, 60) || "(empty)"}
-                </div>
-                <div className="section-block-actions" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" className="section-btn" onClick={() => moveSection(section.id, -1)} title="Move up">↑</button>
-                  <button type="button" className="section-btn" onClick={() => moveSection(section.id, 1)} title="Move down">↓</button>
-                  <button type="button" className="section-btn section-btn-danger" onClick={() => removeSection(section.id)} title="Delete">✕</button>
-                </div>
-              </div>
-              {isOpen && (
-                <div className="section-block-body">
-                  {meta.fields.map((field) => (
-                    <FieldRenderer
-                      key={field.key}
-                      section={section}
-                      field={field}
-                      onChange={(val) => updateSection(section.id, { [field.key]: val })}
+    <div className="min-w-0 space-y-6">
+      {sections.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-muted/30 px-4 py-10 text-center">
+          <p className="text-sm font-medium">No sections yet</p>
+          <p className="text-xs text-muted-foreground">Add one below to start building this page.</p>
+        </div>
+      ) : (
+        <ol className="min-w-0 space-y-3">
+          {sections.map((section, i) => {
+            const meta = SECTION_META[section.type];
+            const isOpen = expanded === section.id;
+            const bodyId = `${baseId}-${section.id}`;
+            return (
+              <li
+                key={section.id}
+                className={cn(
+                  "min-w-0 rounded-2xl border bg-card transition-opacity",
+                  dragIndex === i && "opacity-50"
+                )}
+                draggable
+                onDragStart={(e) => handleDragStart(e, i)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="flex min-w-0 items-center gap-1 p-2">
+                  <span
+                    aria-hidden
+                    title="Drag to reorder"
+                    className="hidden size-8 shrink-0 cursor-grab items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing sm:inline-flex"
+                    onMouseDown={() => { gripDrag.current = true; }}
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    aria-controls={bodyId}
+                    onClick={() => setExpanded(isOpen ? null : section.id)}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-full px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
+                  >
+                    <SectionTypeIcon type={section.type} className="text-muted-foreground" />
+                    <span className="shrink-0 text-sm font-medium">{meta.label}</span>
+                    <span className="min-w-0 truncate text-sm text-muted-foreground">{sectionPreview(section)}</span>
+                    <ChevronDown
+                      aria-hidden
+                      className={cn(
+                        "ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                        isOpen && "rotate-180"
+                      )}
                     />
-                  ))}
-                  {hasEditableItems(section.type) && (
-                    <CardsSubEditor
-                      items={section.items || []}
-                      onChange={(items) => updateSection(section.id, { items })}
-                    />
-                  )}
-                  {section.type === "compare" && (
-                    <CompareEditor
-                      columns={section.compare_columns || ["Capability", "DEXA", "Toast", "Square", "Clover"]}
-                      rows={section.compare_rows || []}
-                      onChangeColumns={(compare_columns) => updateSection(section.id, { compare_columns })}
-                      onChangeRows={(compare_rows) => updateSection(section.id, { compare_rows })}
-                    />
-                  )}
-                  <RawSectionEditor
-                    key={`raw-${section.id}-${JSON.stringify(section)}`}
-                    section={section}
-                    onChange={(updated) => updateSection(section.id, updated)}
-                  />
+                  </button>
+                  <IconAction label="Move section up" disabled={i === 0} onClick={() => moveSection(section.id, -1)}>
+                    <ArrowUp className="h-4 w-4" aria-hidden />
+                  </IconAction>
+                  <IconAction
+                    label="Move section down"
+                    disabled={i === sections.length - 1}
+                    onClick={() => moveSection(section.id, 1)}
+                  >
+                    <ArrowDown className="h-4 w-4" aria-hidden />
+                  </IconAction>
+                  <IconAction label="Delete section" destructive onClick={() => removeSection(section.id)}>
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </IconAction>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
 
-      <div className="section-add">
-        <span className="section-add-label">Add Section:</span>
-        <div className="section-add-types">
+                {isOpen && (
+                  <div id={bodyId} className="min-w-0 space-y-6 px-4 pt-2 pb-5 sm:px-5">
+                    {meta.fields.length > 0 && (
+                      <div className="grid min-w-0 gap-4 md:grid-cols-2">
+                        {meta.fields.map((field) => (
+                          <FieldRenderer
+                            key={field.key}
+                            section={section}
+                            field={field}
+                            className={WIDE_FIELD_TYPES.has(field.type) ? "md:col-span-2" : undefined}
+                            onChange={(val) => updateSection(section.id, { [field.key]: val })}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {hasEditableItems(section.type) && (
+                      <CardsSubEditor
+                        items={section.items || []}
+                        onChange={(items) => updateSection(section.id, { items })}
+                      />
+                    )}
+                    {section.type === "compare" && (
+                      <CompareEditor
+                        columns={section.compare_columns || ["Capability", "DEXA", "Toast", "Square", "Clover"]}
+                        rows={section.compare_rows || []}
+                        onChangeColumns={(compare_columns) => updateSection(section.id, { compare_columns })}
+                        onChangeRows={(compare_rows) => updateSection(section.id, { compare_rows })}
+                      />
+                    )}
+                    <RawSectionEditor
+                      key={`raw-${section.id}-${JSON.stringify(section)}`}
+                      section={section}
+                      onChange={(updated) => updateSection(section.id, updated)}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <div className="min-w-0 space-y-3">
+        <GroupLabel>Add a section</GroupLabel>
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
           {(Object.entries(SECTION_META) as [SectionType, typeof SECTION_META[SectionType]][]).map(([type, meta]) => (
-            <button key={type} type="button" className="section-add-btn" onClick={() => addSection(type)}>
-              <SectionTypeIcon type={type} />
-              <span>{meta.label}</span>
+            <button
+              key={type}
+              type="button"
+              onClick={() => addSection(type)}
+              className="flex min-w-0 items-center gap-2.5 rounded-2xl bg-muted/45 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted"
+            >
+              <SectionTypeIcon type={type} className="text-muted-foreground" />
+              <span className="truncate">{meta.label}</span>
             </button>
           ))}
         </div>
@@ -211,101 +315,121 @@ function hasEditableItems(type: SectionType) {
 function FieldRenderer({
   section,
   field,
+  className,
   onChange,
 }: {
   section: Section;
   field: SectionField;
-  onChange: (value: string | { text: string; link: string; style: string }[]) => void;
+  className?: string;
+  onChange: (value: string | ButtonItem[]) => void;
 }) {
   const value = (section as unknown as Record<string, string>)[field.key] || "";
-  const labelId = `field-${section.id}-${field.key}`;
-
-  if (field.type === "richtext") {
-    return (
-      <div className="section-field">
-        <label htmlFor={labelId}>{field.label}</label>
-        <TipTapEditor content={value} onChange={(html) => onChange(html)} placeholder={`Enter ${field.label.toLowerCase()}...`} />
-      </div>
-    );
-  }
-
-  if (field.type === "textarea") {
-    return (
-      <div className="section-field">
-        <label htmlFor={labelId}>{field.label}</label>
-        <textarea id={labelId} value={value} onChange={(e) => onChange(e.target.value)} rows={3} placeholder={field.placeholder} />
-      </div>
-    );
-  }
-
-  if (field.type === "image") {
-    return (
-      <div className="section-field">
-        <label>{field.label}</label>
-        <ImagePicker value={value} onChange={(url) => onChange(url)} />
-      </div>
-    );
-  }
+  const id = `field-${section.id}-${field.key}`;
 
   if (field.type === "buttons") {
     return (
       <ButtonsEditor
         label={field.label}
         buttons={section.buttons || []}
+        className={className}
         onChange={(buttons) => onChange(buttons)}
       />
     );
   }
 
+  if (field.type === "richtext") {
+    return (
+      <Field label={field.label} className={className}>
+        <TipTapEditor content={value} onChange={(html) => onChange(html)} placeholder={`Enter ${field.label.toLowerCase()}…`} />
+      </Field>
+    );
+  }
+
+  if (field.type === "textarea") {
+    return (
+      <Field label={field.label} htmlFor={id} className={className}>
+        <MutedTextarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={3} placeholder={field.placeholder} />
+      </Field>
+    );
+  }
+
+  if (field.type === "image") {
+    return (
+      <Field label={field.label} htmlFor={id} className={className}>
+        <ImagePicker id={id} value={value} onChange={(url) => onChange(url)} />
+      </Field>
+    );
+  }
+
   if (field.type === "color") {
     return (
-      <div className="section-field section-field-color">
-        <label htmlFor={labelId}>{field.label}</label>
-        <div className="color-picker-row">
-          <input id={labelId} type="color" value={value || "#ffffff"} onChange={(e) => onChange(e.target.value)} />
-          <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="#ffffff or var(--name)" />
+      <Field label={field.label} htmlFor={id} className={className}>
+        <div className="flex min-w-0 items-center gap-2">
+          {/* The native swatch stays a raw input — `Input` cannot style it (§11.1). */}
+          <input
+            type="color"
+            aria-label={`${field.label} swatch`}
+            value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff"}
+            onChange={(e) => onChange(e.target.value)}
+            className="size-9 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+          />
+          <Input
+            id={id}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="#ffffff or var(--name)"
+            className="font-mono"
+          />
         </div>
-      </div>
+      </Field>
     );
   }
 
   if (field.type === "select") {
     return (
-      <div className="section-field">
-        <label htmlFor={labelId}>{field.label}</label>
-        <select id={labelId} value={value} onChange={(e) => onChange(e.target.value)}>
-          {field.options?.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
+      <Field label={field.label} htmlFor={id} className={className}>
+        <MutedSelect
+          id={id}
+          value={value}
+          onValueChange={(v) => onChange(v)}
+          options={field.options || []}
+          placeholder="Choose…"
+        />
+      </Field>
     );
   }
 
   return (
-    <div className="section-field">
-      <label htmlFor={labelId}>{field.label}</label>
-      <input
-        id={labelId}
+    <Field label={field.label} htmlFor={id} className={className}>
+      <Input
+        id={id}
         type={field.type === "url" ? "url" : "text"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={field.placeholder}
       />
-    </div>
+    </Field>
   );
 }
+
+const BUTTON_STYLES = [
+  { value: "primary", label: "Primary" },
+  { value: "secondary", label: "Secondary" },
+  { value: "ghost-light", label: "Light ghost" },
+];
 
 function ButtonsEditor({
   label,
   buttons,
+  className,
   onChange,
 }: {
   label: string;
-  buttons: { text: string; link: string; style: string }[];
-  onChange: (buttons: { text: string; link: string; style: string }[]) => void;
+  buttons: ButtonItem[];
+  className?: string;
+  onChange: (buttons: ButtonItem[]) => void;
 }) {
-  const updateButton = (i: number, patch: Partial<{ text: string; link: string; style: string }>) => {
+  const updateButton = (i: number, patch: Partial<ButtonItem>) => {
     onChange(buttons.map((button, idx) => (idx === i ? { ...button, ...patch } : button)));
   };
 
@@ -318,160 +442,107 @@ function ButtonsEditor({
   };
 
   return (
-    <div className="buttons-sub-editor">
-      <label>{label}</label>
+    <div className={cn("min-w-0 space-y-3", className)}>
+      <GroupLabel>{label}</GroupLabel>
+      {buttons.length === 0 && <p className="text-sm text-muted-foreground">No buttons yet.</p>}
       {buttons.map((button, i) => (
-        <div key={i} className="button-item">
-          <div className="button-item-row">
-            <input
-              type="text"
-              value={button.text || ""}
-              onChange={(e) => updateButton(i, { text: e.target.value })}
-              placeholder="Button text"
-            />
-            <input
-              type="text"
-              value={button.link || ""}
-              onChange={(e) => updateButton(i, { link: e.target.value })}
-              placeholder="/contact"
-            />
-            <select value={button.style || "primary"} onChange={(e) => updateButton(i, { style: e.target.value })}>
-              <option value="primary">Primary</option>
-              <option value="secondary">Secondary</option>
-              <option value="ghost-light">Light ghost</option>
-            </select>
-            <button type="button" className="section-btn section-btn-danger" onClick={() => removeButton(i)}>Delete</button>
+        <div
+          key={i}
+          className="grid min-w-0 gap-2 rounded-2xl bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9.5rem_auto] sm:items-center"
+        >
+          <Input
+            aria-label={`Button ${i + 1} text`}
+            value={button.text || ""}
+            onChange={(e) => updateButton(i, { text: e.target.value })}
+            placeholder="Button text"
+          />
+          <Input
+            aria-label={`Button ${i + 1} link`}
+            value={button.link || ""}
+            onChange={(e) => updateButton(i, { link: e.target.value })}
+            placeholder="/contact"
+          />
+          <MutedSelect
+            ariaLabel={`Button ${i + 1} style`}
+            value={button.style || "primary"}
+            onValueChange={(style) => updateButton(i, { style })}
+            options={BUTTON_STYLES}
+          />
+          <div className="justify-self-end">
+            <IconAction label={`Remove button ${i + 1}`} destructive onClick={() => removeButton(i)}>
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </IconAction>
           </div>
         </div>
       ))}
-      <button type="button" className="section-add-card" onClick={addButton}>+ Add Button</button>
+      <AddButton onClick={addButton}>Add button</AddButton>
     </div>
   );
 }
 
-function ImagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showGallery, setShowGallery] = useState(false);
-
-  const handleUpload = async () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      setUploading(true);
-      setError("");
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        const res = await fetch("/api/cms/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (data.url) {
-          onChange(data.url);
-        } else {
-          setError(data.error || "Upload failed");
-        }
-      } catch {
-        setError("Upload failed: network error");
-      }
-      setUploading(false);
-    };
-    input.click();
-  };
-
-  const handleReplace = () => {
-    setMenuOpen(false);
-    handleUpload();
-  };
-
-  const handleSelect = () => {
-    setMenuOpen(false);
-    setShowGallery(true);
-  };
-
-  const handleRemove = () => {
-    setMenuOpen(false);
-    onChange("");
-  };
+/**
+ * An image URL field with upload and library actions. With an image set, a
+ * preview carries a menu (Replace, Choose from library, Remove) whose trigger
+ * is visible at rest — never a hover reveal (§7).
+ */
+function ImagePicker({ id, value, onChange }: { id?: string; value: string; onChange: (v: string) => void }) {
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const { input, uploading, openPicker } = useCmsImageUpload(onChange);
 
   return (
-    <div className="image-picker">
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Paste image URL or upload..." />
-      {error && <div className="upload-error">{error}</div>}
+    <div className="min-w-0 space-y-3">
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Paste an image URL, upload, or choose from the library"
+      />
       {value ? (
-        <div className="image-preview has-actions">
-          <img src={value} alt="" />
-          <div className="image-preview-overlay">
-            <div className="image-menu-trigger" onClick={() => setMenuOpen(!menuOpen)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-            </div>
-            {menuOpen && (
-              <div className="image-menu">
-                <button type="button" className="image-menu-item" onClick={handleReplace}>Replace</button>
-                <button type="button" className="image-menu-item" onClick={handleSelect}>Select</button>
-                <button type="button" className="image-menu-item image-menu-item-danger" onClick={handleRemove}>Remove</button>
-              </div>
-            )}
+        <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-muted/45">
+          {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary CMS bucket URLs */}
+          <img src={value} alt="" className="max-h-56 w-full object-contain" />
+          <div className="absolute top-2 right-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-sm"
+                  aria-label="Image actions"
+                  className="shadow-sm"
+                  disabled={uploading}
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={openPicker}>
+                  <Upload aria-hidden /> Replace…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setLibraryOpen(true)}>
+                  <Images aria-hidden /> Choose from library
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onSelect={() => onChange("")}>
+                  <Trash2 aria-hidden /> Remove
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       ) : (
-        <button type="button" className="section-btn" onClick={handleUpload} disabled={uploading}>
-          {uploading ? "Uploading..." : "Upload image"}
-        </button>
-      )}
-      {showGallery && (
-        <ImageGallery
-          onSelect={(url) => { onChange(url); setShowGallery(false); }}
-          onClose={() => setShowGallery(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-function ImageGallery({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
-  const [images, setImages] = useState<{ name: string; url: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    fetch("/api/cms/images")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.images) setImages(data.images);
-        else setError(data.error || "Failed to load images");
-      })
-      .catch(() => setError("Failed to load images"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div className="image-gallery-backdrop" onClick={onClose}>
-      <div className="image-gallery" onClick={(e) => e.stopPropagation()}>
-        <div className="image-gallery-header">
-          <span>Select an image</span>
-          <button type="button" className="image-gallery-close" onClick={onClose}>✕</button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={openPicker} disabled={uploading}>
+            <Upload className="h-4 w-4" aria-hidden />
+            {uploading ? "Uploading…" : "Upload image"}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
+            <Images className="h-4 w-4" aria-hidden />
+            Choose from library
+          </Button>
         </div>
-        <div className="image-gallery-body">
-          {loading && <p style={{ padding: 24, textAlign: "center" }}>Loading...</p>}
-          {error && <p style={{ padding: 24, textAlign: "center", color: "#dc2626" }}>{error}</p>}
-          {!loading && !error && images.length === 0 && (
-            <p style={{ padding: 24, textAlign: "center", color: "var(--slate-500)" }}>No images uploaded yet.</p>
-          )}
-          {!loading && images.length > 0 && (
-            <div className="image-gallery-grid">
-              {images.map((img) => (
-                <button key={img.name} type="button" className="image-gallery-item" onClick={() => onSelect(img.url)}>
-                  <img src={img.url} alt={img.name} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
+      {input}
+      <ImageLibraryDialog open={libraryOpen} onOpenChange={setLibraryOpen} onSelect={onChange} />
     </div>
   );
 }
@@ -501,13 +572,36 @@ function RawSectionEditor({
   };
 
   return (
-    <details className="raw-section-editor">
-      <summary>Advanced JSON</summary>
-      <p className="raw-section-help">Edit any section field directly, including links, alt text, image sources, tags, form fields, and settings.</p>
-      <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={12} spellCheck={false} />
-      {error && <p className="upload-error">{error}</p>}
-      <button type="button" className="section-btn" onClick={apply}>Apply JSON</button>
-    </details>
+    <Collapsible className="min-w-0">
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className="group -ml-3 h-8 px-3 text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ChevronRight className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-90" aria-hidden />
+          Advanced JSON
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="min-w-0 space-y-3 pt-3">
+        <p className="text-xs text-muted-foreground">
+          Edit any section field directly, including links, alt text, image sources, tags, form fields and settings.
+        </p>
+        <MutedTextarea
+          aria-label="Section JSON"
+          aria-invalid={!!error || undefined}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={12}
+          spellCheck={false}
+          className="field-sizing-fixed font-mono text-xs"
+        />
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="button" variant="outline" size="sm" onClick={apply}>
+          Apply JSON
+        </Button>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -515,12 +609,11 @@ function CardsSubEditor({
   items,
   onChange,
 }: {
-  items: { title?: string; description?: string; image?: string; image_alt?: string; icon?: string; link?: string; link_text?: string; tags?: string[] }[];
-  onChange: (items: { title?: string; description?: string; image?: string; image_alt?: string; icon?: string; link?: string; link_text?: string; tags?: string[] }[]) => void;
+  items: CardItem[];
+  onChange: (items: CardItem[]) => void;
 }) {
   const updateItem = (i: number, patch: Record<string, string | string[]>) => {
-    const copy = items.map((item, idx) => (idx === i ? { ...item, ...patch } : item));
-    onChange(copy);
+    onChange(items.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
   };
 
   const removeItem = (i: number) => {
@@ -532,62 +625,119 @@ function CardsSubEditor({
   };
 
   return (
-    <div className="cards-sub-editor">
-      <label>Cards</label>
+    <div className="min-w-0 space-y-3">
+      <GroupLabel>Cards</GroupLabel>
+      {items.length === 0 && <p className="text-sm text-muted-foreground">No cards yet.</p>}
       {items.map((item, i) => {
         const useIcon = !!item.icon;
         return (
-          <div key={i} className="card-item">
-            <div className="card-item-row">
-              <input type="text" value={item.title || ""} onChange={(e) => updateItem(i, { title: e.target.value })} placeholder="Card title" />
-              <button type="button" className="section-btn section-btn-danger" onClick={() => removeItem(i)}>✕</button>
+          <div key={i} className="min-w-0 space-y-3 rounded-2xl bg-muted/30 p-3 sm:p-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="w-5 shrink-0 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+              <Input
+                aria-label={`Card ${i + 1} title`}
+                value={item.title || ""}
+                onChange={(e) => updateItem(i, { title: e.target.value })}
+                placeholder="Card title"
+              />
+              <IconAction label={`Remove card ${i + 1}`} destructive onClick={() => removeItem(i)}>
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </IconAction>
             </div>
-            <textarea value={item.description || ""} onChange={(e) => updateItem(i, { description: e.target.value })} placeholder="Description" rows={2} />
-            <div className="card-item-row">
-              <input type="text" value={item.link || ""} onChange={(e) => updateItem(i, { link: e.target.value })} placeholder="Link URL" />
-              <input type="text" value={item.link_text || ""} onChange={(e) => updateItem(i, { link_text: e.target.value })} placeholder="Link text" />
+            <MutedTextarea
+              aria-label={`Card ${i + 1} description`}
+              value={item.description || ""}
+              onChange={(e) => updateItem(i, { description: e.target.value })}
+              placeholder="Description"
+              rows={2}
+            />
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+              <Input
+                aria-label={`Card ${i + 1} link`}
+                value={item.link || ""}
+                onChange={(e) => updateItem(i, { link: e.target.value })}
+                placeholder="Link URL"
+              />
+              <Input
+                aria-label={`Card ${i + 1} link text`}
+                value={item.link_text || ""}
+                onChange={(e) => updateItem(i, { link_text: e.target.value })}
+                placeholder="Link text"
+              />
             </div>
-            <input type="text" value={(item.tags || []).join(", ")} onChange={(e) => updateItem(i, { tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} placeholder="Tags, comma separated" />
-            <div className="card-visual-toggle">
-              <button
-                type="button"
-                className={`card-visual-opt ${useIcon ? "active" : ""}`}
-                onClick={() => updateItem(i, { icon: item.icon || "checkmark", image: "" })}
-              >
-                Icon
-              </button>
-              <button
-                type="button"
-                className={`card-visual-opt ${!useIcon ? "active" : ""}`}
-                onClick={() => updateItem(i, { image: item.image || "", icon: "" })}
-              >
-                Image
-              </button>
+            <Input
+              aria-label={`Card ${i + 1} tags`}
+              value={(item.tags || []).join(", ")}
+              onChange={(e) => updateItem(i, { tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })}
+              placeholder="Tags, comma separated"
+            />
+
+            <div
+              role="radiogroup"
+              aria-label={`Card ${i + 1} visual`}
+              className="inline-flex gap-0.5 rounded-full bg-muted/70 p-1"
+            >
+              {[
+                { label: "Icon", checked: useIcon, onSelect: () => updateItem(i, { icon: item.icon || "checkmark", image: "" }) },
+                { label: "Image", checked: !useIcon, onSelect: () => updateItem(i, { image: item.image || "", icon: "" }) },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={opt.checked}
+                  onClick={opt.onSelect}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 text-[0.8125rem] font-medium transition-colors",
+                    opt.checked
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+
             {useIcon ? (
-              <div className="icon-picker-grid">
-                {CARD_ICON_NAMES.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={`icon-picker-item ${item.icon === name ? "active" : ""}`}
-                    onClick={() => updateItem(i, { icon: name })}
-                    title={name}
-                  >
-                    {CARD_ICONS[name]}
-                  </button>
-                ))}
+              <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5">
+                {CARD_ICON_NAMES.map((name) => {
+                  const selected = item.icon === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      aria-label={name}
+                      aria-pressed={selected}
+                      title={name}
+                      onClick={() => updateItem(i, { icon: name })}
+                      className={cn(
+                        "flex size-10 items-center justify-center rounded-full transition-colors [&_svg]:size-5",
+                        selected
+                          ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {CARD_ICONS[name]}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <>
+              <div className="min-w-0 space-y-3">
                 <ImagePicker value={item.image || ""} onChange={(v) => updateItem(i, { image: v })} />
-                <input type="text" value={item.image_alt || ""} onChange={(e) => updateItem(i, { image_alt: e.target.value })} placeholder="Image alt text" />
-              </>
+                <Input
+                  aria-label={`Card ${i + 1} image alt text`}
+                  value={item.image_alt || ""}
+                  onChange={(e) => updateItem(i, { image_alt: e.target.value })}
+                  placeholder="Image alt text"
+                />
+              </div>
             )}
           </div>
         );
       })}
-      <button type="button" className="section-add-card" onClick={addItem}>+ Add Card</button>
+      <AddButton onClick={addItem}>Add card</AddButton>
     </div>
   );
 }
@@ -618,10 +768,7 @@ function CompareEditor({
   };
 
   const updateCell = (rowIdx: number, colIdx: number, value: string) => {
-    const copy = rows.map((r, ri) =>
-      ri === rowIdx ? r.map((c, ci) => (ci === colIdx ? value : c)) : r
-    );
-    onChangeRows(copy);
+    onChangeRows(rows.map((r, ri) => (ri === rowIdx ? r.map((c, ci) => (ci === colIdx ? value : c)) : r)));
   };
 
   const addRow = () => {
@@ -633,45 +780,50 @@ function CompareEditor({
   };
 
   return (
-    <div className="compare-sub-editor">
-      <label>Comparison columns</label>
-      <div className="compare-row-item">
-        <div className="compare-row-cells">
+    <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-3">
+        <GroupLabel>Comparison columns</GroupLabel>
+        <div className="grid min-w-0 gap-3 rounded-2xl bg-muted/30 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
           {columns.map((column, ci) => (
-            <div key={ci} className="compare-cell">
-              <label>{ci === 0 ? "Label column" : `Column ${ci + 1}`}</label>
-              <input type="text" value={column} onChange={(e) => updateColumn(ci, e.target.value)} />
-              {columns.length > 1 && (
-                <button type="button" className="section-btn section-btn-danger" onClick={() => removeColumn(ci)}>Delete</button>
-              )}
-            </div>
+            <label key={ci} className="block min-w-0 space-y-1.5">
+              <span className="text-xs text-muted-foreground">{ci === 0 ? "Label column" : `Column ${ci + 1}`}</span>
+              <span className="flex min-w-0 items-center gap-1">
+                <Input value={column} onChange={(e) => updateColumn(ci, e.target.value)} />
+                {columns.length > 1 && (
+                  <IconAction label={`Remove column ${ci + 1}`} destructive onClick={() => removeColumn(ci)}>
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </IconAction>
+                )}
+              </span>
+            </label>
           ))}
         </div>
-        <button type="button" className="section-add-card" onClick={addColumn}>+ Add Column</button>
+        <AddButton onClick={addColumn}>Add column</AddButton>
       </div>
-      <label>Comparison rows</label>
-      {rows.length === 0 && (
-        <button type="button" className="section-add-card" onClick={addRow}>+ Add Row</button>
-      )}
-      {rows.map((row, ri) => (
-        <div key={ri} className="compare-row-item">
-          <div className="compare-row-header">
-            <span>Row {ri + 1}</span>
-            <button type="button" className="section-btn section-btn-danger" onClick={() => removeRow(ri)}>✕</button>
+
+      <div className="min-w-0 space-y-3">
+        <GroupLabel>Comparison rows</GroupLabel>
+        {rows.length === 0 && <p className="text-sm text-muted-foreground">No rows yet.</p>}
+        {rows.map((row, ri) => (
+          <div key={ri} className="min-w-0 space-y-3 rounded-2xl bg-muted/30 p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted-foreground tabular-nums">Row {ri + 1}</span>
+              <IconAction label={`Remove row ${ri + 1}`} destructive onClick={() => removeRow(ri)}>
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </IconAction>
+            </div>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {row.map((cell, ci) => (
+                <label key={ci} className="block min-w-0 space-y-1.5">
+                  <span className="text-xs text-muted-foreground">{columns[ci] || `Column ${ci + 1}`}</span>
+                  <Input value={cell} onChange={(e) => updateCell(ri, ci, e.target.value)} />
+                </label>
+              ))}
+            </div>
           </div>
-          <div className="compare-row-cells">
-            {row.map((cell, ci) => (
-              <div key={ci} className="compare-cell">
-                <label>{columns[ci] || `Col ${ci + 1}`}</label>
-                <input type="text" value={cell} onChange={(e) => updateCell(ri, ci, e.target.value)} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {rows.length > 0 && (
-        <button type="button" className="section-add-card" onClick={addRow}>+ Add Row</button>
-      )}
+        ))}
+        <AddButton onClick={addRow}>Add row</AddButton>
+      </div>
     </div>
   );
 }

@@ -154,13 +154,117 @@ function getEntryModeIcon(mode?: string) {
 // Expanded Row Detail
 // ============================================================================
 
+type BreakdownRow = { label: string; value: number; muted?: boolean };
+
+/**
+ * How one payment's amount breaks down: the itemised lines, then the tip and
+ * total. `tail` is empty when there is no tip, since Amount would equal Total.
+ */
+function getPaymentBreakdown(payment: PaymentRecord) {
+  const items = payment.order_payment_items ?? [];
+  const itemsSubtotal = items.reduce(
+    (s, it) => s + Number(it.subtotal_paid || 0),
+    0
+  );
+  const itemsTax = items.reduce((s, it) => s + Number(it.tax_paid || 0), 0);
+  const subtotal = Number(payment.subtotal_portion ?? itemsSubtotal);
+  const tax = Number(payment.tax_portion ?? itemsTax);
+  const discount = Number(payment.discount_portion ?? 0);
+  const gatewayFee = Number(payment.gateway_fee ?? 0);
+  const orderSvc = Number(payment.orders?.service_charge ?? 0);
+  const orderTotal = Number(payment.orders?.total_amount ?? 0);
+  const payAmount = Number(payment.amount ?? 0);
+  const payTip = Number(payment.tip_amount ?? 0);
+  const payTotal = Number(payment.total_amount ?? payAmount + payTip);
+  const isSplit =
+    orderTotal > 0 && payAmount > 0 && payAmount + payTip < orderTotal;
+  // Service charge share for this payment, prorated when split.
+  const svcShare =
+    orderSvc > 0 && isSplit
+      ? orderSvc * (payAmount / Math.max(orderTotal, 1))
+      : orderSvc;
+  // The POS taxes on top of SC, so true tax = item tax + tax on SC.
+  // In some payments the SC amount itself is bundled into
+  // tax_portion as well — detect that and peel it out so SC can
+  // always be displayed as its own line without double-counting.
+  const portionsCoverAmount =
+    Math.abs(subtotal + tax + gatewayFee - discount - payAmount) < 0.02;
+  const svcBundledInTax =
+    svcShare > 0 && tax >= svcShare && portionsCoverAmount;
+  const taxDisplay = svcBundledInTax ? tax - svcShare : tax;
+  const accounted = subtotal + taxDisplay + svcShare + gatewayFee - discount;
+  const other = payAmount - accounted;
+
+  const lines: BreakdownRow[] = [
+    { label: "Subtotal", value: subtotal },
+    { label: "Tax", value: taxDisplay },
+  ];
+  if (svcShare > 0)
+    lines.push({
+      label: `Service charge${isSplit ? " (prorated)" : ""}`,
+      value: svcShare,
+    });
+  if (gatewayFee > 0) lines.push({ label: "Gateway fee", value: gatewayFee });
+  if (discount > 0) lines.push({ label: "Discount", value: -discount });
+  if (Math.abs(other) >= 0.005)
+    lines.push({ label: "Other / adjustments", value: other, muted: true });
+
+  const tail: BreakdownRow[] =
+    payTip > 0
+      ? [
+          { label: "Amount", value: payAmount },
+          { label: "Tip", value: payTip },
+        ]
+      : [];
+
+  return { lines, tail, total: payTotal };
+}
+
+type DetailField = { label: string; value?: React.ReactNode; mono?: boolean };
+
+/** A labelled group of reference fields; empty fields are skipped. */
+function DetailGroup({
+  title,
+  fields,
+}: {
+  title: string;
+  fields: DetailField[];
+}) {
+  const shown = fields.filter(
+    (f) => f.value !== null && f.value !== undefined && f.value !== ""
+  );
+  if (shown.length === 0) return null;
+  return (
+    <section className="min-w-0 space-y-2">
+      <h4 className="text-xs font-medium text-muted-foreground">{title}</h4>
+      <DetailList fields={shown} />
+    </section>
+  );
+}
+
+/** Label beside value, so the eye never crosses the panel to pair them. */
+function DetailList({ fields }: { fields: DetailField[] }) {
+  return (
+    <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-xs">
+      {fields.map((f) => (
+        <React.Fragment key={f.label}>
+          <dt className="text-muted-foreground">{f.label}</dt>
+          <dd className={cn("min-w-0 break-all", f.mono && "font-mono")}>
+            {f.value}
+          </dd>
+        </React.Fragment>
+      ))}
+    </dl>
+  );
+}
+
 function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
   const hasReversals =
     payment.reversals && payment.reversals.length > 0;
   const hasItems =
     payment.order_payment_items && payment.order_payment_items.length > 0;
 
-  const { ct, raw, isCastles } = getCastlesData(payment);
+  const { ct, raw } = getCastlesData(payment);
 
   const baseEmv: EmvData | null | undefined =
     payment.emv_data || payment.processor_response?.emv_data;
@@ -169,408 +273,173 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
     : raw?.txnAID || raw?.txnCardBrand
       ? { aid: raw.txnAID, applicationName: raw.txnCardBrand }
       : null;
-  const hasEmvData =
-    emvData &&
-    (emvData.aid ||
-      emvData.applicationName ||
-      emvData.arc ||
-      emvData.iad ||
-      emvData.tsi ||
-      emvData.tvr);
+  const emvFields: DetailField[] = emvData
+    ? [
+        { label: "AID", value: emvData.aid, mono: true },
+        { label: "Application", value: emvData.applicationName },
+        { label: "ARC", value: emvData.arc, mono: true },
+        { label: "IAD", value: emvData.iad, mono: true },
+        { label: "TSI", value: emvData.tsi, mono: true },
+        { label: "TVR", value: emvData.tvr, mono: true },
+      ].filter((f) => f.value)
+    : [];
+
+  const breakdown = hasItems ? getPaymentBreakdown(payment) : null;
 
   return (
-    <div className="grid w-full max-w-full gap-6 p-4 md:grid-cols-2">
-      <div className="space-y-4 min-w-0">
-        {/* Transaction Details */}
-        <div className="space-y-2 min-w-0">
-          <h4 className="text-sm font-semibold">Transaction Details</h4>
-          <dl className="space-y-1 text-xs">
-            {payment.authorization_code && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Auth Code</dt>
-                <dd className="font-mono">{payment.authorization_code}</dd>
-              </div>
-            )}
-            {payment.transaction_id && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Transaction ID</dt>
-                <dd className="font-mono truncate max-w-35">
-                  {payment.transaction_id}
-                </dd>
-              </div>
-            )}
-            {payment.reference_number && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Reference #</dt>
-                <dd className="font-mono">{payment.reference_number}</dd>
-              </div>
-            )}
-            {payment.dejavoo_response_code && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Response Code</dt>
-                <dd className="font-mono">{payment.dejavoo_response_code}</dd>
-              </div>
-            )}
-            {(payment.batch_number || ct?.batchNumber) && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Batch #</dt>
-                <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
-              </div>
-            )}
-            {payment.settled_at && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Settled At</dt>
-                <dd>{formatDate(payment.settled_at)}</dd>
-              </div>
-            )}
-            {(payment.invoice_number || raw?.txnInvoiceNumber) && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Invoice #</dt>
-                <dd className="font-mono">{payment.invoice_number || raw?.txnInvoiceNumber}</dd>
-              </div>
-            )}
-            {ct?.rrn && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">RRN</dt>
-                <dd className="font-mono">{ct.rrn}</dd>
-              </div>
-            )}
-          </dl>
-        </div>
+    <div className="grid gap-x-10 gap-y-6 p-5 @3xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      {/* What was paid: the question most people open a payment to answer. */}
+      <div className="min-w-0 space-y-6">
+        {hasItems && breakdown && (
+          <section className="min-w-0 space-y-3">
+            <h4 className="text-sm font-semibold">Items paid</h4>
+            {/* A grid, not a nested <table>: the data TableBody styles every
+                descendant tr/td (fill, hover, padding) and would win. */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] text-xs">
+              <div className="border-b pb-2 text-muted-foreground">Item</div>
+              <div className="border-b pb-2 pl-6 text-right text-muted-foreground">Qty</div>
+              <div className="border-b pb-2 pl-6 text-right text-muted-foreground">Subtotal</div>
+              <div className="border-b pb-2 pl-6 text-right text-muted-foreground">Tax</div>
+              {payment.order_payment_items!.map((item) => (
+                <React.Fragment key={item.id}>
+                  <div className="min-w-0 pt-2">
+                    {item.order_items?.item_name || "—"}
+                  </div>
+                  <div className="pt-2 pl-6 text-right tabular-nums">
+                    {item.quantity_paid}
+                  </div>
+                  <div className="pt-2 pl-6 text-right tabular-nums">
+                    {formatCurrency(item.subtotal_paid)}
+                  </div>
+                  <div className="pt-2 pl-6 text-right tabular-nums">
+                    {formatCurrency(item.tax_paid)}
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
 
-        {/* Terminal Info */}
-        <div className="space-y-2 min-w-0">
-          <h4 className="text-sm font-semibold">Terminal Info</h4>
-          <dl className="space-y-1 text-xs">
-            {payment.terminal_type && (
-              <div className="flex gap-2 justify-between">
-                <dt className="text-muted-foreground shrink-0">Terminal</dt>
-                <dd className="text-right break-all">{payment.terminal_type}</dd>
-              </div>
-            )}
-            {(payment.terminal_id || ct?.terminalId) && (
-              <div className="space-y-1">
-                <dt className="text-muted-foreground">Terminal ID</dt>
-                <dd
-                  className="font-mono break-all text-left"
-                  title={payment.terminal_id || ct?.terminalId || ''}
-                >
-                  {payment.terminal_id || ct?.terminalId}
-                </dd>
-              </div>
-            )}
-            {payment.device_id && (
-              <div className="space-y-1">
-                <dt className="text-muted-foreground">Device ID</dt>
-                <dd
-                  className="font-mono break-all text-left"
-                  title={payment.device_id}
-                >
-                  {payment.device_id}
-                </dd>
-              </div>
-            )}
-            {payment.processor_response?.serial_number && (
-              <div className="space-y-1">
-                <dt className="text-muted-foreground">Serial #</dt>
-                <dd
-                  className="font-mono break-all text-left"
-                  title={String(payment.processor_response.serial_number)}
-                >
-                  {payment.processor_response.serial_number}
-                </dd>
-              </div>
-            )}
-          </dl>
-        </div>
-      </div>
-
-      {/* Reversal Details (conditional) */}
-      {hasReversals && (
-        <div className="space-y-2 min-w-0">
-          <h4 className="text-sm font-semibold">Reversals</h4>
-          <div className="space-y-2">
-            {payment.reversals!.map((rev) => (
-              <div
-                key={rev.id}
-                className="space-y-1 rounded-2xl border-0 bg-muted/60 p-2 text-xs shadow-none"
-              >
-                <div className="flex items-center justify-between">
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full border-0 text-[10px]"
-                  >
-                    {rev.reversal_type}
-                  </Badge>
-                  <span className="font-mono tabular-nums">
-                    -{formatCurrency(rev.amount)}
-                  </span>
-                </div>
-                {rev.reason && (
-                  <p className="text-muted-foreground">{rev.reason}</p>
-                )}
-                <div className="flex justify-between text-muted-foreground">
-                  <span>{rev.status}</span>
-                  {rev.processed_at && (
-                    <span>{formatDate(rev.processed_at)}</span>
+            {/* Receipt-style breakdown, right-aligned under the money columns. */}
+            <dl className="ml-auto w-full max-w-60 space-y-1.5 border-t pt-3 text-xs">
+              {[...breakdown.lines, ...breakdown.tail].map((r, i) => (
+                <div
+                  key={`${r.label}-${i}`}
+                  className={cn(
+                    "flex justify-between gap-4",
+                    r.muted && "text-muted-foreground"
                   )}
+                >
+                  <dt className="text-muted-foreground">{r.label}</dt>
+                  <dd className="tabular-nums">{formatCurrency(r.value)}</dd>
                 </div>
-                {rev.order_refund_items &&
-                  rev.order_refund_items.length > 0 && (
-                    <div className="mt-1 space-y-0.5 pt-1">
-                      {rev.order_refund_items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex justify-between"
-                        >
-                          <span>
-                            {item.item_name} x{item.quantity_refunded}
-                          </span>
-                          <span className="font-mono">
-                            {formatCurrency(item.amount)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              ))}
+              <div className="flex justify-between gap-4 border-t pt-1.5 text-sm font-semibold">
+                <dt>Total</dt>
+                <dd className="tabular-nums">
+                  {formatCurrency(breakdown.total)}
+                </dd>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </dl>
+          </section>
+        )}
 
-      {/* Items Paid For (conditional) */}
-      {hasItems && (
-        <div className="space-y-2 min-w-0 pt-2">
-          <h4 className="text-sm font-semibold">Items Paid</h4>
-          <div className="overflow-hidden rounded-2xl bg-muted/20">
-            <table className="w-full max-w-full text-xs">
-              <thead>
-                <tr className="bg-muted/50 text-muted-foreground">
-                  <th className="px-2 py-1.5 text-left font-medium">Item</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Qty</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Subtotal</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Tax</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payment.order_payment_items!.map((item) => (
-                  <tr key={item.id} className="bg-card/70">
-                    <td className="px-1.5 py-1.5 whitespace-nowrap">
-                      {item.order_items?.item_name || "—"}
-                    </td>
-                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-                      {item.quantity_paid}
-                    </td>
-                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-                      {formatCurrency(item.subtotal_paid)}
-                    </td>
-                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-                      {formatCurrency(item.tax_paid)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Payment summary. Lives outside the <table> — a <div> is not a
-              valid child of <table> and breaks hydration. */}
-          {(() => {
-                const items = payment.order_payment_items ?? [];
-                const itemsSubtotal = items.reduce(
-                  (s, it) => s + Number(it.subtotal_paid || 0),
-                  0
-                );
-                const itemsTax = items.reduce(
-                  (s, it) => s + Number(it.tax_paid || 0),
-                  0
-                );
-                const subtotal = Number(
-                  payment.subtotal_portion ?? itemsSubtotal
-                );
-                const tax = Number(payment.tax_portion ?? itemsTax);
-                const discount = Number(payment.discount_portion ?? 0);
-                const gatewayFee = Number(payment.gateway_fee ?? 0);
-                const orderSvc = Number(
-                  payment.orders?.service_charge ?? 0
-                );
-                const orderTotal = Number(
-                  payment.orders?.total_amount ?? 0
-                );
-                const payAmount = Number(payment.amount ?? 0);
-                const payTip = Number(payment.tip_amount ?? 0);
-                const payTotal = Number(
-                  payment.total_amount ?? payAmount + payTip
-                );
-                const isSplit =
-                  orderTotal > 0 &&
-                  payAmount > 0 &&
-                  payAmount + payTip < orderTotal;
-                // Service charge share for this payment, prorated when split.
-                const svcShare =
-                  orderSvc > 0 && isSplit
-                    ? orderSvc * (payAmount / Math.max(orderTotal, 1))
-                    : orderSvc;
-                // The POS taxes on top of SC, so true tax = item tax + tax on SC.
-                // In some payments the SC amount itself is bundled into
-                // tax_portion as well — detect that and peel it out so SC can
-                // always be displayed as its own line without double-counting.
-                const portionsCoverAmount =
-                  Math.abs(
-                    subtotal + tax + gatewayFee - discount - payAmount
-                  ) < 0.02;
-                const svcBundledInTax =
-                  svcShare > 0 && tax >= svcShare && portionsCoverAmount;
-                const taxDisplay = svcBundledInTax ? tax - svcShare : tax;
-                const accounted =
-                  subtotal +
-                  taxDisplay +
-                  svcShare +
-                  gatewayFee -
-                  discount;
-                const other = payAmount - accounted;
-                const rows: Array<{
-                  label: string;
-                  value: number;
-                  cls?: string;
-                }> = [
-                  { label: "Subtotal", value: subtotal },
-                  { label: "Tax", value: taxDisplay },
-                ];
-                if (svcShare > 0)
-                  rows.push({
-                    label: `Service Charge${isSplit ? " (prorated)" : ""}`,
-                    value: svcShare,
-                  });
-                if (gatewayFee > 0)
-                  rows.push({ label: "Gateway Fee", value: gatewayFee });
-                if (discount > 0)
-                  rows.push({
-                    label: "Discount",
-                    value: -discount,
-                  });
-                if (Math.abs(other) >= 0.005)
-                  rows.push({
-                    label: "Other / Adjustments",
-                    value: other,
-                    cls: "text-muted-foreground",
-                  });
-                rows.push({
-                  label: "Amount",
-                  value: payAmount,
-                  cls: "font-semibold",
-                });
-                if (payTip > 0) rows.push({ label: "Tip", value: payTip });
-                rows.push({
-                  label: "Total",
-                  value: payTotal,
-                  cls: "font-semibold",
-                });
-
-                const summaryColumns = rows.slice(0, 4);
-                const overflowColumns = rows.slice(4);
-
-                return (
-                  <div className="mt-3 w-full text-xs">
-                    <div className="grid w-full grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-10">
-                      {summaryColumns.map((r, i) => (
-                        <div key={`${r.label}-${i}`} className="min-w-0">
+        {hasReversals && (
+          <section className="min-w-0 space-y-3">
+            <h4 className="text-sm font-semibold">Reversals</h4>
+            <div className="space-y-2">
+              {payment.reversals!.map((rev) => (
+                <div
+                  key={rev.id}
+                  className="space-y-1 rounded-xl bg-card p-3 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-medium capitalize">
+                      {rev.reversal_type}
+                    </span>
+                    <span className="tabular-nums">
+                      -{formatCurrency(rev.amount)}
+                    </span>
+                  </div>
+                  {rev.reason && (
+                    <p className="text-muted-foreground">{rev.reason}</p>
+                  )}
+                  <div className="flex justify-between gap-4 text-muted-foreground">
+                    <span className="capitalize">{rev.status}</span>
+                    {rev.processed_at && (
+                      <span>{formatDate(rev.processed_at)}</span>
+                    )}
+                  </div>
+                  {rev.order_refund_items &&
+                    rev.order_refund_items.length > 0 && (
+                      <div className="mt-1 space-y-0.5 pt-1">
+                        {rev.order_refund_items.map((item) => (
                           <div
-                            className={cn(
-                              "mb-1 text-right text-muted-foreground",
-                              r.cls
-                            )}
+                            key={item.id}
+                            className="flex justify-between gap-4"
                           >
-                            {r.label}
-                          </div>
-                          <div
-                            className={cn(
-                              "text-right font-mono tabular-nums whitespace-nowrap",
-                              r.cls
-                            )}
-                          >
-                            {formatCurrency(r.value)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {overflowColumns.length > 0 && (
-                      <div className="mt-2 grid w-full grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-10">
-                        {overflowColumns.map((r, i) => (
-                          <div key={`${r.label}-extra-${i}`} className="min-w-0">
-                            <div
-                              className={cn(
-                                "mb-1 text-right text-muted-foreground",
-                                r.cls
-                              )}
-                            >
-                              {r.label}
-                            </div>
-                            <div
-                              className={cn(
-                                "text-right font-mono tabular-nums whitespace-nowrap",
-                                r.cls
-                              )}
-                            >
-                              {formatCurrency(r.value)}
-                            </div>
+                            <span>
+                              {item.item_name} x{item.quantity_refunded}
+                            </span>
+                            <span className="tabular-nums">
+                              {formatCurrency(item.amount)}
+                            </span>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
-                );
-              })()}
-        </div>
-      )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
 
-      {/* EMV Data (conditional) */}
-      {hasEmvData && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold">EMV Data</h4>
-          <dl className="space-y-1 text-xs">
-            {emvData!.aid && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">AID</dt>
-                <dd className="font-mono">{emvData!.aid}</dd>
-              </div>
-            )}
-            {emvData!.applicationName && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Application Name</dt>
-                <dd className="font-mono">{emvData!.applicationName}</dd>
-              </div>
-            )}
-            {emvData!.arc && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">ARC</dt>
-                <dd className="font-mono">{emvData!.arc}</dd>
-              </div>
-            )}
-            {emvData!.iad && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">IAD</dt>
-                <dd className="font-mono truncate max-w-35">
-                  {emvData!.iad}
-                </dd>
-              </div>
-            )}
-            {emvData!.tsi && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">TSI</dt>
-                <dd className="font-mono">{emvData!.tsi}</dd>
-              </div>
-            )}
-            {emvData!.tvr && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">TVR</dt>
-                <dd className="font-mono">{emvData!.tvr}</dd>
-              </div>
-            )}
-          </dl>
-        </div>
-      )}
+      {/* Processor references: looked up, not read, so they sit second. */}
+      <div className="min-w-0 space-y-5">
+        <h4 className="text-sm font-semibold">Reference</h4>
+        <DetailGroup
+          title="Transaction"
+          fields={[
+            { label: "Auth code", value: payment.authorization_code, mono: true },
+            { label: "Transaction ID", value: payment.transaction_id, mono: true },
+            { label: "Reference #", value: payment.reference_number, mono: true },
+            { label: "Response code", value: payment.dejavoo_response_code, mono: true },
+            { label: "Batch #", value: payment.batch_number || ct?.batchNumber, mono: true },
+            { label: "Invoice #", value: payment.invoice_number || raw?.txnInvoiceNumber, mono: true },
+            { label: "RRN", value: ct?.rrn, mono: true },
+            {
+              label: "Settled",
+              value: payment.settled_at ? formatDate(payment.settled_at) : null,
+            },
+          ]}
+        />
+        <DetailGroup
+          title="Terminal"
+          fields={[
+            { label: "Type", value: payment.terminal_type },
+            { label: "Terminal ID", value: payment.terminal_id || ct?.terminalId, mono: true },
+            { label: "Device ID", value: payment.device_id, mono: true },
+            {
+              label: "Serial #",
+              value: payment.processor_response?.serial_number
+                ? String(payment.processor_response.serial_number)
+                : null,
+              mono: true,
+            },
+          ]}
+        />
+        {/* Raw chip data is for disputes and support, so it starts folded. */}
+        {emvFields.length > 0 && (
+          <details className="group min-w-0">
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+              EMV data
+            </summary>
+            <div className="mt-2">
+              <DetailList fields={emvFields} />
+            </div>
+          </details>
+        )}
+      </div>
     </div>
   );
 }
@@ -1081,7 +950,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
 
       {/* Table — §5: variant="data" carries the well, header band and
           borderless rows; do not restate them here. */}
-      <Table variant="data" className="min-w-max">
+      <Table variant="data" className="min-w-max" containerClassName="@container">
           <TableHeader className="[&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
@@ -1159,9 +1028,14 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                     <TableRow className="border-0 hover:bg-transparent">
                       <TableCell
                         colSpan={columns.length}
-                        className="w-full max-w-full bg-muted/40 p-0"
+                        className="bg-muted/40 p-0 whitespace-normal"
                       >
-                        <PaymentDetailPanel payment={row.original} />
+                        {/* The cell spans the whole (wider-than-view) table, so
+                            pin the panel to the visible width: 100cqw of the
+                            scroll container, stuck to its left edge. */}
+                        <div className="@container sticky left-0 w-[100cqw]">
+                          <PaymentDetailPanel payment={row.original} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   )}

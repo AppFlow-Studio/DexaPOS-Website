@@ -1,4 +1,5 @@
 import { requireAdminAuth } from '@/lib/admin/auth'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { SubscriptionCatalogAdmin } from '@/components/billing/SubscriptionCatalogAdmin'
 
 export const dynamic = 'force-dynamic'
@@ -7,16 +8,13 @@ export default async function BillingCatalogPage() {
   await requireAdminAuth('system.billing.manage')
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">Billing Catalog</h1>
-        <p className="text-sm text-muted-foreground">
-          Platform-wide subscription pricing configured by Dexa HQ — plan/station pricing, billable services and
-          add-ons, and device-to-service mappings. Applies to every merchant; existing invoices are unaffected.
-        </p>
-      </div>
-
+    // `as="div"`: the manage layout already renders the route's <main> (§14.1).
+    <PageShell as="div">
+      <PageHeader
+        title="Billing Catalog"
+        subtitle="Platform-wide subscription pricing for every merchant: the station plan, billable services and add-ons, and which service each device bills as."
+      />
       <SubscriptionCatalogAdmin />
-    </div>
+    </PageShell>
   )
 }

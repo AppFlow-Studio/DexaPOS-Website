@@ -487,7 +487,7 @@ export default function AdminSupportPage() {
           ) : (
             <>
               {/* ≤ 720px wide, so it fits the `lg` content column (§5.3, D-23). */}
-              <Table variant="data" containerClassName="hidden lg:block" className="min-w-[680px]">
+              <Table variant="data" bounded={false} containerClassName="hidden lg:block" className="min-w-[680px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Ticket</TableHead>

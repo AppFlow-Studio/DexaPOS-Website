@@ -572,6 +572,7 @@ export default function UsersPage() {
                                 content column from `xl`; cards below that. */}
                             <Table
                                 variant="data"
+                                bounded={false}
                                 containerClassName="hidden xl:block"
                                 className="min-w-[800px]"
                             >

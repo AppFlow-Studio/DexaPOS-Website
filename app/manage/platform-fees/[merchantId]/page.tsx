@@ -146,8 +146,11 @@ export default function MerchantPlatformFeesPage({
         }
       />
 
-      {/* One control row governs every tab. The dates are scope, so they stay on phones. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* One control row governs every tab. The dates are scope, so they stay on phones.
+          Sticky: it pins to the top of #main-content (the layout's scroller) so the range
+          stays in reach on long tabs. The negative margins span the scroller's p-4/sm:p-6
+          gutter so rows don't show beside it; the fill hides them under it. */}
+      <div className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 bg-background px-4 py-3 sm:-mx-6 sm:px-6">
         <DateRangeSegmented value={preset} onChange={setPreset} />
         <span className="text-sm text-muted-foreground tabular-nums">
           {format(new Date(range.from), 'MMM d, yyyy')} – {format(new Date(range.to), 'MMM d, yyyy')}

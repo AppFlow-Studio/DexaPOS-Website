@@ -22,13 +22,20 @@ import {
   Tv,
   UtensilsCrossed,
   ImageIcon,
-  ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { DeviceRegistryMetricCard } from '@/app/manage/devices/components/DeviceRegistryMetricCard'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
-import { Card, CardContent } from '@/components/ui/card'
+import {
+  CardField,
+  CardFields,
+  FilterSelect,
+  LoadError,
+  RecordCard,
+  RecordCardSkeletons,
+} from '@/app/manage/transactions/components/ledger-primitives'
+import { PageShell, Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -67,10 +74,17 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { cn } from '@/lib/utils'
 
 import {
   useDeviceCatalog,
@@ -103,6 +117,11 @@ const CATEGORY_MAP = Object.fromEntries(
   DEVICE_CATEGORIES.map((c) => [c.value, c])
 ) as Record<DeviceCategory, (typeof DEVICE_CATEGORIES)[number]>
 
+/** Position of each category in the list, so rows read in category order. */
+const CATEGORY_ORDER = Object.fromEntries(
+  DEVICE_CATEGORIES.map((c, index) => [c.value, index])
+) as Record<DeviceCategory, number>
+
 // Singular labels for the form dialog
 const CATEGORY_SINGULAR: Record<DeviceCategory, string> = {
   pos_tablet: 'POS Tablet',
@@ -113,6 +132,15 @@ const CATEGORY_SINGULAR: Record<DeviceCategory, string> = {
   kitchen_printer: 'Kitchen Printer',
   cash_drawer: 'Cash Drawer',
 }
+
+const CATEGORY_FILTER_OPTIONS = DEVICE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'discontinued', label: 'Discontinued' },
+]
+
+const PAGE_SIZE = 10
 
 // ============================================================================
 // Spec field configuration per category
@@ -185,14 +213,14 @@ const CATEGORY_SPEC_FIELDS: Record<DeviceCategory, SpecFieldDef[]> = {
 // Helpers
 // ============================================================================
 
-function formatCents(cents: number | null): string {
-  if (cents === null || cents === undefined) return 'N/A'
-  return `$${(cents / 100).toFixed(2)}`
+/** An unset price is unknown, not zero: it renders `—` (§4.9). */
+function formatDollars(dollars: number | null): string {
+  if (dollars === null || dollars === undefined) return '—'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(dollars))
 }
 
-function formatDollars(dollars: number | null): string {
-  if (dollars === null || dollars === undefined) return 'N/A'
-  return `$${Number(dollars).toFixed(2)}`
+function formatCount(value: number) {
+  return value.toLocaleString('en-US')
 }
 
 function renderSpecsSummary(specs: Record<string, unknown>, category: DeviceCategory): string {
@@ -219,7 +247,11 @@ function renderSpecsSummary(specs: Record<string, unknown>, category: DeviceCate
     if (specs.slots_coins) parts.push(`${specs.slots_coins} coin slots`)
     if (specs.dimensions) parts.push(`${specs.dimensions}"`)
   }
-  return parts.join(' / ') || ''
+  return parts.join(' · ') || ''
+}
+
+function modelSubline(device: DeviceCatalogItem) {
+  return [device.manufacturer, device.model_sku].filter(Boolean).join(' · ')
 }
 
 function specsFromDevice(specs: Record<string, unknown>): Record<string, string | number | boolean | string[]> {
@@ -264,48 +296,44 @@ export default function DeviceCatalogPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<DeviceCatalogItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeviceCatalogItem | null>(null)
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
-  const { data: devices, isLoading, error } = useDeviceCatalog()
+  const catalogQuery = useDeviceCatalog()
+  const { data: devices, isLoading, isError } = catalogQuery
   const createMutation = useCreateDevice()
   const updateMutation = useUpdateDevice()
   const toggleMutation = useToggleDeviceStatus()
   const deleteMutation = useDeleteDevice()
 
+  const hasActiveFilters = Boolean(search.trim()) || categoryFilter !== 'all' || statusFilter !== 'all'
+
+  // Rows read in category order, so the table keeps the grouping the old
+  // collapsible list gave. `sort` is stable: the server's manufacturer/model
+  // order survives inside each category.
   const filtered = useMemo(() => {
     if (!devices) return []
-    return devices.filter((d) => {
-      if (categoryFilter !== 'all' && d.device_category !== categoryFilter) return false
-      if (statusFilter === 'active' && !d.is_active) return false
-      if (statusFilter === 'discontinued' && d.is_active) return false
-      if (search) {
-        const q = search.toLowerCase()
-        const match =
-          d.model_name.toLowerCase().includes(q) ||
-          d.manufacturer.toLowerCase().includes(q) ||
-          (d.model_sku?.toLowerCase().includes(q) ?? false)
-        if (!match) return false
-      }
-      return true
-    })
+    const q = search.trim().toLowerCase()
+    return devices
+      .filter((d) => {
+        if (categoryFilter !== 'all' && d.device_category !== categoryFilter) return false
+        if (statusFilter === 'active' && !d.is_active) return false
+        if (statusFilter === 'discontinued' && d.is_active) return false
+        if (q) {
+          const match =
+            d.model_name.toLowerCase().includes(q) ||
+            d.manufacturer.toLowerCase().includes(q) ||
+            (d.model_sku?.toLowerCase().includes(q) ?? false)
+          if (!match) return false
+        }
+        return true
+      })
+      .sort(
+        (a, b) =>
+          (CATEGORY_ORDER[a.device_category as DeviceCategory] ?? 99) -
+          (CATEGORY_ORDER[b.device_category as DeviceCategory] ?? 99)
+      )
   }, [devices, categoryFilter, statusFilter, search])
 
-  const grouped = useMemo(() => {
-    const groups: { category: DeviceCategory; items: DeviceCatalogItem[] }[] = []
-    const map = new Map<DeviceCategory, DeviceCatalogItem[]>()
-    for (const d of filtered) {
-      const cat = d.device_category as DeviceCategory
-      if (!map.has(cat)) map.set(cat, [])
-      map.get(cat)!.push(d)
-    }
-    for (const catDef of DEVICE_CATEGORIES) {
-      const items = map.get(catDef.value)
-      if (items && items.length > 0) {
-        groups.push({ category: catDef.value, items })
-      }
-    }
-    return groups
-  }, [filtered])
+  const { pageRows, pagination, setPage } = useClientPagination(filtered, PAGE_SIZE)
 
   const stats = useMemo(() => {
     if (!devices) return { total: 0, active: 0, discontinued: 0 }
@@ -321,13 +349,15 @@ export default function DeviceCatalogPage() {
     return [...new Set(devices.map((d) => d.manufacturer))].sort()
   }, [devices])
 
-  function toggleGroup(category: string) {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(category)) next.delete(category)
-      else next.add(category)
-      return next
-    })
+  // A catalog that failed to load is unknown, not empty (§4.9).
+  const figure = (value: number) => (isError ? '—' : formatCount(value))
+  const statMeta = (meta: string) => (isError ? 'Catalog unavailable' : meta)
+
+  function clearFilters() {
+    setSearch('')
+    setCategoryFilter('all')
+    setStatusFilter('all')
+    setPage(1)
   }
 
   function openCreate() {
@@ -360,272 +390,269 @@ export default function DeviceCatalogPage() {
     }
   }
 
+  const rowActions = (device: DeviceCatalogItem) => (
+    <DeviceActionsMenu
+      device={device}
+      onEdit={() => openEdit(device)}
+      onToggle={() => handleToggle(device)}
+      onDelete={() => setDeleteTarget(device)}
+    />
+  )
+
   return (
-    <div className="min-w-0 space-y-6 overflow-x-hidden">
+    <PageShell as="div">
       <DeviceRegistryPageHeader
         title="Device catalog"
         description="Supported hardware models, pricing defaults, and reusable specs for future inventory rows."
         actions={
           <>
-          <Button asChild variant="outline">
-            <Link href="/manage/devices">Open inventory</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/manage/devices/overview">Open overview</Link>
-          </Button>
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add device
-          </Button>
+            <Button asChild variant="outline">
+              <Link href="/manage/devices">Open inventory</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/manage/devices/overview">Open overview</Link>
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              Add device
+            </Button>
           </>
         }
       />
 
-      <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
-        {[
-          {
-            label: 'Total models',
-            value: stats.total,
-            detail: 'Catalog entries across all categories',
-            icon: Boxes,
-          },
-          {
-            label: 'Active',
-            value: stats.active,
-            detail: 'Available for procurement and assignment',
-            icon: ToggleRight,
-          },
-          {
-            label: 'Discontinued',
-            value: stats.discontinued,
-            detail: 'Hidden from new rollouts but kept for history',
-            icon: ToggleLeft,
-          },
-          {
-            label: 'Manufacturers',
-            value: manufacturers.length,
-            detail: 'Distinct vendors currently represented',
-            icon: Factory,
-          },
-        ].map((card) => (
-          <DeviceRegistryMetricCard
-            key={card.label}
-            label={card.label}
-            value={card.value}
-            detail={card.detail}
-            icon={card.icon}
+      <Panel padded>
+        <StatRow columns={4}>
+          <StatTile
+            label="Total models"
+            icon={<Boxes />}
+            value={figure(stats.total)}
+            meta={statMeta('Catalog entries across all categories')}
+            showMetaOnMobile={isError}
+            isLoading={isLoading}
           />
-        ))}
+          <StatTile
+            label="Active"
+            icon={<ToggleRight />}
+            value={figure(stats.active)}
+            meta={statMeta('Available for procurement and assignment')}
+            showMetaOnMobile={isError}
+            isLoading={isLoading}
+          />
+          <StatTile
+            label="Discontinued"
+            icon={<ToggleLeft />}
+            value={figure(stats.discontinued)}
+            meta={statMeta('Hidden from new rollouts, kept for history')}
+            showMetaOnMobile={isError}
+            isLoading={isLoading}
+          />
+          <StatTile
+            label="Manufacturers"
+            icon={<Factory />}
+            value={figure(manufacturers.length)}
+            meta={statMeta('Distinct vendors represented')}
+            showMetaOnMobile={isError}
+            isLoading={isLoading}
+          />
+        </StatRow>
+      </Panel>
+
+      {/* A neutral callout, not a dashed card (§3.5). */}
+      <div className="flex flex-col gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+        <p className="min-w-0">
+          Catalog models do not create registry rows. The catalog defines supported hardware; the registry only fills after manual entry or a later bulk import.
+        </p>
+        <Button asChild size="sm" variant="outline" className="h-9 shrink-0 self-start px-4 md:self-auto">
+          <Link href="/manage/devices">Go to registry</Link>
+        </Button>
       </div>
 
-      <Card className="border-dashed bg-muted/20">
-        <CardContent className="flex flex-col gap-2 p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-          <div>
-            Catalog models do not create registry rows. The catalog defines supported hardware; the registry only fills after manual entry or a later bulk import.
-          </div>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/manage/devices">Go to registry</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <Panel>
+        <PanelSection
+          label="Catalog models"
+          caption="Every supported model with its default pricing and the specs new inventory rows inherit."
+        >
+          {/* Toolbar: search left, borderless filter pills right (§5.2). */}
+          <div className="flex min-w-0 flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+            <div className="relative min-w-0 flex-1 md:min-w-[260px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
+                className="h-10 pl-9"
+                placeholder="Search model, manufacturer, or SKU"
+                aria-label="Search catalog"
+              />
+            </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-0 basis-full flex-1 sm:min-w-[220px] md:min-w-[280px] xl:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search models..."
-            className="pl-9 h-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="h-9 min-w-0 flex-1 sm:w-[170px] sm:flex-none">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {DEVICE_CATEGORIES.map((c) => (
-              <SelectItem key={c.value} value={c.value}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 min-w-0 flex-1 sm:w-[140px] sm:flex-none">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="discontinued">Discontinued</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Grouped list */}
-      <Card className="overflow-hidden p-0">
-        {isLoading ? (
-          <div className="p-6 space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="space-y-3">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            ))}
-          </div>
-        ) : error ? (
-          <div className="p-12 text-center text-destructive text-sm">
-            Failed to load device catalog
-          </div>
-        ) : grouped.length === 0 ? (
-          <div className="p-16 text-center">
-            <Monitor className="mx-auto h-10 w-10 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              {devices?.length ? 'No devices match your filters' : 'No devices in catalog yet'}
-            </p>
-            {!devices?.length && (
-              <Button variant="outline" size="sm" className="mt-4" onClick={openCreate}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add your first device
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
-            <div>
-              {grouped.map((group, gi) => {
-                const catDef = CATEGORY_MAP[group.category]
-                const CatIcon = catDef?.icon ?? Monitor
-                const isOpen = !collapsedGroups.has(group.category)
-                return (
-                  <Collapsible
-                    key={group.category}
-                    open={isOpen}
-                    onOpenChange={() => toggleGroup(group.category)}
-                  >
-                    {gi > 0 && <Separator />}
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="w-full sticky top-0 z-10 bg-muted/50 backdrop-blur-sm border-b px-5 py-3 flex items-center gap-2 hover:bg-muted/70 transition-colors cursor-pointer"
-                      >
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? '' : '-rotate-90'}`} />
-                        <CatIcon className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          {catDef?.label ?? group.category}
-                        </span>
-                        <span className="text-xs text-muted-foreground/60">
-                          - {group.items.length}
-                        </span>
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      {group.items.map((device, di) => {
-                        const specsSummary = renderSpecsSummary(device.specs, device.device_category as DeviceCategory)
-                        return (
-                          <div key={device.id}>
-                            {di > 0 && <Separator className="mx-5 w-auto" />}
-                            <div className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors">
-                              {/* Thumbnail */}
-                              <div className="shrink-0">
-                                {device.image_url ? (
-                                  <div className="relative h-12 w-12 rounded-lg overflow-hidden border bg-muted">
-                                    <Image
-                                      src={device.image_url}
-                                      alt={device.model_name}
-                                      fill
-                                      className="object-cover"
-                                      sizes="48px"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted/50">
-                                    <CatIcon className="h-5 w-5 text-muted-foreground/60" />
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium truncate">{device.model_name}</p>
-                                  {!device.is_active && (
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
-                                      Discontinued
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="truncate text-xs text-muted-foreground mt-0.5">
-                                  {device.manufacturer}
-                                  {device.model_sku && (
-                                    <span className="ml-2 font-mono text-muted-foreground/60">{device.model_sku}</span>
-                                  )}
-                                </p>
-                                {specsSummary && (
-                                  <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{specsSummary}</p>
-                                )}
-                              </div>
-
-                              {/* Pricing */}
-                              <div className="hidden md:flex flex-col items-end text-right shrink-0">
-                                {device.unit_cost !== null && (
-                                  <span className="text-sm font-medium">{formatDollars(device.unit_cost)}</span>
-                                )}
-                                {device.monthly_fee !== null && (
-                                  <span className="text-[11px] text-muted-foreground">{formatDollars(device.monthly_fee)}/mo</span>
-                                )}
-                              </div>
-
-                              {/* Actions */}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => openEdit(device)}>
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleToggle(device)}>
-                                    {device.is_active ? (
-                                      <>
-                                        <ToggleLeft className="mr-2 h-4 w-4" />
-                                        Discontinue
-                                      </>
-                                    ) : (
-                                      <>
-                                        <ToggleRight className="mr-2 h-4 w-4" />
-                                        Reactivate
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setDeleteTarget(device)}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </CollapsibleContent>
-                  </Collapsible>
-                )
-              })}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <FilterSelect
+                value={categoryFilter}
+                onValueChange={(value) => {
+                  setCategoryFilter(value)
+                  setPage(1)
+                }}
+                options={CATEGORY_FILTER_OPTIONS}
+                allLabel="All categories"
+                ariaLabel="Category"
+                className="sm:w-[190px]"
+              />
+              <FilterSelect
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value)
+                  setPage(1)
+                }}
+                options={STATUS_FILTER_OPTIONS}
+                allLabel="All statuses"
+                ariaLabel="Status"
+                className="sm:w-[150px]"
+              />
+              {hasActiveFilters ? (
+                <Button variant="ghost" size="sm" className="h-9 rounded-full px-3" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
             </div>
           </div>
-        )}
-      </Card>
+
+          <div className="mt-5 min-w-0">
+            {isError ? (
+              <LoadError
+                title="We hit a snag loading the catalog"
+                detail={catalogQuery.error?.message ?? 'The device catalog could not be loaded.'}
+                onRetry={() => void catalogQuery.refetch()}
+              />
+            ) : isLoading ? (
+              <CatalogLoading />
+            ) : filtered.length === 0 ? (
+              <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 py-10 text-center">
+                <p className="text-sm font-medium">
+                  {hasActiveFilters ? 'No models match these filters' : 'No models in the catalog yet'}
+                </p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  {hasActiveFilters
+                    ? 'Clear the search or filters to widen the results.'
+                    : 'Add a hardware model to define its pricing and specs before units reach the registry.'}
+                </p>
+                <div className="mt-2">
+                  {hasActiveFilters ? (
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={openCreate}>
+                      <Plus className="h-4 w-4" />
+                      Add device
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* 900px of columns fits the content column from `xl` (§5.3, D-23). */}
+                <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Model</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Specs</TableHead>
+                      <TableHead className="text-right">Unit cost</TableHead>
+                      <TableHead className="text-right">Monthly fee</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pageRows.map((device) => {
+                      const category = device.device_category as DeviceCategory
+                      const specsSummary = renderSpecsSummary(device.specs, category)
+                      return (
+                        <TableRow key={device.id}>
+                          <TableCell>
+                            <div className="flex min-w-0 items-center gap-3">
+                              <DeviceThumbnail device={device} />
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{device.model_name}</p>
+                                <p className="truncate text-sm text-muted-foreground">{modelSubline(device)}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">{CATEGORY_SINGULAR[category] ?? category}</TableCell>
+                          <TableCell className="max-w-[240px]">
+                            <p className="truncate text-sm text-muted-foreground" title={specsSummary || undefined}>
+                              {specsSummary || '—'}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{formatDollars(device.unit_cost)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatDollars(device.monthly_fee)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="w-fit px-2.5 text-xs font-medium">
+                              {device.is_active ? 'Active' : 'Discontinued'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{rowActions(device)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+
+                {/* Below `xl` the records become cards; no sideways scroll (§5.3). */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                  {pageRows.map((device) => {
+                    const category = device.device_category as DeviceCategory
+                    const specsSummary = renderSpecsSummary(device.specs, category)
+                    return (
+                      <RecordCard key={device.id}>
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {/* Product images drop on phones (§13.4). */}
+                            <DeviceThumbnail device={device} className="hidden sm:flex" />
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{device.model_name}</p>
+                              <p className="truncate text-sm text-muted-foreground">{modelSubline(device)}</p>
+                            </div>
+                          </div>
+                          {/* On a muted card the status is plain text, not a pill (§3.5). */}
+                          <span className="shrink-0 text-sm font-medium">
+                            {device.is_active ? 'Active' : 'Discontinued'}
+                          </span>
+                        </div>
+                        <CardFields>
+                          <CardField label="Category" value={CATEGORY_SINGULAR[category] ?? category} />
+                          <CardField label="Specs" value={specsSummary || '—'} />
+                          <CardField label="Unit cost" value={formatDollars(device.unit_cost)} />
+                          <CardField label="Monthly fee" value={formatDollars(device.monthly_fee)} />
+                        </CardFields>
+                        <div className="mt-3 flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => openEdit(device)}>
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          {rowActions(device)}
+                        </div>
+                      </RecordCard>
+                    )
+                  })}
+                </div>
+
+                <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="models" />
+                {pagination.total <= PAGE_SIZE ? (
+                  <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
+                    {formatCount(pagination.total)} {pagination.total === 1 ? 'model' : 'models'}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </PanelSection>
+      </Panel>
 
       {/* Create / Edit Dialog */}
       <DeviceFormDialog
@@ -650,7 +677,7 @@ export default function DeviceCatalogPage() {
         saving={createMutation.isPending || updateMutation.isPending}
       />
 
-      {/* Delete Confirmation */}
+      {/* Delete confirmation: a question with two buttons stays a centred card (§13.1). */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -672,7 +699,105 @@ export default function DeviceCatalogPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </PageShell>
+  )
+}
+
+// ============================================================================
+// Row pieces
+// ============================================================================
+
+/**
+ * The model's product image, or its category glyph. A borderless muted plate:
+ * it is the record's identity, so it keeps a surface, but no tint (§3.5).
+ */
+function DeviceThumbnail({ device, className }: { device: DeviceCatalogItem; className?: string }) {
+  const CatIcon = CATEGORY_MAP[device.device_category as DeviceCategory]?.icon ?? Monitor
+  // `cn` lets a caller's `hidden sm:flex` replace the base `flex` (§13.4).
+  return (
+    <div
+      className={cn(
+        'relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted text-muted-foreground',
+        className
+      )}
+    >
+      {device.image_url ? (
+        <Image src={device.image_url} alt={device.model_name} fill className="object-cover" sizes="40px" />
+      ) : (
+        <CatIcon className="h-4 w-4" />
+      )}
     </div>
+  )
+}
+
+function DeviceActionsMenu({
+  device,
+  onEdit,
+  onToggle,
+  onDelete,
+}: {
+  device: DeviceCatalogItem
+  onEdit: () => void
+  onToggle: () => void
+  onDelete: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 rounded-full p-0"
+          aria-label={`Actions for ${device.model_name}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEdit}>
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onToggle}>
+          {device.is_active ? (
+            <>
+              <ToggleLeft className="mr-2 h-4 w-4" />
+              Discontinue
+            </>
+          ) : (
+            <>
+              <ToggleRight className="mr-2 h-4 w-4" />
+              Reactivate
+            </>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** Skeletons in the final shape at each width (§5.4). */
+function CatalogLoading() {
+  return (
+    <>
+      <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+        <TableBody>
+          <TableRow>
+            <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+              Loading catalog…
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+        <RecordCardSkeletons />
+      </div>
+    </>
   )
 }
 
@@ -777,9 +902,11 @@ function DeviceFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
-        <DialogHeader className="px-6 pt-6 pb-0">
-          <DialogTitle>{isEdit ? 'Edit device' : 'Add device'}</DialogTitle>
+      {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
+          the body scrolls; header and footer carry no rule (§5.5). */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[90vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
+          <DialogTitle className="text-xl">{isEdit ? 'Edit device' : 'Add device'}</DialogTitle>
           <DialogDescription>
             {isEdit
               ? `Update ${device?.model_name} details`
@@ -787,175 +914,154 @@ function DeviceFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          {/* Section: Device Info */}
-          <div className="px-6 pt-5 pb-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4">
-              Device Info
-            </p>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          {/* Sections are separated by spacing, not rules (§5.5). */}
+          <div className="thin-scrollbar min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-4">
+            <section className="space-y-4">
+              <h3 className="font-medium">Device info</h3>
 
-            {/* Category selector with icon */}
-            <div className="space-y-2 mb-4">
-              <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={(v) => handleCategoryChange(v as DeviceCategory)}>
-                <SelectTrigger id="category" className="h-10">
-                  <div className="flex items-center gap-2">
-                    <CatIcon className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue />
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Select value={category} onValueChange={(v) => handleCategoryChange(v as DeviceCategory)}>
+                  <SelectTrigger id="category" className="w-full border-0 bg-muted/60 shadow-none dark:bg-muted/60">
+                    <div className="flex items-center gap-2">
+                      <CatIcon className="h-4 w-4 text-muted-foreground" />
+                      <SelectValue />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEVICE_CATEGORIES.map((c) => {
+                      const Icon = c.icon
+                      return (
+                        <SelectItem key={c.value} value={c.value}>
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                            {CATEGORY_SINGULAR[c.value]}
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="manufacturer">Manufacturer</Label>
+                  <Input
+                    id="manufacturer"
+                    required
+                    value={manufacturer}
+                    onChange={(e) => setManufacturer(e.target.value)}
+                    placeholder="e.g. Landi, Dejavoo"
+                    list="mfr-list"
+                  />
+                  {manufacturers.length > 0 && (
+                    <datalist id="mfr-list">
+                      {manufacturers.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="model_name">Model Name</Label>
+                  <Input
+                    id="model_name"
+                    required
+                    value={modelName}
+                    onChange={(e) => setModelName(e.target.value)}
+                    placeholder="e.g. C20 PRO"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="model_sku">SKU</Label>
+                  <Input
+                    id="model_sku"
+                    value={modelSku}
+                    onChange={(e) => setModelSku(e.target.value)}
+                    placeholder="e.g. LANDI-C20PRO"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hw_rev">Hardware Revision</Label>
+                  <Input
+                    id="hw_rev"
+                    value={hardwareRevision}
+                    onChange={(e) => setHardwareRevision(e.target.value)}
+                    placeholder="e.g. Rev A"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3 className="font-medium">{CATEGORY_SINGULAR[category]} specifications</h3>
+              {specFields.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No specification fields for this category.</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {specFields.map((field) => (
+                    <SpecField
+                      key={field.key}
+                      field={field}
+                      value={specsState[field.key]}
+                      onChange={(val) => updateSpec(field.key, val)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-4">
+              <h3 className="font-medium">Pricing and status</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="unit_cost">Unit Cost</Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <Input
+                      id="unit_cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={unitCost}
+                      onChange={(e) => setUnitCost(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-8 tabular-nums"
+                    />
                   </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {DEVICE_CATEGORIES.map((c) => {
-                    const Icon = c.icon
-                    return (
-                      <SelectItem key={c.value} value={c.value}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                          {CATEGORY_SINGULAR[c.value]}
-                        </div>
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="manufacturer">Manufacturer</Label>
-                <Input
-                  id="manufacturer"
-                  required
-                  value={manufacturer}
-                  onChange={(e) => setManufacturer(e.target.value)}
-                  placeholder="e.g. Landi, Dejavoo"
-                  list="mfr-list"
-                  className="h-9"
-                />
-                {manufacturers.length > 0 && (
-                  <datalist id="mfr-list">
-                    {manufacturers.map((m) => (
-                      <option key={m} value={m} />
-                    ))}
-                  </datalist>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="model_name">Model Name</Label>
-                <Input
-                  id="model_name"
-                  required
-                  value={modelName}
-                  onChange={(e) => setModelName(e.target.value)}
-                  placeholder="e.g. C20 PRO"
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="model_sku">SKU</Label>
-                <Input
-                  id="model_sku"
-                  value={modelSku}
-                  onChange={(e) => setModelSku(e.target.value)}
-                  placeholder="e.g. LANDI-C20PRO"
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hw_rev">Hardware Revision</Label>
-                <Input
-                  id="hw_rev"
-                  value={hardwareRevision}
-                  onChange={(e) => setHardwareRevision(e.target.value)}
-                  placeholder="e.g. Rev A"
-                  className="h-9"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="px-6 py-2"><Separator /></div>
-
-          {/* Section: Specifications */}
-          <div className="px-6 py-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4">
-              {CATEGORY_SINGULAR[category]} Specifications
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {specFields.map((field) => (
-                <SpecField
-                  key={field.key}
-                  field={field}
-                  value={specsState[field.key]}
-                  onChange={(val) => updateSpec(field.key, val)}
-                />
-              ))}
-            </div>
-            {specFields.length === 0 && (
-              <p className="text-sm text-muted-foreground">No specification fields for this category.</p>
-            )}
-          </div>
-
-          <div className="px-6 py-2"><Separator /></div>
-
-          {/* Section: Pricing & Status */}
-          <div className="px-6 py-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4">
-              Pricing & Status
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="unit_cost">Unit Cost</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <Input
-                    id="unit_cost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={unitCost}
-                    onChange={(e) => setUnitCost(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-7 h-9"
-                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="monthly_fee">Monthly Fee</Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <Input
+                      id="monthly_fee"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={monthlyFee}
+                      onChange={(e) => setMonthlyFee(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-8 tabular-nums"
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="monthly_fee">Monthly Fee</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <Input
-                    id="monthly_fee"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={monthlyFee}
-                    onChange={(e) => setMonthlyFee(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-7 h-9"
-                  />
-                </div>
+              <div className="flex items-center gap-3">
+                <Switch id="is_active" checked={isActive} onCheckedChange={setIsActive} />
+                <Label htmlFor="is_active" className="text-sm font-normal">Active in catalog</Label>
               </div>
-            </div>
-            <div className="flex items-center gap-3 mt-4">
-              <Switch id="is_active" checked={isActive} onCheckedChange={setIsActive} />
-              <Label htmlFor="is_active" className="text-sm font-normal">Active in catalog</Label>
-            </div>
-          </div>
+            </section>
 
-          <div className="px-6 py-2"><Separator /></div>
-
-          {/* Section: Media & Notes */}
-          <div className="px-6 py-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4">
-              Media & Notes
-            </p>
-            <div className="space-y-4">
+            <section className="space-y-4">
+              <h3 className="font-medium">Media and notes</h3>
               <div className="space-y-2">
                 <Label htmlFor="image_url">Image URL</Label>
-                <div className="flex items-start gap-3">
-                  {imageUrl ? (
-                    <div className="relative h-14 w-14 rounded-lg overflow-hidden border bg-muted shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted text-muted-foreground">
+                    {imageUrl ? (
                       <Image
                         src={imageUrl}
                         alt="Preview"
@@ -964,19 +1070,17 @@ function DeviceFormDialog({
                         sizes="56px"
                         onError={() => {}}
                       />
-                    </div>
-                  ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-lg border bg-muted/50 shrink-0">
-                      <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
-                    </div>
-                  )}
+                    ) : (
+                      <ImageIcon className="h-5 w-5" />
+                    )}
+                  </div>
                   <Input
                     id="image_url"
                     type="url"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
                     placeholder="https://example.com/device.jpg"
-                    className="h-9 min-w-0 flex-1"
+                    className="min-w-0 flex-1"
                   />
                 </div>
               </div>
@@ -991,18 +1095,17 @@ function DeviceFormDialog({
                   className="resize-none"
                 />
               </div>
-            </div>
+            </section>
           </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 border-t mt-4 flex justify-end gap-2 bg-muted/30">
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={saving}>
+            <Button type="submit" disabled={saving}>
               {saving ? 'Saving...' : isEdit ? 'Save changes' : 'Add device'}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -1024,7 +1127,7 @@ function SpecField({
 }) {
   if (field.type === 'switch') {
     return (
-      <div className="flex items-center justify-between sm:col-span-1 py-1">
+      <div className="flex items-center justify-between py-1">
         <Label htmlFor={field.key} className="text-sm font-normal">{field.label}</Label>
         <Switch
           id={field.key}
@@ -1040,7 +1143,7 @@ function SpecField({
       <div className="space-y-2">
         <Label htmlFor={field.key}>{field.label}</Label>
         <Select value={(value as string) || ''} onValueChange={(v) => onChange(v)}>
-          <SelectTrigger id={field.key} className="h-9">
+          <SelectTrigger id={field.key} className="w-full border-0 bg-muted/60 shadow-none dark:bg-muted/60">
             <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
           </SelectTrigger>
           <SelectContent>
@@ -1062,7 +1165,7 @@ function SpecField({
         <Label>{field.label}</Label>
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           {field.options?.map((opt) => (
-            <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+            <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm">
               <Checkbox
                 checked={selected.includes(opt)}
                 onCheckedChange={(checked) => {
@@ -1090,19 +1193,12 @@ function SpecField({
           id={field.key}
           type={field.type === 'number' ? 'number' : 'text'}
           value={value !== undefined && value !== null ? String(value) : ''}
-          onChange={(e) => {
-            const raw = e.target.value
-            if (field.type === 'number') {
-              onChange(raw === '' ? '' : raw)
-            } else {
-              onChange(raw)
-            }
-          }}
+          onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className={`h-9 ${field.suffix ? 'pr-10' : ''}`}
+          className={field.suffix ? 'pr-12' : undefined}
         />
         {field.suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
             {field.suffix}
           </span>
         )}

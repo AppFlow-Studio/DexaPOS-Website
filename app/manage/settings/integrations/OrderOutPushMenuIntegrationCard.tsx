@@ -1,139 +1,148 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import Link from 'next/link'
+import { useTransition } from 'react'
+import { toast } from 'sonner'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, CheckCircle2, Plug, RefreshCw } from 'lucide-react'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
+import { platformLabel } from '@/lib/orderout/platform'
 import { registerOrderOutPushMenuWebhook } from '@/app/manage/actions/orderout-webhooks'
+import { StatusItem, StatusWell, formatTimestamp } from './IntegrationPrimitives'
 
 interface Props {
   expectedEndpoint: string | null
   lastRegisteredAt: string | null
   lastRegisteredBy: string | null
-  dlqCount: number
+  /** Live push_menu dead-letter entries; null when the count is unknown. */
+  dlqCount: number | null
+  /** The status load failed: every field above is unknown, not empty. */
+  statusUnavailable: boolean
   canRegister: boolean
 }
 
 const DELIVERY_SERVICES = ['UBEREATS', 'GRUBHUB', 'DOORDASH']
 
+/**
+ * The platform-wide OrderOut push_menu webhook registration.
+ *
+ * Unprocessed dead-letter entries are the panel's one alarm (§14.3 HQ-2): a
+ * red glyph beside the count, with the count and "unprocessed" saying it in
+ * words. Everything else is neutral.
+ */
 export function OrderOutPushMenuIntegrationCard({
   expectedEndpoint,
   lastRegisteredAt,
   lastRegisteredBy,
   dlqCount,
+  statusUnavailable,
   canRegister,
 }: Props) {
   const [isPending, startTransition] = useTransition()
-  const [registered, setRegistered] = useState<{
-    endpoint?: string
-    at: string
-  } | null>(
-    lastRegisteredAt
-      ? { endpoint: expectedEndpoint ?? undefined, at: lastRegisteredAt }
-      : null
-  )
 
   const handleRegister = () => {
     startTransition(async () => {
-      const result = await registerOrderOutPushMenuWebhook()
-      if (result.success) {
-        setRegistered({
-          endpoint: result.endpoint,
-          at: new Date().toISOString(),
-        })
+      try {
+        const result = await registerOrderOutPushMenuWebhook()
+        if (!result.success) {
+          toast.error(result.error ?? 'Failed to register the OrderOut webhook.')
+          return
+        }
+        // The action revalidates this route, so "Last registered" and its
+        // author arrive with the refreshed props.
+        toast.success('Registered with OrderOut.')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to register the OrderOut webhook.')
       }
     })
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Plug className="h-5 w-5" />
-          OrderOut push_menu Webhook
-        </CardTitle>
-        <CardDescription>
-          One-time, platform-wide registration. After registration, OrderOut
-          sends async per-platform results (UBEREATS / GRUBHUB / DOORDASH) to
-          Dexa after every merchant menu push.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 text-sm">
-          <Row label="Endpoint">
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs break-all">
-              {expectedEndpoint ?? 'NEXT_PUBLIC_SUPABASE_URL not configured'}
-            </code>
-          </Row>
-          <Row label="Delivery services">
-            <div className="flex flex-wrap gap-1.5">
-              {DELIVERY_SERVICES.map((s) => (
-                <Badge key={s} variant="secondary" className="text-xs">
-                  {s}
-                </Badge>
-              ))}
-            </div>
-          </Row>
-          <Row label="Last registered">
-            {registered?.at ? (
-              <span className="inline-flex items-center gap-1.5 text-foreground">
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                {new Date(registered.at).toLocaleString()}
-                {lastRegisteredBy && (
-                  <span className="text-muted-foreground">
-                    by {lastRegisteredBy}
+    <Panel>
+      <PanelSection
+        label="OrderOut menu-push webhook"
+        caption="One-time, platform-wide registration. After it, OrderOut sends each merchant menu push's per-platform result back to Dexa."
+      >
+        <div className="space-y-5">
+          {statusUnavailable && (
+            <p className="text-sm text-muted-foreground">
+              We couldn&apos;t load the registration status. Reload the page to try again.
+            </p>
+          )}
+
+          <StatusWell className="sm:grid-cols-3">
+            <StatusItem
+              term="Endpoint"
+              className="col-span-2 sm:col-span-3"
+              mono={Boolean(expectedEndpoint)}
+              value={expectedEndpoint ?? (statusUnavailable ? '—' : 'Not available')}
+              note={
+                expectedEndpoint || statusUnavailable ? undefined : 'NEXT_PUBLIC_SUPABASE_URL is not set'
+              }
+            />
+            <StatusItem
+              term="Delivery services"
+              value={DELIVERY_SERVICES.map((service) => platformLabel(service)).join(', ')}
+            />
+            <StatusItem
+              term="Last registered"
+              value={formatTimestamp(lastRegisteredAt, statusUnavailable ? '—' : 'Never')}
+              note={lastRegisteredAt && lastRegisteredBy ? `by ${lastRegisteredBy}` : undefined}
+            />
+            <StatusItem
+              term="Dead-letter queue"
+              value={
+                dlqCount === null ? (
+                  '—'
+                ) : dlqCount > 0 ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertTriangle
+                      className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400"
+                      aria-hidden
+                    />
+                    {dlqCount} unprocessed
                   </span>
-                )}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Never</span>
-            )}
-          </Row>
-          <Row label="DLQ (push_menu)">
-            <Badge variant={dlqCount > 0 ? 'destructive' : 'outline'}>
-              {dlqCount > 0 && <AlertTriangle className="h-3 w-3 mr-1" />}
-              {dlqCount} unprocessed
-            </Badge>
-          </Row>
-        </div>
+                ) : (
+                  'None unprocessed'
+                )
+              }
+              note={
+                dlqCount === null ? (
+                  statusUnavailable ? undefined : 'Could not load the count'
+                ) : dlqCount > 0 ? (
+                  <Link href="/manage/dlq" className="underline underline-offset-4 hover:text-foreground">
+                    Review in the dead-letter queue
+                  </Link>
+                ) : (
+                  'All clear'
+                )
+              }
+            />
+          </StatusWell>
 
-        <div className="flex items-center justify-between pt-2 border-t">
-          <p className="text-xs text-muted-foreground">
-            Requires <code>ORDEROUT_API_KEY</code> and{' '}
-            <code>ORDEROUT_WEBHOOK_SECRET</code> in Supabase project secrets.
-          </p>
-          <Button
-            onClick={handleRegister}
-            disabled={isPending || !canRegister}
-            size="sm"
-          >
-            {isPending && <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-            {registered ? 'Re-register' : 'Register with OrderOut'}
-          </Button>
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <p className="min-w-0 flex-1 basis-64 text-xs text-muted-foreground">
+              {canRegister ? (
+                <>
+                  Requires <code className="font-mono">ORDEROUT_API_KEY</code> and{' '}
+                  <code className="font-mono">ORDEROUT_WEBHOOK_SECRET</code> in Supabase project
+                  secrets.
+                </>
+              ) : (
+                'Registering needs the hq.merchant.update permission.'
+              )}
+            </p>
+            <Button
+              onClick={handleRegister}
+              disabled={isPending || !canRegister}
+              className="w-full sm:w-auto"
+            >
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {lastRegisteredAt ? 'Re-register' : 'Register with OrderOut'}
+            </Button>
+          </div>
         </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function Row({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="w-36 shrink-0 text-muted-foreground">{label}</span>
-      <div className="flex-1 min-w-0">{children}</div>
-    </div>
+      </PanelSection>
+    </Panel>
   )
 }

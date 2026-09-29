@@ -34,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { isSupportMessageMine } from "@/lib/support/message-alignment";
 import { buildSupportTicketContext } from "@/lib/support/ticket-context";
@@ -52,8 +51,6 @@ import {
 } from "../../actions/support";
 import {
   TICKET_CATEGORY_LABELS,
-  TICKET_STATUS_COLORS,
-  TICKET_PRIORITY_COLORS,
   TICKET_PRIORITY_LABELS,
   SupportTicketMessage,
   AttachmentInput,
@@ -87,14 +84,13 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+// A pill rather than a rule either side — no horizontal lines (UI-DESIGN-SYSTEM §5.5).
 function DateSeparator({ date }: { date: string }) {
   return (
-    <div className="flex items-center gap-3 py-2">
-      <div className="flex-1 h-px bg-border" />
-      <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">
+    <div className="flex items-center justify-center py-2">
+      <span className="rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground whitespace-nowrap">
         {formatDateSeparator(date)}
       </span>
-      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }
@@ -115,24 +111,25 @@ function MessageBubble({
       ? `${message.sender_name} (DEXA)`
       : message.sender_name;
 
-  // Internal notes: full-width amber card
+  // Internal notes: a full-width muted well. The width, the lock and the
+  // "Staff only" words set it apart from the thread, not a hue (§3.5).
   if (isInternal) {
     return (
-      <div className="w-full rounded-lg bg-amber-50 border border-amber-200 border-l-4 border-l-amber-400 px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+      <div className="w-full rounded-2xl bg-muted/60 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-background text-muted-foreground flex items-center justify-center text-[10px] font-bold shrink-0">
               {initials}
             </div>
-            <span className="text-xs font-semibold text-amber-900">{message.sender_name}</span>
-            <span className="text-xs text-amber-700/60">{formatMessageTime(message.created_at)}</span>
+            <span className="truncate text-xs font-semibold text-foreground">{message.sender_name}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">{formatMessageTime(message.created_at)}</span>
           </div>
-          <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 rounded-full gap-1">
-            <Lock className="h-2.5 w-2.5" />
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Lock className="h-3 w-3" />
             Staff only
-          </Badge>
+          </span>
         </div>
-        <p className="text-sm text-amber-900 whitespace-pre-wrap">{message.message}</p>
+        <p className="text-sm text-foreground whitespace-pre-wrap">{message.message}</p>
         {message.attachments && message.attachments.length > 0 && (
           <AttachmentList attachments={message.attachments} />
         )}
@@ -163,19 +160,16 @@ function MessageBubble({
         </div>
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-            // Own messages read as a tinted surface, not a saturated block:
-            // a soft blue wash in light mode, and a deep muted blue in dark.
-            // A bright fill is uncomfortable over a long thread, and inverting
-            // it (light blue on a dark page) glares worse than the original.
-            // Text stays a near-ink / near-paper tone rather than pure white
-            // on blue, which is what made attachments sit awkwardly on top.
+            "min-w-0 rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            // Neutral on both sides (§3.5): own messages are a muted fill on
+            // the right, the other party a card on the left. Side and surface
+            // tell them apart, not a hue.
             isMine
-              ? "rounded-tr-sm bg-blue-50 text-blue-950 ring-1 ring-blue-200/70 dark:bg-blue-950/50 dark:text-blue-50 dark:ring-blue-900/60"
+              ? "rounded-tr-sm bg-muted text-foreground"
               : "rounded-tl-sm bg-card text-card-foreground ring-1 ring-border/70 shadow-sm"
           )}
         >
-          <p className="whitespace-pre-wrap">{message.message}</p>
+          <p className="whitespace-pre-wrap break-words">{message.message}</p>
           {message.attachments && message.attachments.length > 0 && (
             <AttachmentList attachments={message.attachments} />
           )}
@@ -205,6 +199,7 @@ export default function AdminTicketDetailPage() {
   const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
   const [uploadSessionId] = useState(() => crypto.randomUUID());
   const [uploadKey, setUploadKey] = useState(0);
+  const [chipsNode, setChipsNode] = useState<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -362,7 +357,7 @@ export default function AdminTicketDetailPage() {
       {/* Left: Chat */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Header */}
-        <div className="shrink-0 space-y-2 pb-4 border-b">
+        <div className="shrink-0 space-y-2 pb-2">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
               <Link href="/manage/support">
@@ -375,23 +370,14 @@ export default function AdminTicketDetailPage() {
             <div className="min-w-0">
               <h1 className="mb-2 break-words text-xl font-semibold leading-snug">{ticket.subject}</h1>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
-                <Badge
-                  className={cn(
-                    "text-xs rounded-full border font-medium",
-                    TICKET_STATUS_COLORS[ticket.status]
-                  )}
-                >
+                <span className="text-xs font-mono text-muted-foreground tabular-nums">{ticket.ticket_number}</span>
+                {/* One neutral pill per state; the word carries the meaning (§4.6b). */}
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
                   {getTicketStatusLabel(ticket.status, ticket.ticket_scope)}
-                </Badge>
-                <Badge
-                  className={cn(
-                    "text-xs rounded-full border font-medium",
-                    TICKET_PRIORITY_COLORS[ticket.priority]
-                  )}
-                >
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
                   {TICKET_PRIORITY_LABELS[ticket.priority]}
-                </Badge>
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {isHQInternal ? "DEXA HQ" : merchantInfo?.name}
                   {" / "}
@@ -419,18 +405,8 @@ export default function AdminTicketDetailPage() {
         </div>
 
         {/* Reply Box */}
-        <div className="shrink-0 pt-3 border-t space-y-2" ref={replyAreaRef}>
-          {/* Internal note indicator */}
-          {isInternal && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-100 border border-amber-300">
-              <Lock className="h-3.5 w-3.5 text-amber-700 shrink-0" />
-              <span className="text-xs font-semibold text-amber-800">
-                Internal note — only visible to staff
-              </span>
-            </div>
-          )}
-
-          {/* Toggle */}
+        <div className="shrink-0 pt-3 space-y-2" ref={replyAreaRef}>
+          {/* Toggle — the label and the lock say "internal"; no hue (§3.5) */}
           <div className="flex items-center gap-2">
             <Switch
               id="internal"
@@ -439,7 +415,10 @@ export default function AdminTicketDetailPage() {
             />
             <Label htmlFor="internal" className="text-sm cursor-pointer select-none">
               {isInternal ? (
-                <span className="font-semibold text-amber-700">Internal Note</span>
+                <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                  Internal note — only visible to staff
+                </span>
               ) : (
                 <span className="text-muted-foreground">
                   {isHQInternal ? "Developer update" : "Reply to merchant"}
@@ -448,21 +427,10 @@ export default function AdminTicketDetailPage() {
             </Label>
           </div>
 
-          <FileUploadInput
-            key={uploadKey}
-            onUploadsChange={setAttachments}
-            getUploadUrl={handleGetUploadUrl}
-            onDiscardUpload={DiscardAdminSupportUpload}
-            sessionId={uploadSessionId}
-            disabled={sendMutation.isPending}
-          />
+          {/* Selected files sit above the composer, filled by the picker's portal */}
+          <div ref={setChipsNode} className="empty:hidden" />
 
-          <div
-            className={cn(
-              "flex gap-2 items-end rounded-lg transition-all duration-200",
-              isInternal && "bg-amber-50 p-2 border border-amber-200"
-            )}
-          >
+          <div className="flex items-end gap-2">
             <Textarea
               ref={textareaRef}
               value={reply}
@@ -482,39 +450,47 @@ export default function AdminTicketDetailPage() {
                     ? "Add a developer update..."
                     : "Type your reply..."
               }
-              className={cn(
-                "resize-none min-h-[80px] transition-colors",
-                isInternal && "border-amber-300 bg-amber-50/80 focus-visible:ring-amber-400"
-              )}
+              className="min-w-0 flex-1 resize-none min-h-[80px] max-h-[200px]"
               disabled={sendMutation.isPending}
             />
-            <Button
-              onClick={handleSend}
-              disabled={!canSend}
-              size="icon"
-              className={cn(
-                "shrink-0 h-[80px] w-10 transition-all",
-                isInternal
-                  ? "bg-amber-600 hover:bg-amber-700"
-                  : "bg-indigo-600 hover:bg-indigo-700",
-                !canSend && "opacity-40 cursor-not-allowed"
-              )}
-            >
-              {sendMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+            {/* Send above attach, stacked beside the textarea — matches the merchant thread. */}
+            <div className="flex shrink-0 flex-col gap-2">
+              <Button
+                onClick={handleSend}
+                disabled={!canSend}
+                size="icon"
+                aria-label={isInternal ? "Add internal note" : "Send reply"}
+                className={cn(
+                  "shrink-0 h-9 w-9 rounded-full transition-opacity",
+                  !canSend && "opacity-40 cursor-not-allowed"
+                )}
+              >
+                {sendMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+              <FileUploadInput
+                key={uploadKey}
+                variant="compact"
+                chipsContainer={chipsNode}
+                onUploadsChange={setAttachments}
+                getUploadUrl={handleGetUploadUrl}
+                onDiscardUpload={DiscardAdminSupportUpload}
+                sessionId={uploadSessionId}
+                disabled={sendMutation.isPending}
+              />
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="hidden sm:block text-xs text-muted-foreground text-center">
             Press Enter to send · Shift+Enter for new line
           </p>
         </div>
       </div>
 
       {/* Right: Sidebar */}
-      <div className="w-full min-w-0 shrink-0 space-y-5 border-t pt-5 lg:w-72 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+      <div className="w-full min-w-0 shrink-0 space-y-6 lg:w-72 lg:overflow-y-auto lg:border-l lg:pl-5">
         {/* Ticket Details */}
         <SidebarSection title="Ticket Details">
           <div className="space-y-2.5">
@@ -524,7 +500,7 @@ export default function AdminTicketDetailPage() {
                 value={ticket.status}
                 onValueChange={(v) => statusMutation.mutate({ status: v as TicketStatus })}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-8 w-full border-0 bg-muted/60 text-xs shadow-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -545,7 +521,7 @@ export default function AdminTicketDetailPage() {
                 value={ticket.priority}
                 onValueChange={(v) => priorityMutation.mutate(v as TicketPriority)}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-8 w-full border-0 bg-muted/60 text-xs shadow-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -563,7 +539,7 @@ export default function AdminTicketDetailPage() {
                 value={ticket.category}
                 onValueChange={(v) => categoryMutation.mutate(v as TicketCategory)}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-8 w-full border-0 bg-muted/60 text-xs shadow-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -594,7 +570,7 @@ export default function AdminTicketDetailPage() {
                       }
                     }}
                   >
-                    <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectTrigger className="h-8 w-full flex-1 border-0 bg-muted/60 text-xs shadow-none">
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
                     <SelectContent>
@@ -625,7 +601,7 @@ export default function AdminTicketDetailPage() {
                     {ticket.assigned_to_emails.map((email) => (
                       <Badge
                         key={email}
-                        variant="secondary"
+                        variant="outline"
                         className="max-w-full truncate text-[11px] font-normal"
                       >
                         {email}
@@ -640,7 +616,6 @@ export default function AdminTicketDetailPage() {
           </div>
         </SidebarSection>
 
-        <Separator />
 
         {/* Actions */}
         <SidebarSection title="Actions">
@@ -648,7 +623,7 @@ export default function AdminTicketDetailPage() {
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-8 text-xs justify-start border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800 hover:border-green-400 transition-colors"
+              className="w-full h-8 text-xs justify-start"
               onClick={() => statusMutation.mutate({ status: "resolved" })}
               disabled={ticket.status === "resolved" || ticket.status === "closed"}
             >
@@ -658,7 +633,7 @@ export default function AdminTicketDetailPage() {
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-8 text-xs justify-start border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-400 transition-colors"
+              className="w-full h-8 text-xs justify-start"
               onClick={() => statusMutation.mutate({ status: "closed" })}
               disabled={ticket.status === "closed"}
             >
@@ -668,7 +643,7 @@ export default function AdminTicketDetailPage() {
             <Button
               size="sm"
               variant="outline"
-              className="w-full h-8 text-xs justify-start border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
+              className="w-full h-8 text-xs justify-start"
               onClick={handleAddInternalNote}
             >
               <StickyNote className="h-3.5 w-3.5 mr-1.5" />
@@ -677,7 +652,6 @@ export default function AdminTicketDetailPage() {
           </div>
         </SidebarSection>
 
-        <Separator />
 
         {/* Merchant Info */}
         {merchantInfo && (
@@ -736,39 +710,33 @@ export default function AdminTicketDetailPage() {
 
         {/* Context from metadata */}
         {contextItems.length > 0 && (
-          <>
-            <Separator />
-            <SidebarSection title="Context">
-              <div className="space-y-1.5 text-xs">
-                {contextItems.map((item) => (
-                  <div key={item.label} className="flex items-start justify-between gap-3">
-                    <span className="text-muted-foreground">{item.label}</span>
-                    <span
-                      className="max-w-[9rem] truncate text-right font-medium text-foreground"
-                      title={item.title || item.value}
-                    >
-                      {item.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </SidebarSection>
-          </>
+          <SidebarSection title="Context">
+            <div className="space-y-1.5 text-xs">
+              {contextItems.map((item) => (
+                <div key={item.label} className="flex items-start justify-between gap-3">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span
+                    className="max-w-[9rem] truncate text-right font-medium text-foreground"
+                    title={item.title || item.value}
+                  >
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </SidebarSection>
         )}
 
+        {/* Related Links */}
         {merchantInfo?.clerk_org_id && (
-          <>
-            <Separator />
-            {/* Related Links */}
-            <SidebarSection title="Related">
+          <SidebarSection title="Related">
             <Button size="sm" variant="outline" className="w-full h-7 text-xs justify-start" asChild>
               <Link href={`/manage/merchants/${merchantInfo.id}`}>
                 <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                 View Merchant Dashboard
               </Link>
             </Button>
-            </SidebarSection>
-          </>
+          </SidebarSection>
         )}
       </div>
     </div>

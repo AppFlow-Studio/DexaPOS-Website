@@ -64,8 +64,9 @@ export default function PlatformFeesPage() {
         }
       />
 
-      {/* One control row governs the whole page. The dates are scope, so they stay on phones. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* One control row governs the whole page. The dates are scope, so they stay on phones.
+          Sticky for the same reason as the merchant detail page's row. */}
+      <div className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 bg-background px-4 py-3 sm:-mx-6 sm:px-6">
         <DateRangeSegmented value={preset} onChange={setPreset} />
         <span className="text-sm text-muted-foreground tabular-nums">
           {format(new Date(range.from), 'MMM d, yyyy')} – {format(new Date(range.to), 'MMM d, yyyy')}

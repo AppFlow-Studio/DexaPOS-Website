@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Badge } from '@/components/ui/badge'
+import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { CreditCard, KeyRound, RefreshCw, Shield, Store } from 'lucide-react'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
+import { Field, StatusItem, StatusWell, formatTimestamp } from './IntegrationPrimitives'
 import {
   savePlatformNmiBillingConfig,
   type PlatformNmiBillingConfigSummary,
@@ -18,6 +17,14 @@ interface Props {
   canEdit: boolean
 }
 
+/**
+ * The Dexa-owned NMI billing account. Rendered on /manage/nmi-integration and
+ * /manage/settings/integrations.
+ *
+ * One Panel, two sections: what is saved (words in a muted well, §3.5 — no
+ * status hues), then the credentials form. Secrets are write-only, so the well
+ * is the only place that says whether one exists.
+ */
 export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
   const [isPending, startTransition] = useTransition()
   const [label, setLabel] = useState(config.label)
@@ -25,76 +32,75 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
   const [privateApiKey, setPrivateApiKey] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
 
-  const handleSave = () => {
+  const missing = [
+    !config.tokenizationKey && 'tokenization key',
+    !config.apiKeyConfigured && 'private API key',
+  ].filter(Boolean) as string[]
+  const isConfigured = missing.length === 0
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
     startTransition(async () => {
-      const result = await savePlatformNmiBillingConfig({
-        label,
-        tokenizationKey,
-        privateApiKey,
-        webhookSecret,
-        isActive: true,
-      })
+      try {
+        const result = await savePlatformNmiBillingConfig({
+          label,
+          tokenizationKey,
+          privateApiKey,
+          webhookSecret,
+          isActive: true,
+        })
 
-      if (!result.success) {
-        return
+        if (!result.success) {
+          toast.error(result.error ?? 'Failed to save the Dexa Billing NMI account.')
+          return
+        }
+
+        setPrivateApiKey('')
+        setWebhookSecret('')
+        toast.success('Dexa Billing NMI account saved.')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to save the Dexa Billing NMI account.')
       }
-
-      setPrivateApiKey('')
-      setWebhookSecret('')
     })
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CreditCard className="h-5 w-5" />
-          Dexa Billing NMI Account
-        </CardTitle>
-        <CardDescription>
-          Stores the platform-owned NMI merchant account used for merchant billing-card vaulting and
-          subscription charges. This does not change location online-ordering NMI accounts.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 text-sm">
-          <Row label="Provider">
-            <Badge variant="secondary">NMI</Badge>
-          </Row>
-          <Row label="Status">
-            <Badge variant={config.apiKeyConfigured && config.tokenizationKey ? 'default' : 'secondary'}>
-              {config.apiKeyConfigured && config.tokenizationKey ? 'Configured' : 'Incomplete'}
-            </Badge>
-          </Row>
-          <Row label="Webhook signing">
-            <Badge variant={config.webhookSecretConfigured ? 'default' : 'secondary'}>
-              {config.webhookSecretConfigured ? 'Configured' : 'Missing'}
-            </Badge>
-          </Row>
-          <Row label="Scope">
-            <span className="inline-flex items-center gap-1.5 text-foreground">
-              <Store className="h-3.5 w-3.5 text-muted-foreground" />
-              Dexa system billing only
-            </span>
-          </Row>
-          {config.updatedAt ? (
-            <Row label="Last updated">
-              <span>{new Date(config.updatedAt).toLocaleString()}</span>
-            </Row>
-          ) : null}
-        </div>
+    <Panel>
+      <PanelSection
+        label="Dexa Billing account"
+        caption="Charges merchant subscriptions and vaults merchant billing cards. Location NMI accounts for online ordering are separate and are not changed here."
+        /* Scope, not description: it says which NMI accounts this page does
+           not touch, so it stays on phones (§13.4). */
+        showCaptionOnMobile
+      >
+        <StatusWell>
+          <StatusItem
+            term="Status"
+            value={isConfigured ? 'Configured' : 'Incomplete'}
+            note={isConfigured ? undefined : `Needs a ${missing.join(' and ')}`}
+          />
+          <StatusItem
+            term="Private API key"
+            value={config.apiKeyConfigured ? 'Saved' : 'Not set'}
+          />
+          <StatusItem
+            term="Webhook signing"
+            value={config.webhookSecretConfigured ? 'Saved' : 'Not set'}
+            note={config.webhookSecretConfigured ? undefined : 'Invoice-payment webhooks are rejected until set'}
+          />
+          <StatusItem
+            term="Last updated"
+            value={formatTimestamp(config.updatedAt, 'Never saved')}
+          />
+        </StatusWell>
+      </PanelSection>
 
-        <Alert>
-          <Shield className="h-4 w-4" />
-          <AlertDescription>
-            Use a dedicated Dexa-owned NMI merchant account here. Merchant location NMI accounts for
-            online ordering stay separate and are not modified by this setting.
-          </AlertDescription>
-        </Alert>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="dexa-billing-label">Account Label</Label>
+      <PanelSection
+        label="Credentials"
+        caption="Keys from the Dexa-owned NMI merchant account. Secrets are stored in Supabase Vault and are never shown again — leave a secret blank to keep the saved one."
+      >
+        <form onSubmit={handleSubmit} className="grid gap-6 md:grid-cols-2">
+          <Field id="dexa-billing-label" label="Account label">
             <Input
               id="dexa-billing-label"
               value={label}
@@ -102,77 +108,67 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
               placeholder="Dexa Billing"
               disabled={!canEdit}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dexa-billing-public-key">NMI Tokenization Key</Label>
+          </Field>
+
+          <Field
+            id="dexa-billing-public-key"
+            label="Tokenization key"
+            hint="Public Collect.js key. Required."
+          >
             <Input
               id="dexa-billing-public-key"
               value={tokenizationKey}
               onChange={(event) => setTokenizationKey(event.target.value)}
               placeholder="Public Collect.js tokenization key"
+              aria-required
               disabled={!canEdit}
             />
-          </div>
-        </div>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="dexa-billing-private-key">NMI Private API Key</Label>
-          <Input
+          <Field
             id="dexa-billing-private-key"
-            type="password"
-            value={privateApiKey}
-            onChange={(event) => setPrivateApiKey(event.target.value)}
-            placeholder={config.apiKeyConfigured ? 'Enter only to rotate the saved private key' : 'Private API key'}
-            disabled={!canEdit}
-          />
-          <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-            <KeyRound className="h-3.5 w-3.5" />
-            Stored in Supabase Vault. Leave blank when you only want to keep the existing saved private key.
-          </p>
-        </div>
+            label="Private API key"
+            hint={config.apiKeyConfigured ? 'Leave blank to keep the saved key.' : undefined}
+          >
+            <Input
+              id="dexa-billing-private-key"
+              type="password"
+              autoComplete="off"
+              value={privateApiKey}
+              onChange={(event) => setPrivateApiKey(event.target.value)}
+              placeholder={config.apiKeyConfigured ? 'Saved — enter a new key to rotate' : 'Private API key'}
+              disabled={!canEdit}
+            />
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="dexa-billing-webhook-secret">NMI Webhook Signing Secret</Label>
-          <Input
+          <Field
             id="dexa-billing-webhook-secret"
-            type="password"
-            value={webhookSecret}
-            onChange={(event) => setWebhookSecret(event.target.value)}
-            placeholder={
-              config.webhookSecretConfigured
-                ? 'Stored securely. Enter a new value only to rotate it.'
-                : 'Webhook signing secret'
-            }
-            disabled={!canEdit}
-          />
-          <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-            <Shield className="h-3.5 w-3.5" />
-            Used to verify NMI invoice-payment webhooks before updating invoice status.
-          </p>
-        </div>
+            label="Webhook signing secret"
+            hint="Verifies NMI invoice-payment webhooks before invoice status changes."
+          >
+            <Input
+              id="dexa-billing-webhook-secret"
+              type="password"
+              autoComplete="off"
+              value={webhookSecret}
+              onChange={(event) => setWebhookSecret(event.target.value)}
+              placeholder={
+                config.webhookSecretConfigured ? 'Saved — enter a new secret to rotate' : 'Webhook signing secret'
+              }
+              disabled={!canEdit}
+            />
+          </Field>
 
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={isPending || !canEdit}>
-            {isPending && <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Save Billing Rail
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function Row({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="w-36 shrink-0 text-muted-foreground">{label}</span>
-      <div className="flex-1 min-w-0">{children}</div>
-    </div>
+          {/* Centred on a phone, right-aligned from `sm` up — the same footer as
+              create-organization. */}
+          <div className="flex items-center justify-center sm:justify-end md:col-span-2">
+            <Button type="submit" disabled={isPending || !canEdit} className="w-full sm:w-auto">
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isPending ? 'Saving…' : 'Save billing account'}
+            </Button>
+          </div>
+        </form>
+      </PanelSection>
+    </Panel>
   )
 }

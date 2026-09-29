@@ -352,18 +352,7 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                 <StatTile
                   key={tile.key}
                   label={tile.label}
-                  value={
-                    count == null ? (
-                      '—'
-                    ) : (
-                      // Pending entries are failed deliveries an operator must
-                      // act on: the figure carries the alarm, the meta says it
-                      // in words (§3.5, §14.3 HQ-2).
-                      <span className={cn(alarm && 'text-red-600 dark:text-red-400')}>
-                        {count.toLocaleString()}
-                      </span>
-                    )
-                  }
+                  value={count == null ? '—' : count.toLocaleString()}
                   meta={countsLoading ? undefined : count == null ? 'Count unavailable' : tile.meta}
                   // Alarm text and the reason for a "—" are not detail a phone drops.
                   showMetaOnMobile={alarm || (count == null && !countsLoading)}
@@ -443,7 +432,7 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
               />
             ) : (
               <>
-                <Table variant="data" containerClassName="hidden lg:block" className="min-w-[680px]">
+                <Table variant="data" bounded={false} containerClassName="hidden lg:block" className="min-w-[680px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[140px]">Created</TableHead>

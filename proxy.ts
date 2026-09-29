@@ -29,8 +29,6 @@ const isMarketingRoute = createRouteMatcher([
   '/pos-demo(.*)',
 ])
 const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
-// Marketing CMS admin — gated to the internal HQ team (like /manage).
-const isCmsAdminRoute = createRouteMatcher(['/admin(.*)'])
 // Public/self-authorizing API routes: /api/contact is an anonymous public form;
 // /api/cms/* enforces HQ auth inside each handler (requireHqUser → 401);
 // /api/internal/* are server-to-server webhooks (DB pg_net triggers / edge
@@ -305,15 +303,6 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   if (isInternalTeamRoutes(req)) {
     if( UserSession.orgId !== process.env.DEXA_POS_INTERNAL_TEAM_ID) {
-      return NextResponse.redirect(new URL('/dashboard', req.url));
-    }
-    return NextResponse.next();
-  }
-
-  // Marketing CMS admin — internal HQ team only (handled before the HQ
-  // redirect-to-/manage rule so HQ users aren't bounced off /admin).
-  if (isCmsAdminRoute(req)) {
-    if (UserSession.orgId !== process.env.DEXA_POS_INTERNAL_TEAM_ID) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
     return NextResponse.next();

@@ -1,18 +1,14 @@
 'use client'
 
 /**
- * Shared, dependency-light formatting + badge helpers for the HQ subscription
- * overview sections. Kept in one place so the overview components render tiers,
- * money, dates, and statuses consistently with the workspace.
+ * Shared, dependency-light formatting helpers for the HQ subscription overview
+ * sections. Kept in one place so the overview components render tiers, money,
+ * and dates consistently with the workspace.
+ *
+ * Statuses render as one neutral `<Badge variant="outline">` whatever the
+ * value — the word carries the meaning (UI-DESIGN-SYSTEM §4.6b).
  */
-import type {
-  MerchantSubscriptionRecord,
-  SubscriptionInvoiceRecord,
-  MerchantTierStatusRecord,
-} from '@/app/manage/actions/subscription-billing'
 import type { MerchantBillingProfileRecord } from '@/app/manage/actions/merchant-billing'
-
-export type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive'
 
 export function formatMoney(amount: number | null | undefined): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(amount || 0))
@@ -29,47 +25,6 @@ export function formatDate(date: string | null | undefined): string {
   const value = new Date(date)
   if (Number.isNaN(value.getTime())) return '—'
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-export function tierStatusVariant(status: MerchantTierStatusRecord['subscription_status']): BadgeVariant {
-  switch (status) {
-    case 'active':
-      return 'default'
-    case 'past_due':
-      return 'outline'
-    case 'suspended':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-export function subscriptionStatusVariant(status: MerchantSubscriptionRecord['status']): BadgeVariant {
-  switch (status) {
-    case 'active':
-      return 'default'
-    case 'trial':
-      return 'outline'
-    case 'past_due':
-    case 'suspended':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-export function invoiceStatusVariant(status: SubscriptionInvoiceRecord['status']): BadgeVariant {
-  switch (status) {
-    case 'paid':
-      return 'default'
-    case 'open':
-    case 'processing':
-      return 'outline'
-    case 'failed':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
 }
 
 export function buildPaymentMethodLabel(profile: MerchantBillingProfileRecord | null | undefined): string {

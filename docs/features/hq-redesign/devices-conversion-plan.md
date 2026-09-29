@@ -56,7 +56,7 @@ cards still use `DeviceRegistryMetricCard` (a `<Card>` with a bordered icon plat
 ## Found, not changed
 
 - The hue maps in **`lib/constants/device-status.ts`** (`DEVICE_LIFECYCLE_PRESENTATION` styles and `WARRANTY_STYLES`) no longer have any consumer. The merchant `/dashboard/devices` reads only `warranty.label`. They should be removed or neutralised the next time someone touches that file (§4.6b).
-- `DeviceRegistryMetricCard` is now used only by `/manage/device-catalog`. Delete it when the catalog converts.
+- `DeviceRegistryMetricCard` is now used only by `/manage/device-catalog`. Delete it when the catalog converts. *Done 2026-09-29 ([catalog record](device-catalog-conversion-plan.md)).*
 - The dialog's three `useEffect`s call `setState` synchronously. ESLint flags this (`react-hooks/set-state-in-effect`); the issue predates this change.
 
 ## Verification

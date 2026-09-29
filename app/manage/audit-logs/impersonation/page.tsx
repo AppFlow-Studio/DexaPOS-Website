@@ -164,7 +164,7 @@ export default function ImpersonationAuditPage() {
       ) : (
         <div>
           {/* §5.3: the table from its fit breakpoint (900px fits `xl`), cards below. */}
-          <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+          <Table variant="data" bounded={false} containerClassName="hidden xl:block" className="min-w-[900px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Started</TableHead>

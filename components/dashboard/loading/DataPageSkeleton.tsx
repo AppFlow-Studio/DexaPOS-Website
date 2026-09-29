@@ -607,7 +607,8 @@ function ProfileSkeleton() {
       {/* Identity summary — avatar, name, email, org pill. */}
       <Panel padded>
         <div className="flex items-center gap-4">
-          <LoadingBlock className="h-16 w-16 shrink-0 rounded-full" />
+          {/* The page drops its avatar below `sm` (§13.4), so no slot here either. */}
+          <LoadingBlock className="hidden h-16 w-16 shrink-0 rounded-full sm:block" />
           <div className="min-w-0 flex-1 space-y-2">
             <LoadingBlock className="h-5 w-40 max-w-full" />
             <LoadingBlock className="h-4 w-56 max-w-full rounded-full" />

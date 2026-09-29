@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select,
@@ -21,20 +21,23 @@ import { BillingHistorySection } from './BillingHistorySection'
 import { InfoHint } from './InfoHint'
 import { formatDate, formatMoney } from './helpers'
 
+// Raw custom properties, never `hsl(var(--…))` (UI-DESIGN-SYSTEM C2). Collected
+// is the headline series in the brand colour; failed sits beside it in neutral.
 const trendChartConfig = {
-  paid: { label: 'Collected', color: 'hsl(var(--chart-1))' },
-  failed: { label: 'Failed', color: 'hsl(var(--chart-3))' },
+  paid: { label: 'Collected', color: 'var(--brand)' },
+  failed: { label: 'Failed', color: 'var(--muted-foreground)' },
 } satisfies ChartConfig
 
+// One series: the x-axis names each status, so a hue per bar encodes nothing (§6.1).
 const statusChartConfig = {
-  count: { label: 'Invoices', color: 'hsl(var(--chart-2))' },
+  count: { label: 'Invoices', color: 'var(--brand)' },
 } satisfies ChartConfig
 
-const statusVisuals: Record<string, { label: string; color: string }> = {
-  open: { label: 'Open', color: '#F59E0B' },
-  processing: { label: 'Processing', color: '#3B82F6' },
-  paid: { label: 'Paid', color: '#10B981' },
-  failed: { label: 'Failed', color: '#EF4444' },
+const statusLabels: Record<string, string> = {
+  open: 'Open',
+  processing: 'Processing',
+  paid: 'Paid',
+  failed: 'Failed',
 }
 
 export interface BillingInsightsLocation {
@@ -122,14 +125,14 @@ export function BillingInsightsSection({
       .filter((statusKey) => buckets.has(statusKey))
       .map((statusKey) => {
         const bucket = buckets.get(statusKey)!
-        const visuals = statusVisuals[statusKey] ?? { label: statusKey.replace('_', ' '), color: 'hsl(var(--chart-2))' }
-        return { status: statusKey, label: visuals.label, color: visuals.color, count: bucket.count, total: bucket.total }
+        const label = statusLabels[statusKey] ?? statusKey.replace('_', ' ')
+        return { status: statusKey, label, count: bucket.count, total: bucket.total }
       })
   }, [filteredInvoices])
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -154,31 +157,35 @@ export function BillingInsightsSection({
         <CardContent className="space-y-6">
           {/* Insight tiles */}
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border bg-muted/40 p-4">
-              <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+            <div className="rounded-2xl bg-muted/60 p-4">
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 Net collected
                 <InfoHint label="Total of all paid subscription invoices in view." />
               </div>
-              <div className="mt-1 text-2xl font-semibold text-emerald-600">{formatMoney(summary.paid)}</div>
+              <div className="mt-1 text-2xl font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                {formatMoney(summary.paid)}
+              </div>
             </div>
-            <div className="rounded-xl border bg-muted/40 p-4">
-              <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+            <div className="rounded-2xl bg-muted/60 p-4">
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 Pending
                 <InfoHint label="Open + processing invoices not yet collected. Includes card surcharge." />
               </div>
-              <div className="mt-1 text-2xl font-semibold">{formatMoney(summary.pending)}</div>
+              <div className="mt-1 text-2xl font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                {formatMoney(summary.pending)}
+              </div>
               {summary.pending > 0 && (
-                <div className="mt-1 text-xs text-muted-foreground">
+                <div className="mt-0.5 text-[0.8125rem] tabular-nums text-muted-foreground">
                   {formatMoney(summary.pendingSubtotal)} + {formatMoney(summary.pendingSurcharge)} surcharge
                 </div>
               )}
             </div>
-            <div className="rounded-xl border bg-muted/40 p-4">
-              <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+            <div className="rounded-2xl bg-muted/60 p-4">
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 Failed charges
                 <InfoHint label="Invoices whose card charge failed and needs attention." />
               </div>
-              <div className={`mt-1 text-2xl font-semibold ${summary.failedCount > 0 ? 'text-destructive' : ''}`}>
+              <div className="mt-1 text-2xl font-medium leading-tight tracking-[-0.02em] tabular-nums">
                 {summary.failedCount}
               </div>
             </div>
@@ -186,7 +193,7 @@ export function BillingInsightsSection({
 
           {/* Charts */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border p-4">
+            <div className="rounded-2xl border p-4">
               <div className="mb-2 text-sm font-medium">Payment trend</div>
               {trendData.length > 0 ? (
                 <ChartContainer config={trendChartConfig} className="h-[220px] w-full">
@@ -205,7 +212,7 @@ export function BillingInsightsSection({
                 </div>
               )}
             </div>
-            <div className="rounded-xl border p-4">
+            <div className="rounded-2xl border p-4">
               <div className="mb-2 text-sm font-medium">Invoice status</div>
               {statusData.length > 0 ? (
                 <ChartContainer config={statusChartConfig} className="h-[220px] w-full">
@@ -214,11 +221,7 @@ export function BillingInsightsSection({
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
                     <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {statusData.map((entry) => (
-                        <Cell key={entry.status} fill={entry.color} />
-                      ))}
-                    </Bar>
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ChartContainer>
               ) : (
@@ -238,7 +241,6 @@ export function BillingInsightsSection({
         onPreview={onPreview}
         onDownload={onDownload}
         onCharge={onCharge}
-        limit={20}
       />
     </div>
   )

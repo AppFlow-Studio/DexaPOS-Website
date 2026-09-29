@@ -1,16 +1,10 @@
-import { requireHqUser } from "@/lib/cms/cms-auth";
 import { redirect } from "next/navigation";
-import AdminBlocksClient from "./AdminBlocksClient";
-import { DEFAULT_SITE_SETTINGS, SiteSettings } from "@/lib/cms/site-settings-data";
 
-interface Block {
-  id: string;
-  key: string;
-  title: string;
-  body_html: string;
-  content_json?: unknown;
-  published: boolean;
-}
+import { PageShell } from "@/components/dashboard/shell";
+import { requireHqUser } from "@/lib/cms/cms-auth";
+import { DEFAULT_SITE_SETTINGS, SiteSettings } from "@/lib/cms/site-settings-data";
+import { WebsiteEditorHeader } from "../components/WebsiteEditorHeader";
+import { BlocksClient, type Block } from "./BlocksClient";
 
 function parseJson(value: string): Partial<SiteSettings> {
   try {
@@ -35,7 +29,7 @@ function withDefaultSiteSettings(block: Block): Block {
   };
 }
 
-export default async function AdminBlocks() {
+export default async function WebsiteEditorBlocks() {
   const { userId, supabase } = await requireHqUser();
   if (!userId) redirect("/dashboard");
 
@@ -56,5 +50,10 @@ export default async function AdminBlocks() {
     });
   }
 
-  return <AdminBlocksClient initialBlocks={initialBlocks} />;
+  return (
+    <PageShell as="div">
+      <WebsiteEditorHeader />
+      <BlocksClient initialBlocks={initialBlocks} />
+    </PageShell>
+  );
 }

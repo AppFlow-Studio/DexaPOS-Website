@@ -23,9 +23,9 @@ export function SupportTicketSkeleton() {
 
       {/* Thread column */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="shrink-0 space-y-2 border-b pb-4">
+        <div className="shrink-0 space-y-2 pb-2">
           <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded-md" />
+            <Skeleton className="h-8 w-8 rounded-full" />
             <Skeleton className="h-4 w-28" />
           </div>
           <div className="min-w-0 px-1">
@@ -57,35 +57,37 @@ export function SupportTicketSkeleton() {
                 {!bubble.own && (
                   <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
                 )}
-                <Skeleton className={`${bubble.width} ${bubble.height}`} />
+                <Skeleton className={`${bubble.width} ${bubble.height} rounded-2xl`} />
               </div>
             </div>
           ))}
         </div>
 
         {/* Composer */}
-        <div className="shrink-0 space-y-2 border-t pt-3">
+        <div className="shrink-0 space-y-2 pt-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-5 w-9 rounded-full" />
             <Skeleton className="h-4 w-32" />
           </div>
-          <Skeleton className="h-16 w-full rounded-lg" />
           <div className="flex min-w-0 items-end gap-2">
-            <Skeleton className="h-20 min-w-0 flex-1 rounded-md" />
-            <Skeleton className="h-20 w-10 shrink-0 rounded-md" />
+            <Skeleton className="h-20 min-w-0 flex-1 rounded-2xl" />
+            <div className="flex shrink-0 flex-col gap-2">
+              <Skeleton className="h-9 w-9 rounded-full" />
+              <Skeleton className="h-9 w-9 rounded-full" />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Details rail */}
-      <div className="w-full min-w-0 shrink-0 space-y-5 border-t pt-5 lg:w-72 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+      <div className="w-full min-w-0 shrink-0 space-y-6 lg:w-72 lg:border-l lg:pl-5">
         {[3, 3, 2].map((rows, section) => (
           <div key={section} className="min-w-0 space-y-2.5">
             <Skeleton className="h-4 w-28" />
             {Array.from({ length: rows }).map((_, i) => (
               <div key={i} className="min-w-0 space-y-1">
                 <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-8 w-full rounded-md" />
+                <Skeleton className="h-8 w-full rounded-full" />
               </div>
             ))}
           </div>

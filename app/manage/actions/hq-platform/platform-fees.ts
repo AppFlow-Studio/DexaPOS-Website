@@ -100,6 +100,17 @@ export interface MerchantPaymentsResult {
 
 const PAYMENT_STATUS_FILTER = ['captured', 'partially_refunded', 'refunded']
 
+// PostgREST `.or()` forms of the fee-row predicate in `fetchFeeRows`, for the
+// server-paged payments list. It must match that predicate, or the Payments tab
+// count (from the totals) disagrees with the rows the table can page through.
+// A returned void carries a refund credit, so it sits under "refunded" too.
+const RETURNED_VOID = 'and(status.eq.void,is_returned.eq.true)'
+const FEE_ROW_OR = `status.in.(${PAYMENT_STATUS_FILTER.join(',')}),${RETURNED_VOID}`
+const REFUNDED_ROW_OR = `status.in.(refunded,partially_refunded),${RETURNED_VOID}`
+
+// PostgREST's max rows per response; fetchFeeRows pages at this size.
+const FEE_ROW_PAGE = 1000
+
 interface FeeRow {
   merchant_id: string | null
   location_id: string | null
@@ -154,28 +165,35 @@ async function fetchFeeRows(args: {
   locationId?: string
 }): Promise<FeeRow[]> {
   const supabase = createServiceRoleClient()
-  let query = supabase
-    .from('order_payments')
-    .select(
-      'merchant_id, location_id, captured_at, dual_pricing_fee, tip_fee, refunded_dual_pricing_fee, refunded_tip_fee, status, is_returned'
-    )
-    .gte('captured_at', args.from)
-    .lt('captured_at', args.to)
+  // Paged: PostgREST caps a response at 1000 rows, and an unpaged select was
+  // silently truncating every total (a merchant with 2,735 fee rows showed 938).
+  // Ordered by (captured_at, id) so pages can't overlap or skip.
+  const rows: FeeRow[] = []
+  for (let offset = 0; ; offset += FEE_ROW_PAGE) {
+    let query = supabase
+      .from('order_payments')
+      .select(
+        'merchant_id, location_id, captured_at, dual_pricing_fee, tip_fee, refunded_dual_pricing_fee, refunded_tip_fee, status, is_returned'
+      )
+      .gte('captured_at', args.from)
+      .lt('captured_at', args.to)
+      .or(FEE_ROW_OR)
 
-  if (args.merchantId) query = query.eq('merchant_id', args.merchantId)
-  if (args.locationId) query = query.eq('location_id', args.locationId)
+    if (args.merchantId) query = query.eq('merchant_id', args.merchantId)
+    if (args.locationId) query = query.eq('location_id', args.locationId)
 
-  const { data, error } = await query
-  if (error) {
-    console.error('[platform-fees] fetchFeeRows error:', error)
-    return []
+    const { data, error } = await query
+      .order('captured_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + FEE_ROW_PAGE - 1)
+    if (error) {
+      // A partial sum would read as a real total, so fail rather than return it.
+      console.error('[platform-fees] fetchFeeRows error:', error)
+      throw new Error('Could not load platform fee payments')
+    }
+    rows.push(...((data || []) as FeeRow[]))
+    if (!data || data.length < FEE_ROW_PAGE) return rows
   }
-  const rows = (data || []) as FeeRow[]
-  return rows.filter(
-    (r) =>
-      (r.status && PAYMENT_STATUS_FILTER.includes(r.status)) ||
-      (r.status === 'void' && !!r.is_returned)
-  )
 }
 
 export async function getPlatformFeesOverview(args: {
@@ -423,7 +441,9 @@ export interface GetMerchantPaymentsParams {
   merchantId: string
   from: string
   to: string
-  status?: 'all' | 'collected' | 'refunded' | 'disputed'
+  // No 'disputed': it isn't a `payment_status` value (disputes live in the
+  // chargebacks table), and sending it made Postgres reject the whole query.
+  status?: 'all' | 'collected' | 'refunded'
   locationId?: string
   limit?: number
   offset?: number
@@ -455,11 +475,9 @@ export async function getMerchantPayments(
   if (args.status === 'collected') {
     query = query.eq('status', 'captured')
   } else if (args.status === 'refunded') {
-    query = query.in('status', ['refunded', 'partially_refunded'])
-  } else if (args.status === 'disputed') {
-    query = query.eq('status', 'disputed')
+    query = query.or(REFUNDED_ROW_OR)
   } else {
-    query = query.in('status', ['captured', 'partially_refunded', 'refunded', 'disputed'])
+    query = query.or(FEE_ROW_OR)
   }
 
   const { data, error, count } = await query

@@ -335,7 +335,7 @@ const AuditLogDetail = ({ log }: { log: any }) => (
           </div>
         )
       ) : (
-        <div className="py-6 text-center text-sm text-muted-foreground">
+        <div className="py-6 text-sm text-muted-foreground">
           This action didn&apos;t change any data.
         </div>
       )}
@@ -968,9 +968,12 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         )}
                       </TableCell>
                     </TableRow>
+                    {/* `!`: the data TableBody's `[&_tr:hover]` outranks row classes. */}
                     {expandedRow === log.id && (
-                      <TableRow className="bg-muted/20">
-                        <TableCell colSpan={columnCount} className="p-0">
+                      <TableRow className="hover:!bg-card/70">
+                        {/* `whitespace-normal`: TableCell's nowrap would stop long
+                            values (user agents) wrapping and widen the table. */}
+                        <TableCell colSpan={columnCount} className="whitespace-normal p-0">
                           <AuditLogDetail log={log} />
                         </TableCell>
                       </TableRow>

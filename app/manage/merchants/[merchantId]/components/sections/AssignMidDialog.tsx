@@ -163,7 +163,7 @@ export function AssignMidDialog({
                             <SelectTrigger id="status">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent side="top">
                                 {STATUSES.map((s) => (
                                     <SelectItem key={s} value={s}>
                                         {s}

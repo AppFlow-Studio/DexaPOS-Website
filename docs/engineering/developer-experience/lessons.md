@@ -486,3 +486,21 @@ typed call, annotate the return type — `(input): ReturnType<typeof TheAction> 
 result never depends on inference order. Corollary: `tsconfig` is `incremental`, so after a
 fix `tsc --noEmit` can replay the old diagnostic from `tsconfig.tsbuildinfo`; confirm with
 `--incremental false` before believing either result.
+
+## Tailwind v4 scans docs too — an ellipsis inside a class breaks the build (2026-09-29)
+
+Context: a plan doc and a code comment wrote a placeholder class with a literal `…` inside
+`w-[var(` … `)]`. Tailwind v4 content detection scans every non-ignored file (Markdown and
+comments included), generated `width: var(…)`, and Lightning CSS failed to parse
+`app/globals.css` — "Unexpected token Ident" — taking down every page.
+
+Rule: in docs and comments, write the real class or describe it in words; never put `…` inside
+`[...]` brackets. Check with `grep -rnE '[a-z]-\[[^] ]*…' app components docs`
+(UI-DESIGN-SYSTEM C8). Restart the dev server afterwards — Turbopack keeps the broken CSS.
+
+Correction (2026-09-29): a restart is NOT enough. Next 16 persists Turbopack's cache to disk
+(`.next/dev/cache`), and Turbopack doesn't track `.md` files as inputs to `globals.css`, so
+fixing the doc never invalidates the cached CSS and every restart reloads the same error. Stop
+the dev server, delete `.next/dev/cache`, then start it again. To prove the sources are clean
+first, run Tailwind's own scanner (`Scanner` from `@tailwindcss/oxide`) over the repo and
+`compile().build()` the candidates — no generated line should contain `…`.

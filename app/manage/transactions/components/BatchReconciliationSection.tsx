@@ -423,7 +423,7 @@ export function BatchReconciliationSection({
       )}
 
       <div>
-        <Table variant="data" containerClassName="hidden 2xl:block" className="min-w-[1180px]">
+        <Table variant="data" containerClassName="hidden border bg-card 2xl:block" className="min-w-[1180px]">
           <TableHeader>
             <TableRow>
               <TableHead>
@@ -530,7 +530,7 @@ export function BatchReconciliationSection({
               const isSelected = selectedBatchId === batch.id
               const originLabel = getOriginLabel(batch.origin)
               return (
-                <RecordCard key={batch.id} selected={isSelected}>
+                <RecordCard key={batch.id} selected={isSelected} className="border bg-card">
                   <button
                     type="button"
                     className="w-full min-w-0 text-left"
@@ -578,7 +578,7 @@ export function BatchReconciliationSection({
       </div>
 
       {selectedBatch && (
-        <div className="space-y-3 rounded-2xl bg-muted/60 p-4">
+        <div className="space-y-3 rounded-2xl border bg-card p-4">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span>
               <span className="text-muted-foreground">Selected batch </span>

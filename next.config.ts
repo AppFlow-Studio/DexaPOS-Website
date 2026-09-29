@@ -88,6 +88,33 @@ const nextConfig: NextConfig = {
         destination: "/dashboard/website/pages",
         permanent: false,
       },
+      // The marketing CMS moved from its own `/admin` shell into the HQ
+      // portal. The pages list is the editor's landing screen.
+      {
+        source: "/admin",
+        destination: "/manage/website-editor",
+        permanent: false,
+      },
+      {
+        source: "/admin/pages",
+        destination: "/manage/website-editor",
+        permanent: false,
+      },
+      {
+        source: "/admin/pages/:route*",
+        destination: "/manage/website-editor/pages/:route*",
+        permanent: false,
+      },
+      {
+        source: "/admin/categories",
+        destination: "/manage/website-editor/categories",
+        permanent: false,
+      },
+      {
+        source: "/admin/blocks",
+        destination: "/manage/website-editor/blocks",
+        permanent: false,
+      },
     ];
   },
 };

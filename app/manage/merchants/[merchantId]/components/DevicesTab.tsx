@@ -474,10 +474,15 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                         )
                     }
                 >
-                    <div className="mt-4 flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    {/* flex-wrap, not a lg: row: this panel sits beside the merchant nav,
+                        so viewport breakpoints don't track its width. The tab rail keeps
+                        its natural width (shrink-0); the filter group flexes from a 20rem
+                        basis beside it, so it only drops to its own line when the panel
+                        can't fit both. */}
+                    <div className="mt-4 flex w-full min-w-0 flex-wrap items-center gap-3">
                         {/* §4.5 pill rail; classes are the TAB_* literals (C7). */}
-                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')} className="min-w-0">
-                            <div className="w-full min-w-0 overflow-x-auto pb-1">
+                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')} className="max-w-full shrink-0">
+                            <div className="w-full min-w-0 overflow-x-auto">
                                 <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                                     <TabsTrigger
                                         value="stations"
@@ -494,8 +499,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                 </TabsList>
                             </div>
                         </Tabs>
-                        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto">
-                            <div className="relative min-w-[140px] flex-1 sm:flex-none">
+                        <div className="flex min-w-0 flex-[1_1_20rem] flex-wrap items-center justify-end gap-2">
+                            <div className="relative min-w-[10rem] flex-1 sm:max-w-72">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                                 <Input
                                     placeholder="Search..."
@@ -506,7 +511,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                         setStationPage(1)
                                         setTerminalPage(1)
                                     }}
-                                    className="h-9 w-full pl-9 text-[0.8125rem] sm:w-64"
+                                    className="h-9 w-full pl-9 text-[0.8125rem]"
                                 />
                             </div>
                             <Select
@@ -517,7 +522,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                     setTerminalPage(1)
                                 }}
                             >
-                                <SelectTrigger aria-label="Location" className="h-9 w-full min-w-0 text-[0.8125rem] sm:w-[200px]">
+                                <SelectTrigger aria-label="Location" className="h-9 w-full min-w-0 text-[0.8125rem] sm:w-44">
                                     <SelectValue placeholder="All Locations">
                                         {selectedLocationId === 'all'
                                             ? 'All Locations'
@@ -537,7 +542,12 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                         </div>
                     </div>
 
-                    <div className="mt-6">
+                    {/* @container: the table/card switch below keys off THIS panel's
+                        width, not the viewport. The panel sits beside the merchant nav,
+                        so at a 1280px viewport it is only ~700px -- a viewport `lg:`
+                        switch showed the 7-column table there and clipped Status,
+                        Device Info, Last Heartbeat and the actions off to the right. */}
+                    <div className="@container mt-6">
                         {isLoading ? (
                             <div className="space-y-2" aria-busy="true">
                                 {Array.from({ length: 4 }).map((_, i) => (
@@ -567,10 +577,12 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                             </Empty>
                                         ) : (
                                             <>
-                                            {/* §5.3: a card grid below `lg`, never a
-                                                scrolling table. This table has 7 columns,
-                                                so at 375px it was a scroll well. */}
-                                            <Table variant="data" containerClassName="hidden lg:block">
+                                            {/* §5.3: a card grid until the panel fits all 7
+                                                columns (@5xl, 64rem), never a scrolling table.
+                                                Unbounded: the page is capped at 10 rows by
+                                                pagination, so an inner scroll well only slid
+                                                rows under a sticky header. */}
+                                            <Table variant="data" bounded={false} containerClassName="hidden @5xl:block">
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead>Station</TableHead>
@@ -661,11 +673,11 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 </TableBody>
                                             </Table>
 
-                                            {/* Mirrors the table's `hidden lg:block`. Same
+                                            {/* Mirrors the table's `hidden @5xl:block`. Same
                                                 page of rows, stacked: identity and status lead,
                                                 the rest drops into a two-column field grid.
                                                 Values are plain text on the muted card (§3.5). */}
-                                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                            <div className="grid min-w-0 grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:hidden">
                                                 {stationPageRows.map((station) => {
                                                     const StationIcon = getStationTypeIcon(station.station_type)
                                                     return (
@@ -747,7 +759,9 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                             </Empty>
                                         ) : (
                                             <>
-                                            <Table variant="data" containerClassName="hidden lg:block">
+                                            {/* 6 columns fit from @4xl (56rem). Unbounded for
+                                                the same reason as the stations table. */}
+                                            <Table variant="data" bounded={false} containerClassName="hidden @4xl:block">
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead>Terminal</TableHead>
@@ -816,8 +830,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 </TableBody>
                                             </Table>
 
-                                            {/* Mirrors the table's `hidden lg:block`. */}
-                                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                            {/* Mirrors the table's `hidden @4xl:block`. */}
+                                            <div className="grid min-w-0 grid-cols-1 gap-3 @xl:grid-cols-2 @4xl:hidden">
                                                 {terminalPageRows.map((terminal) => (
                                                     <div
                                                         key={terminal.id}

@@ -13,7 +13,6 @@ import {
   buildPaymentMethodLabel,
   formatDate,
   formatTierPrice,
-  tierStatusVariant,
 } from './helpers'
 
 interface MerchantBillingSectionProps {
@@ -43,7 +42,7 @@ export function MerchantBillingSection({
       : `${tierStatus.active_location_count} of ${maxLocations} locations`
 
   return (
-    <Card>
+    <Card className="rounded-3xl">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           Merchant subscription
@@ -52,12 +51,12 @@ export function MerchantBillingSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Tier + price */}
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-muted/40 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-muted/60 p-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-lg font-semibold">{tierName}</span>
               {status && (
-                <Badge variant={tierStatusVariant(status)} className="capitalize">
+                <Badge variant="outline" className="capitalize">
                   {status.replace('_', ' ')}
                 </Badge>
               )}
@@ -65,12 +64,12 @@ export function MerchantBillingSection({
             <div className="mt-1 text-sm text-muted-foreground">
               {coverage}
               {tierStatus.is_over_limit && (
-                <span className="ml-2 font-medium text-destructive">Over limit</span>
+                <span className="ml-2 font-medium text-foreground">Over limit</span>
               )}
             </div>
           </div>
           <div className="text-right">
-            <div className="flex items-center justify-end gap-1 text-2xl font-semibold">
+            <div className="flex items-center justify-end gap-1 text-2xl font-semibold tabular-nums">
               {formatTierPrice(priceCents)}
               <span className="text-sm font-normal text-muted-foreground">/mo</span>
             </div>
@@ -82,7 +81,7 @@ export function MerchantBillingSection({
 
         {/* Card on file */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border p-4">
+          <div className="rounded-2xl border p-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CreditCard className="h-4 w-4" />
               Billing card on file
@@ -95,15 +94,15 @@ export function MerchantBillingSection({
           </div>
 
           {/* Merchant-level unlocks */}
-          <div className="rounded-xl border p-4">
+          <div className="rounded-2xl border p-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Sparkles className="h-4 w-4" />
               Merchant unlocks
               <InfoHint label="Merchant-wide feature unlocks that add to the tier (e.g. Fine Dining: table mapping, reservations, tableside). A merchant can run many locations and still be Quick Service." />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Quick Service (default)</Badge>
-              <Badge variant="outline" className="text-muted-foreground">
+              <Badge variant="outline">Quick Service (default)</Badge>
+              <Badge variant="outline">
                 Fine Dining — not enabled
               </Badge>
             </div>

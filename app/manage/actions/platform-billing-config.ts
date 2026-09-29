@@ -142,6 +142,7 @@ export async function savePlatformNmiBillingConfig(params: {
 
   revalidatePath('/manage/settings')
   revalidatePath('/manage/settings/integrations')
+  revalidatePath('/manage/nmi-integration')
   revalidatePath('/manage/merchants')
 
   return { success: true }

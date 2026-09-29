@@ -23,7 +23,7 @@ export function LocationsWithoutSubscription({ locations, onSetup }: LocationsWi
   if (locations.length === 0) return null
 
   return (
-    <Card>
+    <Card className="rounded-3xl">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           Locations without a subscription
@@ -36,7 +36,7 @@ export function LocationsWithoutSubscription({ locations, onSetup }: LocationsWi
           {locations.map((location) => (
             <div
               key={location.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-dashed p-3"
+              className="flex items-center justify-between gap-3 rounded-2xl bg-muted/45 p-3"
             >
               <div className="flex min-w-0 items-center gap-2">
                 <MapPinOff className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -56,7 +56,7 @@ export function LocationsWithoutSubscription({ locations, onSetup }: LocationsWi
 
 function Badge({ count }: { count: number }) {
   return (
-    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700">
+    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted/60 px-1.5 text-xs font-semibold tabular-nums text-muted-foreground">
       {count}
     </span>
   )

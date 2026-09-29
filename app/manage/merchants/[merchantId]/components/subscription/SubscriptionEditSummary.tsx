@@ -54,7 +54,7 @@ export function SubscriptionEditSummary({
   const lineItems = quote?.line_items ?? []
 
   return (
-    <Card className="lg:sticky lg:top-6">
+    <Card className="rounded-3xl lg:sticky lg:top-6">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           Summary
@@ -70,7 +70,7 @@ export function SubscriptionEditSummary({
           </span>
         </div>
 
-        <div className="border-t pt-3">
+        <div>
           <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
             {locationName ? `Location · ${locationName}` : 'Location'}
           </div>
@@ -83,7 +83,7 @@ export function SubscriptionEditSummary({
                   <span className="min-w-0 truncate text-muted-foreground">
                     {readString(item, ['description', 'label', 'name'], 'Item')}
                   </span>
-                  <span className="shrink-0 font-medium">
+                  <span className="shrink-0 font-medium tabular-nums">
                     {formatMoney(readNumber(item, ['amount', 'total', 'line_total', 'subtotal']))}
                   </span>
                 </li>
@@ -93,7 +93,7 @@ export function SubscriptionEditSummary({
         </div>
 
         {/* Totals */}
-        <div className="space-y-1 border-t pt-3">
+        <div className="space-y-1 tabular-nums">
           <div className="flex items-center justify-between text-muted-foreground">
             <span>Subtotal</span>
             <span>{formatMoney(quote?.subtotal)}</span>
@@ -115,7 +115,7 @@ export function SubscriptionEditSummary({
         </div>
 
         {/* Card + cadence */}
-        <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
+        <div className="space-y-1 text-xs text-muted-foreground">
           <div className="flex items-center justify-between gap-2">
             <span>Charged to</span>
             <span className="text-right font-medium text-foreground">{cardLabel}</span>
