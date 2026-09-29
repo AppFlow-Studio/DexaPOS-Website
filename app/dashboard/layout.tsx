@@ -117,6 +117,8 @@ import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBot
 import { GlobalSearch } from "./components/global-search/GlobalSearch";
 import { FinancialNav } from "@/components/dashboard/financial/FinancialNav";
 import { isFinancialWorkspacePath } from "@/lib/navigation/financial";
+import { TeamNav } from "@/components/dashboard/staff/TeamNav";
+import { isTeamWorkspacePath } from "@/lib/navigation/team";
 import { resolveInitialLocationSelection } from "@/lib/locations/initial-selection";
 
 const navMain = [
@@ -187,14 +189,9 @@ const navMain = [
     title: "Management",
     items: [
       {
-        title: "Staff",
+        title: "Team",
         url: "/dashboard/staff",
         icon: Users,
-      },
-      {
-        title: "Schedules",
-        url: "/dashboard/schedules",
-        icon: Calendar,
       },
       {
         title: "Online Ordering",
@@ -766,8 +763,10 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                               isActive={
                                 menuItem.url === "/dashboard/financial"
                                   ? isFinancialWorkspacePath(pathname)
-                                  : pathname === menuItem.url ||
-                                    pathname.startsWith(menuItem.url + "/")
+                                  : menuItem.url === "/dashboard/staff"
+                                    ? isTeamWorkspacePath(pathname)
+                                    : pathname === menuItem.url ||
+                                      pathname.startsWith(menuItem.url + "/")
                               }
                             >
                               <Link href={menuItem.url}>
@@ -1545,7 +1544,7 @@ export default function MerchantDashboardLayout({
     { id: "home", label: "Home", icon: LayoutDashboard, url: "/dashboard" },
     { id: "orders", label: "Orders", icon: ShoppingCart, url: "/dashboard/orders" },
     { id: "menu", label: "Menu", icon: Utensils, url: "/dashboard/menu" },
-    { id: "staff", label: "Staff", icon: Users, url: "/dashboard/staff" },
+    { id: "staff", label: "Team", icon: Users, url: "/dashboard/staff", activeWhen: isTeamWorkspacePath },
   ];
 
   // Every page the sidebar can reach, flattened in sidebar order — nothing
@@ -1571,8 +1570,7 @@ export default function MerchantDashboardLayout({
     { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
     { title: "Modifiers", url: "/dashboard/menu/modifiers", icon: Layers },
 
-    // Management — "Staff" has a bottom-bar tab.
-    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
+    // Management — Team navigation contains scheduling and timesheets.
     { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
     { title: "Kiosk", url: "/dashboard/kiosk", icon: MonitorPlay },
     { title: "Customers", url: "/dashboard/customers", icon: User },
@@ -1668,6 +1666,7 @@ export default function MerchantDashboardLayout({
         </header>
         <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">
           {isFinancialWorkspacePath(pathname) && <FinancialNav pathname={pathname} />}
+          {isTeamWorkspacePath(pathname) && <TeamNav pathname={pathname} />}
           {children}
         </div>
       </main>

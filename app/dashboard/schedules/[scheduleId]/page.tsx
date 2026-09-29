@@ -14,7 +14,7 @@ export default function SchedulingPage({
     <PageShell>
       <PageHeader
         title="Schedule Editor"
-        subtitle="Assign shifts, review weekly coverage, and publish changes to your team."
+        subtitle="Assign shifts and review weekly coverage. Schedules are saved only in this browser."
         backHref="/dashboard/schedules"
         backLabel="Back to schedules"
       />

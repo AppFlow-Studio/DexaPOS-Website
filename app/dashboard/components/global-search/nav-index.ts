@@ -73,12 +73,14 @@ export const NAV_INDEX: NavSearchItem[] = [
   { label: "Menus", path: "/dashboard/menu", section: "Menus & Products", icon: Utensils },
   { label: "Items", path: "/dashboard/menu/items", section: "Menus & Products", icon: List, keywords: ["menu items", "products", "dishes"] },
   { label: "Categories", path: "/dashboard/menu/categories", section: "Menus & Products", icon: Tag, keywords: ["menu categories"] },
+  { label: "Menu availability", path: "/dashboard/menu/availability", section: "Menus & Products", icon: Calendar, keywords: ["menu schedules", "availability"] },
   { label: "Discounts", path: "/dashboard/discounts", section: "Menus & Products", icon: Banknote, keywords: ["promotions", "coupons", "deals"] },
   { label: "Modifiers", path: "/dashboard/menu/modifiers", section: "Menus & Products", icon: Layers, keywords: ["add ons", "options", "extras"] },
 
   // ── Management ──────────────────────────────────────────────────────────
-  { label: "Staff", path: "/dashboard/staff", section: "Management", icon: Users, keywords: ["employees", "team", "users"] },
-  { label: "Schedules", path: "/dashboard/schedules", section: "Management", icon: Calendar, keywords: ["shifts", "rota"] },
+  { label: "Team", path: "/dashboard/staff", section: "Management", icon: Users, keywords: ["staff", "employees", "users"] },
+  { label: "Scheduling", path: "/dashboard/schedules", section: "Management", icon: Calendar, keywords: ["shifts", "rota"] },
+  { label: "Timesheets", path: "/dashboard/staff/timesheets", section: "Management", icon: Calendar, keywords: ["hours", "clock in", "timecards"] },
   { label: "Online Ordering", path: "/dashboard/online-ordering", section: "Management", icon: Globe, keywords: ["web ordering", "storefront", "ecommerce"] },
   { label: "Customers", path: "/dashboard/customers", section: "Management", icon: User, keywords: ["guests", "clients", "patrons"] },
   { label: "Campaigns", path: "/dashboard/campaigns", section: "Management", icon: Megaphone, keywords: ["marketing", "sms", "telnyx", "message log", "delivery", "messages"] },

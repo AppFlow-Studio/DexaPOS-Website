@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { format, parse, parseISO, subDays } from 'date-fns'
 import { AlertTriangle, CalendarIcon, Download, RefreshCcwDot, ShieldCheck } from 'lucide-react'
@@ -102,12 +103,22 @@ function getOriginBadge(origin?: string | null) {
   }
 }
 
-function buildBatchExportCsv(batch: PlatformSettlementBatch, rows: PlatformSettlementBatchPayment[]): string {
+function buildBatchExportCsv(
+  batch: PlatformSettlementBatch,
+  rows: PlatformSettlementBatchPayment[],
+  terminalLookupFailed: boolean,
+): string {
+  const terminalAttribution = terminalLookupFailed
+    ? 'lookup unavailable'
+    : batch.terminal_serial ? 'linked' : batch.payment_terminal_id ? 'terminal record missing' : 'not recorded'
   const headers = [
     'batch_id',
     'business_date',
     'merchant',
     'location',
+    'terminal_name',
+    'terminal_serial',
+    'terminal_attribution',
     'batch_status',
     'batch_gross_amount',
     'linked_payment_amount',
@@ -130,6 +141,9 @@ function buildBatchExportCsv(batch: PlatformSettlementBatch, rows: PlatformSettl
     batch.business_date,
     batch.merchant_name,
     batch.location_name || '',
+    batch.terminal_name || '',
+    batch.terminal_serial || '',
+    terminalAttribution,
     batch.status,
     batch.gross_amount,
     batch.linked_payment_amount,
@@ -243,8 +257,9 @@ export function BatchReconciliationSection({
     refetch: refetchBatches,
   } = usePlatformSettlementBatches(filters)
 
-  const batches = batchesResult?.data || []
+  const batches = useMemo(() => batchesResult?.data || [], [batchesResult?.data])
   const batchErrorCode = batchesResult?.errorCode
+  const terminalLookupFailed = batchesResult?.terminalLookupFailed
 
   const selectedBatch = useMemo(
     () => batches.find((batch) => batch.id === selectedBatchId) || null,
@@ -322,7 +337,7 @@ export function BatchReconciliationSection({
       return
     }
 
-    const csv = buildBatchExportCsv(selectedBatch, batchPayments)
+    const csv = buildBatchExportCsv(selectedBatch, batchPayments, !!terminalLookupFailed)
     const filename = `DEXA_Batch_${formatBatchLabel(selectedBatch)}_${selectedBatch.business_date}.csv`
     downloadCsv(csv, filename)
   }
@@ -418,13 +433,19 @@ export function BatchReconciliationSection({
           </div>
         )}
 
+        {terminalLookupFailed && (
+          <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            Batch totals loaded, but terminal details could not be loaded. Device attribution is unavailable until you refresh.
+          </div>
+        )}
+
         <Table containerClassName="max-h-[42vh] overflow-auto rounded-md border">
           <TableHeader className="sticky top-0 z-20 bg-card">
             <TableRow>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Batch ID <InfoIcon tip="The settlement batch identifier, composed of acquirer prefix and batch number (e.g. TSYS-009)." side="bottom" /></span>
               </TableHead>
-              <TableHead>Merchant</TableHead>
+              <TableHead>{scopedMerchantId ? 'Batch Terminal / Location' : 'Merchant'}</TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Business Date <InfoIcon tip="The processing date the batch belongs to. Usually the calendar date of the settlement run." side="bottom" /></span>
               </TableHead>
@@ -443,7 +464,7 @@ export function BatchReconciliationSection({
                 <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
               </TableHead>
               <TableHead className="text-right">
-                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
+                <span className="inline-flex items-center justify-end gap-1">Batch Net <InfoIcon tip="Net amount recorded for this batch after refunds and fees. Check the funded status and processor deposit record before treating it as money received in the bank." side="bottom" /></span>
               </TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>
@@ -479,8 +500,33 @@ export function BatchReconciliationSection({
                 >
                   <TableCell className="font-mono text-xs">{formatBatchLabel(batch)}</TableCell>
                   <TableCell>
-                    <div className="font-medium">{batch.merchant_name}</div>
-                    <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
+                    {scopedMerchantId ? (
+                      <div>
+                        {batch.terminal_serial ? (
+                          <Link
+                            href={`/manage/merchants/${batch.merchant_id}/devices/terminal/${encodeURIComponent(batch.terminal_serial)}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {batch.terminal_name || 'Payment terminal'}
+                          </Link>
+                        ) : (
+                          <div className="font-medium text-muted-foreground">
+                            {terminalLookupFailed
+                              ? 'Terminal details unavailable'
+                              : batch.payment_terminal_id ? batch.terminal_name || 'Terminal record unavailable' : 'Terminal not recorded'}
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                          {batch.terminal_serial ? `Serial ${batch.terminal_serial} · ` : ''}{batch.location_name || 'No location'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="font-medium">{batch.merchant_name}</div>
+                        <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>{formatDateOnly(batch.business_date)}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(batch.opened_at)}</TableCell>
@@ -519,6 +565,25 @@ export function BatchReconciliationSection({
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-medium">Selected batch:</span>
               <Badge variant="outline" className="font-mono text-xs">{formatBatchLabel(selectedBatch)}</Badge>
+              {scopedMerchantId && (
+                <>
+                  <span className="text-muted-foreground">Batch terminal:</span>
+                  <span className="font-medium">
+                    {terminalLookupFailed
+                      ? 'Terminal details unavailable'
+                      : selectedBatch.terminal_name || selectedBatch.terminal_serial ||
+                        (selectedBatch.payment_terminal_id ? 'Terminal record unavailable' : 'Not recorded')}
+                  </span>
+                  {selectedBatch.terminal_serial && (
+                    <Link
+                      href={`/manage/merchants/${selectedBatch.merchant_id}/devices/terminal/${encodeURIComponent(selectedBatch.terminal_serial)}`}
+                      className="text-primary hover:underline"
+                    >
+                      Serial {selectedBatch.terminal_serial} · View device
+                    </Link>
+                  )}
+                </>
+              )}
               <span className="text-muted-foreground">Linked payments:</span>
               <span className="font-medium">{selectedBatch.linked_payment_count.toLocaleString()}</span>
               <span className="text-muted-foreground">Linked amount:</span>
@@ -536,10 +601,10 @@ export function BatchReconciliationSection({
                   disabled={SETTLED_BATCH_STATUSES.has(selectedBatch.status.toLowerCase())}
                 >
                   <ShieldCheck className="mr-2 h-4 w-4" />
-                  Manual Batchout
+                  Mark settled in Dexa
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  Super-admin only · marks this batch settled (reconciliation, not a terminal batchout).
+                  Super-admin only · records a reconciliation; does not close the batch on the terminal.
                 </span>
               </div>
             </PermissionGate>
@@ -619,6 +684,7 @@ export function BatchReconciliationSection({
 
         <ManualBatchoutDialog
           batch={selectedBatch}
+          terminalLookupFailed={terminalLookupFailed}
           open={manualBatchoutOpen}
           onOpenChange={setManualBatchoutOpen}
           onSuccess={handleRefresh}

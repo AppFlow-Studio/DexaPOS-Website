@@ -140,7 +140,7 @@ export function MenuSchedulesView() {
         <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-primary">
-              Menu availability
+              Availability windows
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Control when menus and categories are available.

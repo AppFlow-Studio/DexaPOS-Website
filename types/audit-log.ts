@@ -17,6 +17,7 @@ export const AUDIT_CATEGORIES = [
   "settings",
   "authentication",
   "order",
+  "settlement",
 ] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
