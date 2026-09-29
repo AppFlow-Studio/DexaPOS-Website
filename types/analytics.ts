@@ -800,6 +800,16 @@ export interface ServerLeaderboardRow {
   order_count: number;
 }
 
+/** D1 — Recognized orders no staff member rang up (kiosk, online, delivery apps) */
+export interface UnattributedChannelRow {
+  channel: string;
+  order_count: number;
+  total_sales: number;
+  avg_check_size: number;
+  total_tips: number;
+  avg_tip_pct: number;
+}
+
 /** D2 — Tips analysis summary */
 export interface TipsAnalysis {
   total_tips: number;
@@ -829,6 +839,8 @@ export interface StaffPerformanceStats {
   total_tips: number;
   avg_tip_pct: number;
   leaderboard: ServerLeaderboardRow[];
+  /** Absent until migration 20260928130000 is applied to the environment. */
+  unattributed?: UnattributedChannelRow[];
   tips_analysis: TipsAnalysis;
   order_activity: StaffOrderActivityRow[];
 }

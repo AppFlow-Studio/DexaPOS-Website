@@ -6,7 +6,7 @@ import {
   upsertReceiptTemplate,
   initializeDefaultTemplates,
 } from "@/app/dashboard/actions/receipt-templates";
-import type { UpsertReceiptTemplateInput } from "../types";
+import type { TemplateType, UpsertReceiptTemplateInput } from "../types";
 import { toast } from "sonner";
 
 /**
@@ -24,6 +24,9 @@ export function useReceiptTemplates(locationId: string) {
     },
     enabled: !!locationId && locationId !== "all",
     staleTime: 30_000,
+    // Edits from this page invalidate the list; edits made elsewhere (another
+    // tab, the POS) show up when the tab regains focus.
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -60,7 +63,8 @@ export function useUpsertReceiptTemplate() {
 }
 
 /**
- * Hook to initialize all default receipt templates for a location
+ * Hook to create default receipt templates for a location: every type, or only
+ * `templateTypes`. Never overwrites a template that already exists.
  */
 export function useInitializeDefaultTemplates() {
   const queryClient = useQueryClient();
@@ -69,23 +73,35 @@ export function useInitializeDefaultTemplates() {
     mutationFn: async ({
       clerkOrgId,
       locationId,
+      templateTypes,
     }: {
       clerkOrgId: string;
       locationId: string;
+      templateTypes?: TemplateType[];
     }) => {
-      const result = await initializeDefaultTemplates(clerkOrgId, locationId);
+      const result = await initializeDefaultTemplates(
+        clerkOrgId,
+        locationId,
+        templateTypes,
+      );
       if (!result.success) {
         throw new Error(
           result.error || "Failed to initialize default templates",
         );
       }
-      return result.data;
+      return result.data ?? [];
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (created, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["receipt-templates", variables.locationId],
       });
-      toast.success("Default receipt templates saved successfully");
+      if (created.length === 0) {
+        // Someone (another tab, the POS) saved this template first. Nothing
+        // was written; the refetch shows what they saved.
+        toast.info("This template is already set up. Showing its saved settings.");
+        return;
+      }
+      toast.success("Default receipt template saved");
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to initialize default templates");

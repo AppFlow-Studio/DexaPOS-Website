@@ -86,6 +86,16 @@ function zonedWallClockToUtc(
   return candidate;
 }
 
+/**
+ * Parse a report day key ("YYYY-MM-DD") as that calendar day in the viewer's
+ * timezone. `new Date("2026-09-02")` is UTC midnight, which renders as the
+ * previous day anywhere west of UTC.
+ */
+export function parseReportDateKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.slice(0, 10).split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
 export function buildReportingQueryRange(
   appliedRange: AppliedDateRange,
   timezones: Array<string | null | undefined>

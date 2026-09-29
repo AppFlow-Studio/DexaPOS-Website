@@ -30,10 +30,9 @@ import { MerchantPicker } from "./MerchantPicker";
 /**
  * Connection status, NOT viewing status.
  *
- * Deliberately never says "Live": the replay scrubber owns that word, and it
- * means "you are looking at the board as it is now" rather than "the socket is
- * up". Two badges both reading Live is how you get someone confidently
- * reporting on a board they are actually scrubbed twenty minutes back into.
+ * Deliberately never says "Live": it reports whether the socket is up, not
+ * whether the board on screen is current (the 5 s poll keeps it current
+ * either way).
  */
 function RealtimeBadge({
   status,
