@@ -29,7 +29,7 @@ const CARDS = [
     title: "Gross Tax Collected",
     icon: DollarSign,
     format: (s: TaxSummary) => fmt(s.grossTaxCollected),
-    sub: (s: TaxSummary) => `${s.totalOrders} completed orders`,
+    sub: (s: TaxSummary) => `${s.totalOrders} paid orders`,
   },
   {
     key: "taxRefunded" as const,

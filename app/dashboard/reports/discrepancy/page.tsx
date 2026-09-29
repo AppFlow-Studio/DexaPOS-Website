@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useVoidsReport, useFinancialKPIs } from "../../hooks/useOrderAnalytics";
+import { useReportDateRange } from "@/stores/report-date-range-store";
+import { useVoidsReport } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
   DatePreset,
@@ -104,11 +105,8 @@ const exportColumns = [
 ];
 
 export default function DiscrepancyReportPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | DiscrepancyType>("all");
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
@@ -124,11 +122,7 @@ export default function DiscrepancyReportPage() {
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
-  const { data: voidsData, isLoading: voidsLoading, isError: voidsError } = useVoidsReport(queryDateRange.from, queryDateRange.to);
-  const { data: financialKPIs, isLoading: analyticsLoading, isError: analyticsError } = useFinancialKPIs(queryDateRange.from, queryDateRange.to);
-
-  const isLoading = voidsLoading || analyticsLoading;
-  const isError = voidsError || analyticsError;
+  const { data: voidsData, isLoading, isError } = useVoidsReport(queryDateRange.from, queryDateRange.to);
 
   // Merge voids + refunds into unified discrepancy rows
   const allRows: DiscrepancyRow[] = useMemo(() => {
@@ -217,36 +211,42 @@ export default function DiscrepancyReportPage() {
   const totalRefunds = allRows.filter(r => r.type === "refund");
   const totalVoidAmt = totalVoids.reduce((s, r) => s + r.amount, 0);
   const totalRefundAmt = totalRefunds.reduce((s, r) => s + r.amount, 0);
-  // Count distinct affected orders (not raw event rows) to avoid >100% rates
+  // Distinct orders touched by a void or refund. No "% of orders" rate: most
+  // voided items sit on orders that were voided outright and never became
+  // paid orders, so dividing by the paid-order count mixes two populations
+  // (it read 92.7% on staging for 38 affected vs 41 paid orders).
   const affectedOrderIds = new Set(allRows.map(r => r.order_id));
-  const totalOrders = financialKPIs?.summary.order_count ?? 0;
-  const discrepancyRate = totalOrders > 0
-    ? ((affectedOrderIds.size / totalOrders) * 100).toFixed(1)
-    : "0.0";
+  // Sales part of the refunds — the same "Refunds" line Financials subtracts.
+  const refundedSales = (voidsData?.refunds ?? []).reduce(
+    (s, r) => s + (r.sales_amount ?? r.amount),
+    0
+  );
 
   const kpiCards = [
     {
       label: "Total Discrepancies",
       value: isLoading ? null : isError ? "—" : allRows.length.toLocaleString(),
-      sub: isError ? "Failed to load" : `${discrepancyRate}% of all orders`,
+      sub: isError
+        ? "Failed to load"
+        : `${affectedOrderIds.size.toLocaleString()} orders affected`,
       icon: ShieldAlert,
     },
     {
       label: "Void Events",
       value: isLoading ? null : isError ? "—" : totalVoids.length.toLocaleString(),
-      sub: isError ? "Failed to load" : `-$${totalVoidAmt.toFixed(2)} impact`,
+      sub: isError ? "Failed to load" : `$${totalVoidAmt.toFixed(2)} of items removed`,
       icon: AlertTriangle,
     },
     {
       label: "Refund Events",
       value: isLoading ? null : isError ? "—" : totalRefunds.length.toLocaleString(),
-      sub: isError ? "Failed to load" : `-$${totalRefundAmt.toFixed(2)} returned`,
+      sub: isError ? "Failed to load" : `$${totalRefundAmt.toFixed(2)} returned to customers`,
       icon: RefreshCcw,
     },
     {
-      label: "Total Financial Impact",
-      value: isLoading ? null : isError ? "—" : `-$${(totalVoidAmt + totalRefundAmt).toFixed(2)}`,
-      sub: isError ? "Failed to load" : "Revenue lost to discrepancies",
+      label: "Refunded Sales",
+      value: isLoading ? null : isError ? "—" : `-$${refundedSales.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Subtracted from net sales",
       icon: DollarSign,
     },
   ];
@@ -265,7 +265,7 @@ export default function DiscrepancyReportPage() {
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
-            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange(from, to); }}
             preset={preset}
             onPresetChange={setPreset}
           />

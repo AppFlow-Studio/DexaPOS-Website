@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useVoidsReport } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
@@ -81,11 +82,8 @@ function SortIcon<T extends string>({ col, active, dir }: { col: T; active: T; d
 }
 
 export default function VoidsReportPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [search, setSearch] = useState("");
   const [voidSort, setVoidSort] = useState<VoidSort>("voided_at");
   const [voidDir, setVoidDir] = useState<SortDir>("desc");
@@ -116,7 +114,12 @@ export default function VoidsReportPage() {
 
   const totalVoidAmount = data?.voids.reduce((s, r) => s + r.amount, 0) ?? 0;
   const totalRefundAmount = data?.refunds.reduce((s, r) => s + r.amount, 0) ?? 0;
-  const netImpact = totalVoidAmount + totalRefundAmount;
+  // Sales part of the refunds: exactly the "Refunds" line Financials subtracts
+  // to reach net sales. Voids are not added to it — a voided item never
+  // reached gross sales, so it is not money lost from sales.
+  const refundedSales =
+    data?.refunds.reduce((s, r) => s + (r.sales_amount ?? r.amount), 0) ?? 0;
+  const refundedOrderCount = new Set(data?.refunds.map((r) => r.order_id) ?? []).size;
 
   function sortItems<T extends Record<string, any>>(arr: T[], key: string, dir: SortDir) {
     return [...arr].sort((a, b) => {
@@ -169,25 +172,25 @@ export default function VoidsReportPage() {
     {
       label: "Voided Items",
       value: isLoading ? null : isError ? "—" : (data?.voids.length ?? 0).toLocaleString(),
-      sub: isError ? "Failed to load" : `-$${totalVoidAmount.toFixed(2)} lost`,
+      sub: isError ? "Failed to load" : "Items removed before payment",
       icon: AlertTriangle,
     },
     {
       label: "Total Void Amount",
       value: isLoading ? null : isError ? "—" : `$${totalVoidAmount.toFixed(2)}`,
-      sub: isError ? "Failed to load" : "Cancelled item value",
+      sub: isError ? "Failed to load" : "Removed item value",
       icon: TrendingDown,
     },
     {
       label: "Refunded Orders",
-      value: isLoading ? null : isError ? "—" : (data?.refunds.length ?? 0).toLocaleString(),
-      sub: isError ? "Failed to load" : `-$${totalRefundAmount.toFixed(2)} returned`,
+      value: isLoading ? null : isError ? "—" : refundedOrderCount.toLocaleString(),
+      sub: isError ? "Failed to load" : `$${totalRefundAmount.toFixed(2)} returned to customers`,
       icon: RefreshCcw,
     },
     {
-      label: "Total Net Impact",
-      value: isLoading ? null : isError ? "—" : `-$${netImpact.toFixed(2)}`,
-      sub: isError ? "Failed to load" : "Voids + refunds combined",
+      label: "Refunded Sales",
+      value: isLoading ? null : isError ? "—" : `-$${refundedSales.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Subtracted from net sales",
       icon: DollarSign,
     },
   ];
@@ -204,7 +207,7 @@ export default function VoidsReportPage() {
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
-            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange(from, to); }}
             preset={preset}
             onPresetChange={setPreset}
           />
