@@ -60,6 +60,7 @@ import { StationActivityTab } from "./components/StationActivityTab";
 import { RemoteActionsPanel } from "./components/RemoteActionsPanel";
 import { StationPrintersTab } from "./components/StationPrintersTab";
 import { StationMenusTab } from "./components/StationMenusTab";
+import { StationKioskTab } from "./components/StationKioskTab";
 
 // Tab configuration
 const TABS = [
@@ -68,6 +69,7 @@ const TABS = [
   // docs/features/menu-management/FEATURE-2026-09-19-PER-STATION-MENU-SCOPE-WEB.md);
   // it ships as its own tab next to Overview and is trivially relocatable.
   { id: "menus", label: "Menus" },
+  { id: "kiosk", label: "Kiosk" },
   { id: "devices", label: "Devices" },
   { id: "printers", label: "Printers" },
   { id: "terminal", label: "Payment Terminal" },
@@ -82,9 +84,19 @@ const TABS_HIDDEN_BY_STATION_TYPE: Record<string, string[]> = {
   kds: ["terminal", "menus"],
 };
 
+// Tabs that only make sense for one station type.
+const TABS_ONLY_FOR_STATION_TYPE: Record<string, string> = {
+  kiosk: "self_service",
+};
+
 function getVisibleTabs(stationType: string | null | undefined) {
   const hidden = TABS_HIDDEN_BY_STATION_TYPE[stationType ?? ""] ?? [];
-  return TABS.filter((tab) => !hidden.includes(tab.id));
+  return TABS.filter(
+    (tab) =>
+      !hidden.includes(tab.id) &&
+      (!TABS_ONLY_FOR_STATION_TYPE[tab.id] ||
+        TABS_ONLY_FOR_STATION_TYPE[tab.id] === stationType),
+  );
 }
 
 export default function StationDetailPage() {
@@ -423,6 +435,7 @@ export default function StationDetailPage() {
           <StationOverviewTab station={station} timeFilter={timeFilter} />
         )}
         {activeTab === "menus" && <StationMenusTab station={station} />}
+        {activeTab === "kiosk" && <StationKioskTab station={station} />}
         {activeTab === "devices" && <StationDevicesTab station={station} />}
         {activeTab === "printers" && <StationPrintersTab station={station} />}
         {activeTab === "terminal" && <PaymentTerminalTab station={station} />}
