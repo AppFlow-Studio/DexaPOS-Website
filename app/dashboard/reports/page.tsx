@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import {
   useFinancialKPIs,
-  useOrderAnalytics,
-  useRevenueBreakdown,
   useDualPricingComparison,
 } from "../hooks/useOrderAnalytics";
 import {
@@ -149,39 +148,35 @@ const SUB_REPORTS = [
 ];
 
 export default function ReportsPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
 
-  const { data: analytics, isLoading, isError } = useOrderAnalytics(
+  // Every figure on this page comes from get_financial_kpis, so it matches the
+  // other report pages by construction (shared definitions in
+  // supabase/migrations/20260930150000_report_number_consistency.sql).
+  const { data: financialKPIs, isLoading, isError } = useFinancialKPIs(
     queryDateRange.from,
     queryDateRange.to
   );
-  const { data: financialKPIs, isLoading: kpisLoading, isError: kpisError } = useFinancialKPIs(
-    queryDateRange.from,
-    queryDateRange.to
-  );
-  // Tax / service charge / discounts and dual-pricing for a complete export
-  const { data: revenueBreakdown } = useRevenueBreakdown(
-    queryDateRange.from,
-    queryDateRange.to
-  );
+  // Trend: the same calculation over the equal-length window just before.
+  const periodMs = queryDateRange.to.getTime() - queryDateRange.from.getTime();
+  const previousFrom = new Date(queryDateRange.from.getTime() - periodMs);
+  const { data: previousKPIs } = useFinancialKPIs(previousFrom, queryDateRange.from);
+  // Card vs cash tender split for the export only
   const { data: dualPricing } = useDualPricingComparison(
     queryDateRange.from,
     queryDateRange.to
   );
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
-    if (from && to) setDateRange({ from, to });
+    if (from && to) setDateRange(from, to);
   };
 
   // Derived metrics
   const totalSales = financialKPIs?.summary.net_sales ?? 0;
-  const previousSales = analytics?.previousPeriodSales ?? 0;
+  const previousSales = previousKPIs?.summary.net_sales ?? 0;
   const salesTrend =
     previousSales > 0 ? ((totalSales - previousSales) / previousSales) * 100 : null;
   const chartData = fillDailyFinancialStats(
@@ -194,23 +189,23 @@ export default function ReportsPage() {
   }));
 
   // Enriched daily rows for CSV/PDF export (tax, service charge, discounts, tender split)
-  const revenueByDate = new Map(
-    (revenueBreakdown?.byDate ?? []).map((d) => [d.date, d])
+  const dailyByDate = new Map(
+    (financialKPIs?.daily_stats ?? []).map((d) => [d.date.slice(0, 10), d])
   );
   const dualByDate = new Map(
     (dualPricing?.byDate ?? []).map((d) => [d.date, d])
   );
   const hasDualPricing = dualPricing?.hasDualPricing ?? false;
   const salesOverviewExport: SalesOverviewRow[] = chartData.map((row) => {
-    const rev = revenueByDate.get(row.date);
+    const day = dailyByDate.get(row.date);
     const dual = dualByDate.get(row.date);
     return {
       date: row.date,
       sales: row.sales,
       orders: row.orders,
-      tax: rev?.tax ?? 0,
-      serviceCharges: rev?.serviceCharges ?? 0,
-      discounts: rev?.discounts ?? 0,
+      tax: day?.tax ?? 0,
+      serviceCharges: day?.service_charge ?? 0,
+      discounts: day?.discounts ?? 0,
       cardRevenue: dual?.cardRevenue ?? 0,
       cashRevenue: dual?.cashRevenue ?? 0,
     };
@@ -219,9 +214,10 @@ export default function ReportsPage() {
     ? [...salesOverviewBaseColumns, ...salesOverviewDualPricingColumns]
     : salesOverviewBaseColumns;
 
-  const topOrderTypeEntry = Object.entries(
-    analytics?.orderTypeBreakdown ?? {}
-  ).sort(([, a], [, b]) => (b as number) - (a as number))[0];
+  const orderTypeBreakdown = Object.fromEntries(
+    (financialKPIs?.order_types ?? []).map((t) => [t.type, t.count])
+  );
+  const topOrderTypeEntry = Object.entries(orderTypeBreakdown).sort(([, a], [, b]) => (b as number) - (a as number))[0];
 
   const topOrderTypeLabel = topOrderTypeEntry
     ? topOrderTypeEntry[0]
@@ -230,11 +226,11 @@ export default function ReportsPage() {
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : "—";
 
-  const isAnyError = isError || kpisError;
+  const isAnyError = isError;
   const kpiCards = [
     {
       label: "Total Revenue",
-      value: isLoading || kpisLoading ? null : isAnyError ? "—" : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: isLoading ? null : isAnyError ? "—" : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
       trend: isAnyError ? null : salesTrend,
       description: isAnyError
@@ -245,17 +241,17 @@ export default function ReportsPage() {
     },
     {
       label: "Total Orders",
-      value: isLoading || kpisLoading ? null : isAnyError ? "—" : (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
+      value: isLoading ? null : isAnyError ? "—" : (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
       icon: ShoppingCart,
       trend: null,
-      description: isAnyError ? "Failed to load" : "Completed orders",
+      description: isAnyError ? "Failed to load" : "Paid orders",
     },
     {
       label: "Avg Order Value",
-      value: isLoading || kpisLoading ? null : isAnyError ? "—" : `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
+      value: isLoading ? null : isAnyError ? "—" : `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
       icon: TrendingUp,
       trend: null,
-      description: isAnyError ? "Failed to load" : "Per transaction",
+      description: isAnyError ? "Failed to load" : "Net sales ÷ orders",
     },
     {
       label: "Top Order Type",
@@ -306,7 +302,7 @@ export default function ReportsPage() {
                   value: `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
                 },
               ]}
-              disabled={isLoading || kpisLoading || isAnyError}
+              disabled={isLoading || isAnyError}
             />
           </div>
         }
@@ -342,22 +338,21 @@ export default function ReportsPage() {
       </Panel>
 
       {/* ── Sales Chart (full-width) ────────────────────────────── */}
-      <SalesChart data={chartData} isLoading={isLoading || kpisLoading} />
+      <SalesChart data={chartData} isLoading={isLoading} />
 
       {/* ── Bottom row: Order Sources / Top Items / Reports ──────── */}
       <div className="grid min-w-0 gap-6 lg:grid-cols-3">
         {/* Order Sources */}
         <OrderTypeChart
-          data={
-            analytics?.orderTypeBreakdown ?? {
-              dine_in: 0,
-              qr_dine_in: 0,
-              takeout: 0,
-              delivery: 0,
-              online: 0,
-              catering: 0,
-            }
-          }
+          data={{
+            dine_in: 0,
+            qr_dine_in: 0,
+            takeout: 0,
+            delivery: 0,
+            online: 0,
+            catering: 0,
+            ...orderTypeBreakdown,
+          }}
           isLoading={isLoading}
         />
 
@@ -377,13 +372,13 @@ export default function ReportsPage() {
                   />
                 ))}
               </div>
-            ) : (analytics?.bestSellingItems ?? []).length === 0 ? (
+            ) : (financialKPIs?.best_sellers ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No item data available
               </p>
             ) : (
               <div className="divide-y divide-border/60">
-                {(analytics?.bestSellingItems ?? [])
+                {(financialKPIs?.best_sellers ?? [])
                   .slice(0, 6)
                   .map((item, i) => (
                     <div

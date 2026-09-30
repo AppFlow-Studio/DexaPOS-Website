@@ -25,6 +25,8 @@ export interface HourlyComparisonData {
   location_id: string;
   location_name: string;
   business_date: string;
+  /** Location-local weekday, 0 = Sunday … 6 = Saturday (when aggregated by weekday). */
+  day_of_week?: number;
   hour_of_day: number;
   gross_sales: number;
   order_count: number;

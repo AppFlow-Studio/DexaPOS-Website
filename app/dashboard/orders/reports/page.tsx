@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 
@@ -11,7 +11,9 @@ import {
   PageShell,
   Panel,
 } from '@/components/dashboard/shell'
-import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
+import { DateRangePicker } from '@/components/dashboard/orders/DateRangePicker'
+import { useReportDateRange } from '@/stores/report-date-range-store'
+import { useReportingQueryRange } from '@/app/dashboard/hooks/useReportingDateRange'
 import { SalesSummaryReport } from '@/components/dashboard/orders/reports/SalesSummaryReport'
 import { HourlySalesReport } from '@/components/dashboard/orders/reports/HourlySalesReport'
 import { ItemSalesReport } from '@/components/dashboard/orders/reports/ItemSalesReport'
@@ -39,14 +41,16 @@ export default function ReportsPage() {
   const selectedLocation = useSelectedLocation()
   const isAllLocations = useIsAllLocations()
 
-  // Date range state
-  const [preset, setPreset] = useState<DatePreset>('last_7_days')
-  const [dateFrom, setDateFrom] = useState<Date>(() => {
-    const date = new Date()
-    date.setDate(date.getDate() - 7)
-    return date
-  })
-  const [dateTo, setDateTo] = useState<Date>(new Date())
+  // Date range shared with every other report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange()
+  // Same location-timezone window as the /dashboard/reports pages, so a day
+  // here is the same day there. The tabs take an inclusive end.
+  const queryDateRange = useReportingQueryRange(dateRange)
+  const dateFrom = queryDateRange.from
+  const dateTo = useMemo(
+    () => new Date(queryDateRange.to.getTime() - 1),
+    [queryDateRange.to]
+  )
   const [activeTab, setActiveTab] = useState<string>('sales-summary')
   const [orderSource, setOrderSource] = useState<OrderSource | null>(null)
 
@@ -55,10 +59,7 @@ export default function ReportsPage() {
   const locationName = isAllLocations ? 'All Locations' : selectedLocation?.name
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
-    if (from && to) {
-      setDateFrom(from)
-      setDateTo(to)
-    }
+    if (from && to) setDateRange(from, to)
   }
 
   const reportProps = { dateFrom, dateTo, merchantName, locationName }
@@ -130,8 +131,8 @@ export default function ReportsPage() {
             live on one control row so the filters read as a single group. */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <DateRangePicker
-            dateFrom={dateFrom}
-            dateTo={dateTo}
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
             onDateRangeChange={handleDateRangeChange}
             preset={preset}
             onPresetChange={setPreset}

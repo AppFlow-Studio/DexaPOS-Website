@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useCashFlowReport } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
@@ -76,11 +77,8 @@ const exportColumns = [
 ];
 
 export default function CashManagementPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -163,7 +161,7 @@ export default function CashManagementPage() {
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
-            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange(from, to); }}
             preset={preset}
             onPresetChange={setPreset}
           />

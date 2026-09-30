@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { startOfMonth } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
@@ -30,11 +31,8 @@ import { PageShell } from "@/components/dashboard/shell";
 const PAGE_SIZE = 50;
 
 export default function TaxReportPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: startOfMonth(new Date()),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("this_month");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [activeTab, setActiveTab] = useState("breakdown");
   const [page, setPage] = useState(0);
   const [filterOrderType, setFilterOrderType] = useState("all");
@@ -50,7 +48,7 @@ export default function TaxReportPage() {
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
     if (from && to) {
-      setDateRange({ from, to });
+      setDateRange(from, to);
       setPage(0);
     }
   }
