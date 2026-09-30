@@ -119,9 +119,9 @@ export function FiltersPanel({
               </div>
             </div>
 
-            {/* Roles Filter */}
+            {/* Shift positions, not access roles. */}
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Roles</Label>
+              <Label className="text-xs text-muted-foreground">Positions</Label>
               <div className="flex flex-wrap gap-1">
                 {ROLES.map((role) => (
                   <Button

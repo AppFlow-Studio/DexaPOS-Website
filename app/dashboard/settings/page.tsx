@@ -14,13 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { useLocationTaxRates, useUpsertTaxRate, useDeactivateTaxRate } from '../hooks/useTaxRates'
-import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
+import { useGatedLocationId } from '@/stores/location-store'
 import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
 import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import {
-    LocationIndicator,
     PageHeader,
     Panel,
     PanelSection,
@@ -36,7 +35,6 @@ export default function TaxSettingsPage() {
     // skip the "Select a Location" prompt. The tax hooks below resolve the same
     // way internally (see useTaxRates), so data/mutations target the one location.
     const isAllLocations = !useGatedLocationId()
-    const selectedLocation = useGatedLocation()
     const { data: taxRatesData, isLoading } = useLocationTaxRates()
     const upsertMutation = useUpsertTaxRate()
     const deactivateMutation = useDeactivateTaxRate()
@@ -101,7 +99,6 @@ export default function TaxSettingsPage() {
                 <PageHeader
                     title="General & tax"
                     subtitle="Configure location-specific tax rates and account billing."
-                    indicator={<LocationIndicator isAllLocations locationName={null} />}
                     actions={
                       <Button variant="outline" asChild>
                         <Link href="/dashboard/settings/billing">
@@ -135,12 +132,6 @@ export default function TaxSettingsPage() {
             <PageHeader
                 title="General & tax"
                 subtitle="Configure tax categories and rates for this location."
-                indicator={
-                    <LocationIndicator
-                        isAllLocations={false}
-                        locationName={selectedLocation?.name}
-                    />
-                }
                 actions={
                   <Button variant="outline" asChild>
                     <Link href="/dashboard/settings/billing">

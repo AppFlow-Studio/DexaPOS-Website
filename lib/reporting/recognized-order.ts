@@ -42,6 +42,43 @@ export function applyReportablePredicate<T>(query: T, prefix = ""): T {
 }
 
 /**
+ * Sale-order predicate used by the report pages — mirrors SQL
+ * `public.is_order_sale` (supabase/migrations/20260930150000_report_number_consistency.sql):
+ *
+ *   status NOT IN ('draft','cancelled','void','declined')
+ *   AND payment_status IN ('paid','captured','partially_refunded','refunded')
+ *
+ * Unlike the recognized-order predicate above, refunded orders stay IN: a
+ * refunded sale is still a sale, and its refund is subtracted on its own line
+ * (Gross − Discounts − Refunds = Net). Prefer the `get_sales_report` RPC for
+ * money; use this only to pick the same order set for row-level lists.
+ */
+export const SALE_PAYMENT_STATUSES = [
+  "paid",
+  "captured",
+  "partially_refunded",
+  "refunded",
+] as const;
+
+export const NON_SALE_ORDER_STATUSES = "(draft,cancelled,void,declined)";
+
+export function applySalePredicate<T>(query: T, prefix = ""): T {
+  return (query as any)
+    .in(`${prefix}payment_status`, [...SALE_PAYMENT_STATUSES])
+    .not(`${prefix}status`, "in", NON_SALE_ORDER_STATUSES) as T;
+}
+
+export function isOrderSale(o: {
+  status?: string | null;
+  payment_status?: string | null;
+}): boolean {
+  return (
+    (SALE_PAYMENT_STATUSES as readonly string[]).includes(o.payment_status ?? "") &&
+    !["draft", "cancelled", "void", "declined"].includes(o.status ?? "")
+  );
+}
+
+/**
  * In-memory equivalent for filtering already-fetched rows. Use only when a row
  * set was fetched without the DB-level gate (prefer the query builder version).
  */

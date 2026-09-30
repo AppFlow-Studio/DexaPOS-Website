@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useCashFlowReport } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
@@ -35,7 +36,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import { exportToCsv } from "@/utils/export";
 import { format as dateFnsFormat } from "date-fns";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
@@ -76,11 +77,8 @@ const exportColumns = [
 ];
 
 export default function CashManagementPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -93,7 +91,6 @@ export default function CashManagementPage() {
   const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
   const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
   const { data: cashTransactions, isLoading, isError } = useCashFlowReport(queryDateRange.from, queryDateRange.to);
 
@@ -160,12 +157,11 @@ export default function CashManagementPage() {
       <ReportPageHeader
         title="Cash Management"
         description="Cash drawer activity and cash payments"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
-            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange(from, to); }}
             preset={preset}
             onPresetChange={setPreset}
           />

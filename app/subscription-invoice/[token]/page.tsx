@@ -83,7 +83,7 @@ export default async function PublicSubscriptionInvoicePage({ params }: PageProp
               Download PDF
             </a>
             <a
-              href="/dashboard/subscriptions/billing"
+              href="/dashboard/subscriptions?section=billing"
               style={{ color: C.primary }}
               className="inline-flex items-center gap-1.5 text-sm font-semibold no-underline"
             >

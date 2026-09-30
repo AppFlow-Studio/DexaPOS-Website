@@ -1,5 +1,6 @@
 export type PosUiScale = "compact" | "comfortable" | "large";
 export type PosAppTheme = "system" | "light" | "dark";
+export type PosOrderNumberScope = "per_station" | "location_wide";
 
 export interface PosPrintingConfig {
   showTaxBreakdown: boolean;
@@ -27,6 +28,13 @@ export interface PosNotificationConfig {
   volume: number;
 }
 
+export interface PosOrderingConfig {
+  // "per_station": order numbers are partitioned per register (e.g. #S1-0042).
+  // "location_wide": one shared counter across the whole location (e.g. #0042).
+  // See docs — the tablet reads this via get_effective_pos_config.
+  orderNumberScope: PosOrderNumberScope;
+}
+
 export interface PosConfig {
   _schema?: "pos_config_v1";
   _version?: number;
@@ -35,6 +43,7 @@ export interface PosConfig {
   payment: PosPaymentConfig;
   display: PosDisplayConfig;
   notifications: PosNotificationConfig;
+  ordering: PosOrderingConfig;
 }
 
 export interface StationPosConfigOverrides {
@@ -66,6 +75,9 @@ export const DEFAULT_POS_CONFIG: PosConfig = {
   notifications: {
     soundEnabled: true,
     volume: 70,
+  },
+  ordering: {
+    orderNumberScope: "per_station",
   },
 };
 
@@ -126,7 +138,18 @@ export function normalizePosConfig(config: unknown): PosConfig {
         Number((merged.notifications as PosNotificationConfig | undefined)?.volume),
       ),
     },
+    ordering: {
+      ...DEFAULT_POS_CONFIG.ordering,
+      ...(isRecord(merged.ordering) ? merged.ordering : {}),
+      orderNumberScope: normalizeOrderNumberScope(
+        (merged.ordering as PosOrderingConfig | undefined)?.orderNumberScope,
+      ),
+    },
   } as PosConfig;
+}
+
+export function normalizeOrderNumberScope(value: unknown): PosOrderNumberScope {
+  return value === "location_wide" ? "location_wide" : "per_station";
 }
 
 export function normalizeStationOverrides(

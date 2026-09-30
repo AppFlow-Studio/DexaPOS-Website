@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { subDays } from "date-fns";
-import { PageShell, PageHeader, LocationIndicator } from "@/components/dashboard/shell";
+import { PageShell, PageHeader } from "@/components/dashboard/shell";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { DateRangePicker, type DatePreset } from "@/components/dashboard/orders/DateRangePicker";
 import { useOrders } from "../hooks/useOrder";
-import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
+import { useSelectedLocation } from "@/stores/location-store";
 import type { OrderResponse } from "@/types/order-management";
 import { TransactionsList } from "./components/TransactionsList";
 
@@ -18,7 +18,6 @@ export default function TransactionsPage() {
   const [preset, setPreset] = useState<DatePreset>("last_7_days");
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
   const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const { data: orders, isLoading } = useOrders({ dateRange });
 
   return (
@@ -26,12 +25,6 @@ export default function TransactionsPage() {
       <PageHeader
         title="Transactions"
         subtitle="Browse orders, payment status, and receipts"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

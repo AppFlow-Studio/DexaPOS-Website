@@ -7,6 +7,7 @@ Merchant and HQ reporting, date boundaries, reportability, channels, and source 
 - [BUG-2026-09-26-SERVER-PERFORMANCE-FANOUT-AND-SALES-SUMMARY-DAYS.md](BUG-2026-09-26-SERVER-PERFORMANCE-FANOUT-AND-SALES-SUMMARY-DAYS.md) - Server Performance totals inflated by a join fan-out; Sales Summary days shifted
 - [PLAN-2026-06-04-REPORTING-DATE-RANGE-BOUNDARIES.md](PLAN-2026-06-04-REPORTING-DATE-RANGE-BOUNDARIES.md) - Reporting Date Range Boundaries And Loading State
 - [PLAN-2026-07-30-KIOSK-CHANNEL-REPORTING-WEB.md](PLAN-2026-07-30-KIOSK-CHANNEL-REPORTING-WEB.md) - [Reporting - Kiosk] Website Channel-Segmented Reports
+- [PLAN-2026-09-30-REPORT-NUMBER-CONSISTENCY.md](PLAN-2026-09-30-REPORT-NUMBER-CONSISTENCY.md) - One shared calculation behind every report page (revenue, refunds, tax, AOV, comparison)
 - [recognized-order-predicate.md](recognized-order-predicate.md) - Recognized-Order Canonical Predicate â€” Reporting Consistency Fix
 - [recognized-order-test-summary.md](recognized-order-test-summary.md) - Recognized-Order Predicate â€” Work & Test Summary
 

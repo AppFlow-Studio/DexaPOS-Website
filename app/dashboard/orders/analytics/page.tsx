@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect } from 'react'
-import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
+
 import {
   useOrderAnalytics,
   useRevenueBreakdown,
@@ -28,7 +28,6 @@ import {
 import { DollarSign, Settings } from 'lucide-react'
 
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
 } from '@/components/dashboard/shell'
@@ -101,8 +100,6 @@ const TABS = [
 /* ----------------------- Component ----------------------- */
 
 export default function AnalyticsPage() {
-  const selectedLocation = useSelectedLocation()
-  const isAllLocations = useIsAllLocations()
 
   /* ---------------- Date State ---------------- */
 
@@ -339,12 +336,6 @@ export default function AnalyticsPage() {
         subtitle="View detailed analytics and insights for your orders"
         backHref="/dashboard/orders"
         backLabel="Back to Orders"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
       />
 
       {/* Settings Dialog */}

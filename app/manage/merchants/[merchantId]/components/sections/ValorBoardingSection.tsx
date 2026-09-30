@@ -17,6 +17,14 @@ import { EmptySection } from './EmptySection'
 import { SectionHead } from './SectionHead'
 import { AcquirerProfileSheet } from './AcquirerProfileSheet'
 
+/**
+ * Automatic boarding (Valor /create, then a store + EPI per location) is parked:
+ * locations are boarded manually for now and show up below once their Valor
+ * account exists. Status and "Set live" stay available. Flip to `true` to bring
+ * back the processing-credentials and "Board on Valor" steps.
+ */
+const AUTO_BOARDING_ENABLED = false
+
 function statusVariant(boarded: boolean): 'default' | 'secondary' {
   return boarded ? 'default' : 'secondary'
 }
@@ -125,10 +133,14 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
     <div>
       <SectionHead
         title="Valor Boarding"
-        sub="Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO."
+        sub={
+          AUTO_BOARDING_ENABLED
+            ? 'Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO.'
+            : 'Valor status per location for online-order checkout. Locations are boarded manually for now, then set live here.'
+        }
       />
 
-      {acquirer && (
+      {AUTO_BOARDING_ENABLED && acquirer && (
         <AcquirerProfileSheet
           merchantId={merchantId}
           profile={acquirer}
@@ -152,8 +164,23 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
         />
       ) : (
         <>
+          {!AUTO_BOARDING_ENABLED && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
+              <div className="space-y-1">
+                <div className="font-medium">Board on Valor</div>
+                <div className="text-xs text-muted-foreground">
+                  Automatic boarding is coming soon. Locations are boarded manually for now and
+                  appear below once their Valor account is added.
+                </div>
+              </div>
+              <Badge variant="secondary" className="shrink-0">
+                Coming soon
+              </Badge>
+            </div>
+          )}
+
           {/* Step 1 — processing credentials (gates boarding) */}
-          {acquirer && (
+          {AUTO_BOARDING_ENABLED && acquirer && (
             <div
               className={`mb-3 rounded-lg border p-4 ${
                 acquirerReady ? 'bg-card' : 'border-amber-300 bg-amber-50 text-amber-900'
@@ -199,6 +226,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
           )}
 
           {/* Step 2 — board on Valor */}
+          {AUTO_BOARDING_ENABLED && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
             <div className="space-y-1">
               <div className="font-medium">
@@ -226,8 +254,9 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                   : 'Board on Valor'}
             </Button>
           </div>
+          )}
 
-          {blockers && blockers.length > 0 && (
+          {AUTO_BOARDING_ENABLED && blockers && blockers.length > 0 && (
             <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertTriangle className="h-4 w-4" />
@@ -298,7 +327,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                           (setPrimary.isPending && setPrimary.variables === row.locationId)
                         }
                         onClick={() => handleSetLive(row.locationId, row.locationName)}
-                        title={row.hasApiKeys ? undefined : 'Missing API keys — re-provision this location first'}
+                        title={row.hasApiKeys ? undefined : 'Missing API keys — add this location’s Valor keys first'}
                       >
                         {setPrimary.isPending && setPrimary.variables === row.locationId
                           ? 'Setting live…'

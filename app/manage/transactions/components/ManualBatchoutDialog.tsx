@@ -41,11 +41,13 @@ function batchLabel(batch: Pick<PlatformSettlementBatch, 'batch_number' | 'acqui
  */
 export function ManualBatchoutDialog({
   batch,
+  terminalLookupFailed,
   open,
   onOpenChange,
   onSuccess,
 }: {
   batch: PlatformSettlementBatch | null
+  terminalLookupFailed?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void | Promise<void>
@@ -104,7 +106,7 @@ export function ManualBatchoutDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-amber-600" />
-            Manual Batchout
+            Mark settled in Dexa
           </DialogTitle>
           <DialogDescription>
             Mark this batch <strong>settled</strong> in Dexa and settle its linked payments. Use this
@@ -122,6 +124,16 @@ export function ManualBatchoutDialog({
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Merchant</span>
                 <span className="font-medium">{batch.merchant_name}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Linked terminal</span>
+                <span className="text-right font-medium">
+                  {terminalLookupFailed
+                    ? 'Terminal details unavailable'
+                    : batch.terminal_name || batch.terminal_serial ||
+                      (batch.payment_terminal_id ? 'Terminal record unavailable' : 'Not recorded')}
+                  {batch.terminal_serial && <span className="block text-xs text-muted-foreground">Serial {batch.terminal_serial}</span>}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Linked amount</span>
@@ -181,7 +193,7 @@ export function ManualBatchoutDialog({
                 Settling…
               </>
             ) : (
-              'Confirm Manual Batchout'
+              'Mark settled in Dexa'
             )}
           </Button>
         </DialogFooter>

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -119,7 +120,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     // Local state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [searchTerm, setSearchTerm] = useState('')
-    const [activeTab, setActiveTab] = useState<'stations' | 'terminals'>('stations')
+    const [activeTab, setActiveTab] = useState<'stations' | 'terminals'>('terminals')
     const [isAddStationOpen, setIsAddStationOpen] = useState(false)
     const [isAddTerminalOpen, setIsAddTerminalOpen] = useState(false)
     const [editTerminal, setEditTerminal] = useState<(PaymentTerminal & { location_name: string; station_name: string | null }) | null>(null)
@@ -296,10 +297,15 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                 <div className="min-w-0">
                     <h2 className="text-2xl font-bold tracking-tight">Stations & Terminals</h2>
                     <p className="text-muted-foreground">
-                        Manage POS stations and payment terminals for this merchant
+                        A station is a POS workspace. A payment terminal is the card reader linked to batches and payments.
                     </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={`/manage/merchants/${merchantId}?tab=settlements`}>
+                            View batches & deposits
+                        </Link>
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => {
                         refetchStations()
                         refetchTerminals()
@@ -576,6 +582,9 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                             {/* Terminals Tab Content */}
                             {activeTab === 'terminals' && (
                                 <>
+                                    <p className="text-sm text-muted-foreground">
+                                        Select a terminal name to review its batches and activity. Use the row menu to edit its settings or test the connection.
+                                    </p>
                                     {/* Unique terminals, deduplicated by serial number (Castles + Valor) */}
                                     <ConnectedTerminalsPanel
                                         merchantId={merchantId}
@@ -621,7 +630,16 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                     <CreditCard className="h-5 w-5" />
                                                                 </div>
                                                                 <div>
-                                                                    <div className="font-medium">{terminal.terminal_name}</div>
+                                                                    {terminal.serial_number ? (
+                                                                        <Link
+                                                                            href={`/manage/merchants/${merchantId}/devices/terminal/${encodeURIComponent(terminal.serial_number)}`}
+                                                                            className="font-medium text-primary hover:underline"
+                                                                        >
+                                                                            {terminal.terminal_name}
+                                                                        </Link>
+                                                                    ) : (
+                                                                        <div className="font-medium">{terminal.terminal_name}</div>
+                                                                    )}
                                                                     <div className="text-sm text-muted-foreground">
                                                                         {terminal.location_name}
                                                                     </div>
@@ -672,9 +690,17 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                         </Button>
                                                                     </DropdownMenuTrigger>
                                                                     <DropdownMenuContent align="end">
+                                                                        {terminal.serial_number && (
+                                                                            <DropdownMenuItem asChild>
+                                                                                <Link href={`/manage/merchants/${merchantId}/devices/terminal/${encodeURIComponent(terminal.serial_number)}`}>
+                                                                                    <CreditCard className="h-4 w-4 mr-2" />
+                                                                                    View batches & activity
+                                                                                </Link>
+                                                                            </DropdownMenuItem>
+                                                                        )}
                                                                         <DropdownMenuItem onClick={() => setEditTerminal(terminal)}>
                                                                             <Settings2 className="h-4 w-4 mr-2" />
-                                                                            Edit
+                                                                            Edit terminal settings
                                                                         </DropdownMenuItem>
                                                                         <DropdownMenuItem
                                                                             onClick={() => handleTestConnection(terminal)}

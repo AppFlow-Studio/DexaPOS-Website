@@ -43,6 +43,11 @@ export interface SalesByItemReportV2Item {
   category: string;
   quantity_sold: number;
   gross_sales: number;
+  /** Order discounts allocated to this item. */
+  discounts?: number;
+  /** Sales portion of refunds allocated to this item (dated by refund). */
+  refunds?: number;
+  /** gross_sales − discounts − refunds */
   net_sales: number;
 }
 

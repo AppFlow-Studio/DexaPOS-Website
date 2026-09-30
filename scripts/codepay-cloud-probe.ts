@@ -14,9 +14,14 @@
  *     --ref CP_1790542126063_d668 --ref CP_1790000000000_0000 \
  *     [--canary-ref <known approved CP_ ref; defaults to the first --ref>] \
  *     --trans-no 51126005503260925000031 \
- *     [--env-out ./codepay-cloud.env --location <location uuid>]
+ *     [--env-out ./codepay-cloud.env --location <location uuid | default>]
+ *
+ * `--location default` writes the shared entry every location falls back to;
+ * it leaves merchant_no out (the function reads each location's from its own
+ * CodePay sales), so --merchant-no there only picks whose sales to probe.
  *
  * Then: supabase secrets set --env-file ./codepay-cloud.env [--project-ref …]
+ * The env file holds ONE entry and the secret is replaced whole on `set`.
  * The private key and the signing string are never printed.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -110,7 +115,8 @@ for (const transNo of a.get("trans-no") ?? []) {
 const envOut = one("env-out");
 if (envOut) {
   const location = need("location");
-  const entry = { [location]: cfg };
+  const { merchant_no: _merchantNo, ...shared } = cfg;
+  const entry = { [location]: location === "default" ? shared : cfg };
   // Base64 so the multi-line PEM survives the env file untouched; the function
   // accepts raw JSON or base64.
   const encoded = Buffer.from(JSON.stringify(entry), "utf8").toString("base64");
