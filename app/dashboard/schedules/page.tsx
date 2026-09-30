@@ -37,9 +37,12 @@ export default function SchedulesPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Staff Scheduling"
-        subtitle="Build team schedules and review labor coverage."
+        title="Scheduling"
+        subtitle="Plan team shifts and review labor coverage."
       />
+      <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+        Schedules and reports on this page are saved only in this browser. Staff cannot see them and no notifications are sent.
+      </p>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="min-w-0">
         <div ref={sectionRailRef} className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">

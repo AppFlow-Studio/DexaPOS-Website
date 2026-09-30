@@ -38,7 +38,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -338,27 +337,6 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     );
   };
 
-  const handleStaffStatusToggle = (staff: UnifiedStaffMember) => {
-    const primaryLocation =
-      staff.location_assignments.find((assignment) => assignment.is_primary) ||
-      staff.location_assignments[0];
-
-    if (!primaryLocation || !staff.staff_profile_id) return;
-
-    if (staff.overall_is_active) {
-      deactivateStaff.mutate({
-        staffProfileId: staff.staff_profile_id,
-        locationId: primaryLocation.location_id,
-      });
-      return;
-    }
-
-    reactivateStaff.mutate({
-      staffProfileId: staff.staff_profile_id,
-      locationId: primaryLocation.location_id,
-    });
-  };
-
   const columns: ColumnDef<UnifiedStaffMember>[] = [
     {
       id: "select",
@@ -519,54 +497,27 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       header: "Status",
       cell: ({ row }) => {
         const staff = row.original;
-        const primaryLocation =
-          staff.location_assignments.find((a) => a.is_primary) ||
-          staff.location_assignments[0];
-
         return (
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={staff.overall_is_active}
-              onCheckedChange={() => handleStaffStatusToggle(staff)}
-              disabled={
-                !primaryLocation ||
-                deactivateStaff.isPending ||
-                reactivateStaff.isPending
-              }
-            />
-            <span
-              className={cn(
-                "text-sm font-medium",
-                staff.overall_is_active
-                  ? "text-green-600"
-                  : "text-muted-foreground",
-              )}
-            >
-              {staff.overall_is_active ? "Active" : "Inactive"}
-            </span>
-          </div>
+          <Badge variant="secondary" className={cn(
+            "rounded-full border-0",
+            staff.overall_is_active ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400" : "text-muted-foreground",
+          )}>
+            {staff.overall_is_active ? "Active" : "Inactive"}
+          </Badge>
         );
       },
     },
     {
       accessorKey: "pos_access",
-      header: "POS Access",
+      header: "Access",
       cell: ({ row }) => {
         const staff = row.original;
         const hasPin = staff.location_assignments.some((a) => a.has_pin);
 
-        return (
-          <div className="flex items-center gap-2">
-            {hasPin ? (
-              <div className="flex items-center gap-1.5 text-green-600">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="text-sm font-medium">PIN Set</span>
-              </div>
-            ) : (
-              <span className="text-muted-foreground text-sm">No PIN</span>
-            )}
-          </div>
-        );
+        return <span className="text-sm">
+          {staff.is_clerk_user ? "Dashboard" : "POS only"}
+          {hasPin && <span className="text-muted-foreground"> - PIN set</span>}
+        </span>;
       },
     },
     {
@@ -582,6 +533,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             toast.error("No primary location found");
             return;
           }
+          if (!window.confirm(`Reset ${staff.display_name}'s PIN at ${primaryLocation.location_name}?`)) return;
 
           resetPIN.mutate({
             memberId: staff.member_id,
@@ -600,7 +552,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           }
           const staffProfileId = staff.staff_profile_id;
 
-          if (staff.overall_is_active) {
+          if (primaryLocation.is_active) {
+            if (!window.confirm(`Deactivate ${staff.display_name}? They will lose access at their primary location.`)) return;
             deactivateStaff.mutate({
               staffProfileId,
               locationId: primaryLocation.location_id,
@@ -665,20 +618,20 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 onClick={handleDeactivate}
                 disabled={!primaryLocation}
                 className={
-                  staff.overall_is_active
+                  primaryLocation?.is_active
                     ? "text-destructive"
                     : "text-green-600"
                 }
               >
-                {staff.overall_is_active ? (
+                {primaryLocation?.is_active ? (
                   <>
                     <UserX className="mr-2 h-4 w-4" />
-                    Deactivate
+                    Deactivate at primary location
                   </>
                 ) : (
                   <>
                     <UserCheck className="mr-2 h-4 w-4" />
-                    Reactivate
+                    Reactivate at primary location
                   </>
                 )}
               </DropdownMenuItem>
@@ -1021,21 +974,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 </div>
 
                 <div className="mt-6 flex items-center justify-between gap-3 pt-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Switch
-                      checked={staff.overall_is_active}
-                      onCheckedChange={() => handleStaffStatusToggle(staff)}
-                      disabled={
-                        !primaryLocation ||
-                        deactivateStaff.isPending ||
-                        reactivateStaff.isPending
-                      }
-                      aria-label={`Toggle ${staff.display_name} status`}
-                    />
-                    <span className="truncate text-sm text-muted-foreground">
-                      {staff.overall_is_active ? "Active" : "Inactive"}
-                    </span>
-                  </div>
+                  <Badge variant="secondary" className={cn(
+                    "rounded-full border-0",
+                    staff.overall_is_active ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400" : "text-muted-foreground",
+                  )}>
+                    {staff.overall_is_active ? "Active" : "Inactive"}
+                  </Badge>
                   <Button
                     variant="ghost"
                     size="sm"

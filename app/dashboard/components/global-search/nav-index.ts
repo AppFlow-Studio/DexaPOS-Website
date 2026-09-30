@@ -79,8 +79,9 @@ export const NAV_INDEX: NavSearchItem[] = [
   { label: "Menu schedules", path: "/dashboard/menu/schedules", section: "Menus & Products", icon: Clock, keywords: ["menu availability", "menu hours", "dayparts", "brunch", "lunch hours"] },
 
   // ── Management ──────────────────────────────────────────────────────────
-  { label: "Staff", path: "/dashboard/staff", section: "Management", icon: Users, keywords: ["employees", "team", "users"] },
-  { label: "Schedules", path: "/dashboard/schedules", section: "Management", icon: Calendar, keywords: ["shifts", "rota"] },
+  { label: "Team", path: "/dashboard/staff", section: "Management", icon: Users, keywords: ["staff", "employees", "users"] },
+  { label: "Scheduling", path: "/dashboard/schedules", section: "Management", icon: Calendar, keywords: ["shifts", "rota"] },
+  { label: "Timesheets", path: "/dashboard/staff/timesheets", section: "Management", icon: Calendar, keywords: ["hours", "clock in", "timecards"] },
   { label: "Online Ordering", path: "/dashboard/online-ordering", section: "Management", icon: Globe, keywords: ["web ordering", "storefront", "ecommerce"] },
   { label: "Customers", path: "/dashboard/customers", section: "Management", icon: User, keywords: ["guests", "clients", "patrons"] },
   { label: "Campaigns", path: "/dashboard/campaigns", section: "Management", icon: Megaphone, keywords: ["marketing", "sms", "telnyx", "message log", "delivery", "messages"] },

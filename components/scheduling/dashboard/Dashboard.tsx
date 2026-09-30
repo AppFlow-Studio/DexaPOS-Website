@@ -3,7 +3,7 @@
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { SchedulePeriod, WeeklySchedule } from "@/types/schedule";
 import { useState, useMemo, useCallback } from "react";
-import { CalendarPlus, CalendarRange, LayoutTemplate } from "lucide-react";
+import { CalendarPlus, CalendarRange, ChevronDown, LayoutTemplate } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -145,18 +145,10 @@ export function ScheduleDashboard() {
             Schedule workspace
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create a week quickly or organize longer scheduling periods.
+            Build this week&apos;s shifts and check coverage.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={() => router.push("/dashboard/schedules/templates")}
-            variant="ghost"
-            className="gap-2"
-          >
-            <LayoutTemplate className="h-4 w-4" />
-            Templates
-          </Button>
           <Button
             onClick={() => setIsQuickScheduleModalOpen(true)}
             className="gap-2"
@@ -164,62 +156,15 @@ export function ScheduleDashboard() {
             <CalendarPlus className="h-4 w-4" />
             New Schedule
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setEditingPeriod(null);
-              setWizardOpen(true);
-            }}
-            className="gap-2"
-          >
-            <CalendarRange className="h-4 w-4" />
-            New Period
-          </Button>
         </div>
       </div>
 
-      <section className="px-4 py-6 sm:px-6">
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="font-semibold">Schedule periods</h3>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Longer ranges for seasons, events, or rotating coverage.
-            </p>
-          </div>
-          <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
-            {filteredSchedulePeriods.length} total
-          </span>
-        </div>
-        <ScrollArea className="w-full whitespace-nowrap">
-          <div className="flex gap-3 pb-3">
-            {filteredSchedulePeriods.length === 0 ? (
-              <div className="flex min-h-24 w-full items-center justify-center rounded-2xl bg-muted/35 px-5 text-sm text-muted-foreground">
-                No schedule periods yet. Create one when you need a range longer than a week.
-              </div>
-            ) : (
-              filteredSchedulePeriods.map((period) => (
-                <PeriodCard
-                  key={period.id}
-                  period={period}
-                  onEdit={() => {
-                    setEditingPeriod(period);
-                    setWizardOpen(true);
-                  }}
-                  onDelete={() => deleteSchedule(period.id, "period")}
-                />
-              ))
-            )}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-      </section>
-
-      <section className="px-4 py-6 sm:px-6">
+      <section className="px-4 pb-6 sm:px-6">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div className="min-w-0">
             <h3 className="font-semibold">Weekly schedules</h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Open a week to assign staff, resolve coverage, and publish shifts.
+              Open a week to assign staff and review coverage.
             </p>
           </div>
           <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
@@ -243,6 +188,76 @@ export function ScheduleDashboard() {
           )}
         </div>
       </section>
+
+      <details className="group border-t px-4 py-5 sm:px-6">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+          <div>
+            <h3 className="font-semibold">Advanced scheduling</h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Templates and longer schedule periods.
+            </p>
+          </div>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-5 space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => router.push("/dashboard/schedules/templates")}
+              variant="outline"
+              className="gap-2"
+            >
+              <LayoutTemplate className="h-4 w-4" />
+              Templates
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingPeriod(null);
+                setWizardOpen(true);
+              }}
+              className="gap-2"
+            >
+              <CalendarRange className="h-4 w-4" />
+              New Period
+            </Button>
+          </div>
+          <section>
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <h4 className="font-semibold">Schedule periods</h4>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Longer ranges for seasons, events, or rotating coverage.
+                </p>
+              </div>
+              <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                {filteredSchedulePeriods.length} total
+              </span>
+            </div>
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex gap-3 pb-3">
+                {filteredSchedulePeriods.length === 0 ? (
+                  <div className="flex min-h-24 w-full items-center justify-center rounded-2xl bg-muted/35 px-5 text-sm text-muted-foreground">
+                    No schedule periods yet. Create one when you need a range longer than a week.
+                  </div>
+                ) : (
+                  filteredSchedulePeriods.map((period) => (
+                    <PeriodCard
+                      key={period.id}
+                      period={period}
+                      onEdit={() => {
+                        setEditingPeriod(period);
+                        setWizardOpen(true);
+                      }}
+                      onDelete={() => deleteSchedule(period.id, "period")}
+                    />
+                  ))
+                )}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </section>
+        </div>
+      </details>
 
       <PeriodWizard
         isOpen={isWizardOpen}
