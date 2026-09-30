@@ -10,6 +10,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { normalizeSerial } from '@/app/dashboard/settings/stations/utils/terminal-helpers'
+import type { SettlementBatchIdentity } from '@/types/audit-log'
 
 export interface DeviceIdentity {
   id: string
@@ -140,7 +141,15 @@ export interface DeviceAuditEntry {
   actor_role: string | null
   created_at: string
   metadata: Record<string, unknown> | null
+  resource_type: string | null
+  resource_name: string | null
+  resource_id?: string | null
+  /** Batch events: the batch's own label fields, so every writer's rows agree. */
+  settlement_batch?: SettlementBatchIdentity
 }
+
+const DEVICE_AUDIT_COLUMNS =
+  'id, action, action_category, severity, status, actor_role, created_at, metadata, resource_type, resource_name, resource_id'
 
 export interface PaymentDeviceDetail {
   device: DeviceIdentity
@@ -271,7 +280,7 @@ export async function getPaymentDeviceDetail(merchantId: string, serial: string)
             .limit(100)),
       supabase
         .from('audit_logs')
-        .select('id, action, action_category, severity, status, actor_role, created_at, metadata')
+        .select(DEVICE_AUDIT_COLUMNS)
         .eq('resource_type', 'payment_terminal')
         .eq('resource_id', terminalId)
         .order('created_at', { ascending: false })
@@ -294,6 +303,39 @@ export async function getPaymentDeviceDetail(merchantId: string, serial: string)
     // the most-recent batch carrying the same batch_number.
     const rawBatches = (batchesRes.data || []) as Record<string, any>[]
     const batchIdSet = new Set(rawBatches.map((b) => b.id as string))
+
+    // Batch closes, reviews and failures are audited against the batch, not the
+    // terminal, so the terminal's own rows alone would hide all of them.
+    let batchAudit: DeviceAuditEntry[] = []
+    if (batchIdSet.size > 0) {
+      const { data: batchAuditRows, error: batchAuditErr } = await supabase
+        .from('audit_logs')
+        .select(DEVICE_AUDIT_COLUMNS)
+        .eq('resource_type', 'settlement_batch')
+        .in('resource_id', [...batchIdSet])
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (batchAuditErr) console.error('[getPaymentDeviceDetail] batch audit error:', batchAuditErr)
+      else {
+        const batchById = new Map(rawBatches.map((b) => [b.id as string, b]))
+        batchAudit = ((batchAuditRows || []) as DeviceAuditEntry[]).map((entry) => {
+          const b = entry.resource_id ? batchById.get(entry.resource_id) : undefined
+          return b
+            ? {
+                ...entry,
+                settlement_batch: {
+                  batchId: b.batch_id ?? null,
+                  batchNumber: b.batch_number != null ? String(b.batch_number) : null,
+                  acquirer: b.acquirer ?? null,
+                },
+              }
+            : entry
+        })
+      }
+    }
+    const audit = [...((auditRes.data || []) as DeviceAuditEntry[]), ...batchAudit]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 100)
     const latestBatchIdByNumber = new Map<string, string>()
     for (const b of rawBatches) {
       const bn = b.batch_number != null ? String(b.batch_number) : null
@@ -374,7 +416,7 @@ export async function getPaymentDeviceDetail(merchantId: string, serial: string)
       payments,
       attempts: (attemptsRes.data || []) as DeviceAttempt[],
       webhookEvents: (eventsRes.data || []) as DeviceWebhookEvent[],
-      audit: (auditRes.data || []) as DeviceAuditEntry[],
+      audit,
     }
 
     return { success: true, data, error: null }
