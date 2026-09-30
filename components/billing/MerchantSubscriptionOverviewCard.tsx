@@ -71,6 +71,7 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
+import { formatBillingCard } from '@/lib/subscription-billing/card-display'
 import { cn } from '@/lib/utils'
 import {
   invoiceStatusLabel,
@@ -179,9 +180,7 @@ function buildPaymentMethodLabel(profile: MerchantSubscriptionBillingProfileView
   if (!profile) return 'Not set'
 
   if (profile.billing_method === 'card') {
-    const brand = profile.card_brand || 'Card'
-    const suffix = profile.card_last_four ? `**** ${profile.card_last_four}` : ''
-    return [brand, suffix].filter(Boolean).join(' ')
+    return formatBillingCard(profile).label
   }
 
   const bank = profile.bank_name || 'Bank account'
@@ -1100,8 +1099,8 @@ export function MerchantSubscriptionOverviewCard({
               <div>
                 <div className="font-medium">{buildPaymentMethodLabel(primaryBillingProfile)}</div>
                 <div className="text-sm text-muted-foreground">
-                  {primaryBillingProfile?.billing_method === 'card' && primaryBillingProfile?.card_exp_month && primaryBillingProfile?.card_exp_year
-                    ? `Expires ${String(primaryBillingProfile.card_exp_month).padStart(2, '0')}/${primaryBillingProfile.card_exp_year}`
+                  {primaryBillingProfile?.billing_method === 'card'
+                    ? formatBillingCard(primaryBillingProfile).detail
                     : primaryBillingProfile?.billing_method === 'ach'
                       ? 'Bank account on file'
                       : 'Payment method setup is handled by your Dexa team.'}

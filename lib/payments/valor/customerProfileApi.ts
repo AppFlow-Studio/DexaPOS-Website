@@ -15,6 +15,7 @@
 
 import {
   extractValorError,
+  getWithHeaderCredentials,
   isValorSuccess,
   postWithHeaderCredentials,
   type ValorEnvelope,
@@ -274,4 +275,89 @@ export async function attachPaymentProfile(
     paymentProfileId: readPaymentProfileId(result.body),
     raw: result.body,
   };
+}
+
+/**
+ * One stored card on a customer profile, as Get Payment Profile describes it.
+ *
+ * Valor also returns the card `token` on each entry. It is deliberately not
+ * carried here: this type exists for display metadata, and a token has no
+ * business travelling alongside it.
+ */
+export interface ValorPaymentProfile {
+  paymentId: string;
+  /** Last four behind a mask, e.g. "XXXX1111". Never a full card number. */
+  maskedPan: string | null;
+  /** "C" or "D" — credit or debit. NOT the network; that is `cardBrand`. */
+  cardType: string | null;
+  /** The network, e.g. "Visa". */
+  cardBrand: string | null;
+  cardholderName: string | null;
+  status: string | null;
+}
+
+export interface ValorGetPaymentProfileResponse extends ValorEnvelope {
+  data?: unknown;
+}
+
+function readProfileText(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number") return String(value);
+  return null;
+}
+
+/** Narrow the Get Payment Profile `data` array. Pure — exported for testing. */
+export function readPaymentProfiles(
+  body: ValorGetPaymentProfileResponse
+): ValorPaymentProfile[] {
+  if (!Array.isArray(body.data)) return [];
+
+  const profiles: ValorPaymentProfile[] = [];
+  for (const entry of body.data) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as Record<string, unknown>;
+    const paymentId = readProfileText(row.payment_id);
+    if (!paymentId) continue;
+    profiles.push({
+      paymentId,
+      maskedPan: readProfileText(row.masked_pan),
+      cardType: readProfileText(row.card_type),
+      cardBrand: readProfileText(row.card_brand),
+      cardholderName: readProfileText(row.cardholder_name),
+      status: readProfileText(row.status),
+    });
+  }
+  return profiles;
+}
+
+/**
+ * List the cards stored on a customer profile.
+ *
+ * Verified against sandbox 2026-09-29. Valor serves this under both
+ * `/api/valor-vault/` and the documented `/api/fl-valor-vault/` with identical
+ * `data`; the former is used because it matches the other vault calls here and
+ * returns `errors` as the array `extractValorError` already reads. Expiry is
+ * not part of the response.
+ *
+ * Source: [V-GETPP] get-payment-profile-1.
+ */
+export async function getPaymentProfiles(
+  options: ValorRequestOptions,
+  vaultCustomerId: string
+): Promise<ValorPaymentProfile[]> {
+  const result = await getWithHeaderCredentials<ValorGetPaymentProfileResponse>(
+    `/api/valor-vault/getpaymentprofile/${encodeURIComponent(vaultCustomerId)}`,
+    options
+  );
+
+  if (result.status >= 400 || !isValorSuccess(result.body)) {
+    throw new ValorVaultError(
+      extractValorError(result.body) ??
+        `Valor getpaymentprofile failed (HTTP ${result.status})`,
+      result.status,
+      result.body
+    );
+  }
+
+  return readPaymentProfiles(result.body);
 }
