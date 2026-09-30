@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { format, formatDistanceStrict } from "date-fns";
-import { RefreshCw } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/dashboard/shell";
 import { PaginationBar } from "@/components/dashboard/PaginationBar";
 import { Badge } from "@/components/ui/badge";
@@ -108,17 +107,6 @@ export default function ImpersonationAuditPage() {
         subtitle="Every time an HQ admin acted as a merchant. Each action taken during a session is also recorded in the audit log."
         backHref="/manage/audit-logs"
         backLabel="Back to audit logs"
-        actions={
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Refresh sessions"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
-          </Button>
-        }
       />
 
       {isLoading ? (

@@ -61,7 +61,6 @@ import {
   Tablet,
   Key,
   UserPlus,
-  RefreshCw,
   CheckCircle,
   Search,
   MapPin,
@@ -126,7 +125,6 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
     data: staff,
     isLoading,
     refetch,
-    isFetching,
   } = useAdminMerchantStaff(merchantId, locationFilter !== 'all' ? locationFilter : undefined)
 
   const staffList = staff || []
@@ -544,14 +542,6 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
               ))}
             </SelectContent>
           </Select>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-          </Button>
         </div>
 
         {canManageMerchantTeam && (

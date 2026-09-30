@@ -38,7 +38,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search,
-  RefreshCw,
   ChevronDown,
   ChevronRight,
   Sliders,
@@ -117,7 +116,6 @@ export function ModifiersTable({
     data: modifierGroups,
     isLoading,
     refetch,
-    isFetching,
   } = useAdminModifierGroups(merchantId, locationId)
 
   // Fetch details for editing group
@@ -226,12 +224,6 @@ export function ModifiersTable({
             <Button variant="default" size="sm" onClick={handleCreateModifier}>
               <Plus className="h-4 w-4 mr-2" />
               Add Modifier Group
-            </Button>
-
-            {/* Refresh */}
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-              Refresh
             </Button>
           </div>
         </div>

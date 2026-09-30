@@ -6,13 +6,11 @@ import {
   CreditCard,
   Globe,
   MapPin,
-  RefreshCcwDot,
 } from 'lucide-react'
 import { useAdminPayments } from '@/lib/queries/use-admin-financial'
 import { PaymentCharts } from '@/app/dashboard/payments/components/PaymentCharts'
 import { PaymentStats } from '@/app/dashboard/payments/components/PaymentStats'
 import { PaymentsTable } from '@/app/dashboard/payments/components/PaymentsTable'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Empty } from '@/components/ui/empty'
@@ -168,7 +166,7 @@ export function PaymentsTab({ merchantId, locations }: PaymentsTabProps) {
     [dateFrom, dateTo]
   )
 
-  const { data: payments, isLoading, refetch } = useAdminPayments(
+  const { data: payments, isLoading } = useAdminPayments(
     merchantId,
     selectedLocationId === 'all' ? null : selectedLocationId,
     filters
@@ -267,19 +265,7 @@ export function PaymentsTab({ merchantId, locations }: PaymentsTabProps) {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>All Payments</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                await refetch()
-              }}
-            >
-              <RefreshCcwDot className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
+          <CardTitle>All Payments</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && paymentList.length === 0 ? (

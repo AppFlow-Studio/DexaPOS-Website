@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import {
     LifeBuoy,
@@ -10,13 +10,11 @@ import {
     Clock,
     TrendingUp,
     ChevronRight,
-    RefreshCw,
     Search,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -104,7 +102,6 @@ function needsAttention(t: TicketListRow) {
 
 export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
     const router = useRouter()
-    const queryClient = useQueryClient()
 
     const [activeStatus, setActiveStatus] = useState<string>('open')
 
@@ -213,23 +210,6 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
             <PanelSection
                 label="Support tickets"
                 caption="All tickets opened by or against this merchant."
-                action={
-                    <Button
-                        variant="outline"
-                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                        onClick={() => {
-                            queryClient.invalidateQueries({
-                                queryKey: ['merchant-support-tickets', merchantId],
-                            })
-                            queryClient.invalidateQueries({
-                                queryKey: ['merchant-support-stats', merchantId],
-                            })
-                        }}
-                    >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Refresh
-                    </Button>
-                }
             >
                 <div className="space-y-6">
                     <KpiStrip cells={cells} loading={isLoading} />

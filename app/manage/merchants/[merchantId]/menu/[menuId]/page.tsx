@@ -81,7 +81,6 @@ import {
   Settings,
   Calendar,
   ImageOff,
-  RefreshCw,
   Plus,
 } from 'lucide-react'
 
@@ -231,8 +230,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
   const {
     data: menu,
     isLoading: isMenuLoading,
-    refetch,
-    isFetching,
   } = useAdminMenuWithCategories(clerkOrgId, menuId, locationId)
 
   // OrderOut status
@@ -562,15 +559,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Link>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
           </Button>
 
           {/* Location Selector */}

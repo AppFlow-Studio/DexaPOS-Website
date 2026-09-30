@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, formatDistanceToNow } from "date-fns";
@@ -9,7 +9,6 @@ import {
   Clock,
   MessageSquare,
   MessageSquarePlus,
-  RefreshCw,
   Search,
   TrendingUp,
   Users,
@@ -169,7 +168,6 @@ function HoursFigure({ value }: { value: string | null }) {
 
 export default function AdminSupportPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
   const { hasPermission } = useAdminPermissions();
   const canCreateTicket = hasPermission("hq.support.manage");
@@ -300,17 +298,6 @@ export default function AdminSupportPage() {
         subtitle="Manage merchant support requests and internal developer tickets"
         actions={
           <>
-            <Button
-              variant="outline"
-              className="h-11 px-4 sm:h-9"
-              disabled={ticketsFetching}
-              onClick={() =>
-                queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
-              }
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", ticketsFetching && "animate-spin")} />
-              Refresh
-            </Button>
             {canCreateTicket && (
               <Button asChild className="h-11 px-4 sm:h-9">
                 <Link href="/manage/support/new">

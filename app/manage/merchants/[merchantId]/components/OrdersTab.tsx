@@ -28,7 +28,6 @@ import {
     TrendingUp,
     Ban,
     RotateCcw,
-    RefreshCcwDot,
     Filter,
     Utensils,
     Download,
@@ -129,7 +128,6 @@ export function OrdersTab({ merchantInfo }: OrdersTabProps) {
     const {
         data: ordersData,
         isLoading,
-        refetch,
     } = useQuery({
         queryKey: [
             'admin-merchant-orders',
@@ -390,14 +388,6 @@ export function OrdersTab({ merchantInfo }: OrdersTabProps) {
                                 >
                                     <Download className="h-4 w-4 mr-2" />
                                     Export CSV
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={async () => await refetch()}
-                                >
-                                    <RefreshCcwDot className="h-4 w-4 mr-2" />
-                                    Refresh
                                 </Button>
                             </div>
                         </div>

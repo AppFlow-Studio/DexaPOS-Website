@@ -9,7 +9,6 @@ import {
   Eye,
   FileText,
   Loader2,
-  RefreshCcw,
   Receipt,
   Store,
 } from 'lucide-react'
@@ -612,10 +611,6 @@ export function SubscriptionBillingAdminCard({
                   : selectedLocationSubscription
                     ? 'Update Location Services'
                     : 'Create Location Subscription'}
-              </Button>
-              <Button variant="outline" onClick={refresh} disabled={isPending}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                Refresh
               </Button>
               {status === 'active' ? (
                 <span className="text-xs text-muted-foreground">

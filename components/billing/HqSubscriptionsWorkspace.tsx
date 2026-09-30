@@ -19,7 +19,6 @@ import {
   Eye,
   FileText,
   Loader2,
-  RefreshCcw,
   ShieldCheck,
   Wallet,
 } from 'lucide-react'
@@ -2246,17 +2245,6 @@ export function HqSubscriptionsWorkspace({
                                     Add a card
                                     <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                                   </Link>
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8"
-                                  onClick={() => refresh()}
-                                  disabled={isPending}
-                                >
-                                  <RefreshCcw className={`mr-1.5 h-4 w-4${isPending ? ' animate-spin' : ''}`} />
-                                  Refresh
                                 </Button>
                               </span>
                             </div>

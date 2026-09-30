@@ -1,9 +1,8 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { CircleAlert, Cpu, Plug, RefreshCcwDot } from 'lucide-react'
+import { CircleAlert, Cpu, Plug } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { getConnectivityStatus } from '@/app/manage/actions/hq-platform/payments'
@@ -32,7 +31,7 @@ export function ConnectivityStrip({
     /** Hold the request back (the host's primary list goes first). The skeleton shows meanwhile. */
     enabled?: boolean
 }) {
-    const { data, isPending, isFetching, refetch } = useQuery({
+    const { data, isPending } = useQuery({
         queryKey: ['platform-connectivity', (merchantIds ?? []).join(',')],
         queryFn: () => getConnectivityStatus(merchantIds ?? null),
         staleTime: 30_000,
@@ -50,25 +49,11 @@ export function ConnectivityStrip({
         )
     }
 
-    const refreshButton = (
-        <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-        >
-            <RefreshCcwDot className="h-3 w-3" />
-            {isFetching ? 'Refreshing…' : 'Refresh'}
-        </Button>
-    )
-
     // A status line with a place in the layout says when it has nothing (§4.9).
     if (!data) {
         return (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>Processor connectivity is unavailable right now.</span>
-                {refreshButton}
             </div>
         )
     }
@@ -113,8 +98,6 @@ export function ConnectivityStrip({
                     </span>
                 ))}
             </div>
-
-            {refreshButton}
         </div>
     )
 }

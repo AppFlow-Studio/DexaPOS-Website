@@ -169,7 +169,7 @@ export function PaymentsLedger({
 
     return (
         <div className="min-w-0 space-y-4">
-            <LedgerToolbar onRefresh={() => void refetch()} refreshing={isFetching}>
+            <LedgerToolbar>
                 <FilterDate
                     value={fromField}
                     onChange={(value) => setRangeEdge('from', value)}

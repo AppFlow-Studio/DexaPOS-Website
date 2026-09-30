@@ -191,7 +191,7 @@ export function AuditLogSection() {
         <InfoIcon tip="Total number of admin audit events logged matching current filters." side="right" />
       </div>
 
-      <LedgerToolbar onRefresh={() => void refetch()} refreshing={isFetching}>
+      <LedgerToolbar>
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}

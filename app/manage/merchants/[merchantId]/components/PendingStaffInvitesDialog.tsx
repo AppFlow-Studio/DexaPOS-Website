@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Loader2, Mail, RefreshCw, Send } from 'lucide-react'
+import { Loader2, Mail, Send } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
@@ -35,7 +35,7 @@ export function PendingStaffInvitesDialog({
     onOpenChange,
     merchantId,
 }: PendingStaffInvitesDialogProps) {
-    const { data: invites = [], isLoading, refetch, isFetching } =
+    const { data: invites = [], isLoading, refetch } =
         useMerchantPendingStaffInvites(merchantId, open)
     const resendMutation = useAdminResendStaffInvite()
 
@@ -67,27 +67,16 @@ export function PendingStaffInvitesDialog({
             <DialogContent className="sm:max-w-150 gap-0 p-0 overflow-hidden" elevation="high">
                 <div className="px-6 pt-6 pb-4 border-b">
                     <DialogHeader>
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0">
-                                    <Mail className="h-4 w-4 text-primary" />
-                                </div>
-                                <div className="min-w-0">
-                                    <DialogTitle className="text-base">Pending staff invites</DialogTitle>
-                                    <DialogDescription className="text-xs mt-0.5">
-                                        Resend any pending invitation that hasn&apos;t been accepted yet.
-                                    </DialogDescription>
-                                </div>
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                                <Mail className="h-4 w-4 text-primary" />
                             </div>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                onClick={() => void refetch()}
-                                disabled={isFetching}
-                            >
-                                <RefreshCw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
-                            </Button>
+                            <div className="min-w-0">
+                                <DialogTitle className="text-base">Pending staff invites</DialogTitle>
+                                <DialogDescription className="text-xs mt-0.5">
+                                    Resend any pending invitation that hasn&apos;t been accepted yet.
+                                </DialogDescription>
+                            </div>
                         </div>
                     </DialogHeader>
                 </div>

@@ -17,7 +17,6 @@ import {
   TrendingDown,
   Minus,
   CheckCircle2,
-  RefreshCw,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -178,32 +177,12 @@ function EmptyState({ title, description }: { title: string; description: string
 
 // ─── Last Refreshed ───────────────────────────────────────────────────────────
 
-function LastRefreshed({
-  updatedAt,
-  onRefresh,
-  isLoading,
-}: {
-  updatedAt: number;
-  onRefresh: () => void;
-  isLoading: boolean;
-}) {
+function LastRefreshed({ updatedAt }: { updatedAt: number }) {
   const label = updatedAt
     ? `Updated ${formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}`
     : "Not yet loaded";
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span>{label}</span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        onClick={onRefresh}
-        disabled={isLoading}
-        title="Refresh"
-      >
-        <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-      </Button>
-    </div>
+    <div className="text-xs text-muted-foreground">{label}</div>
   );
 }
 
@@ -242,7 +221,6 @@ function SummaryCards({
   stats,
   isLoading,
   updatedAt,
-  onRefresh,
 }: {
   stats: {
     totalCashSales: number;
@@ -256,7 +234,6 @@ function SummaryCards({
   } | undefined;
   isLoading: boolean;
   updatedAt: number;
-  onRefresh: () => void;
 }) {
   const cards = [
     {
@@ -316,7 +293,7 @@ function SummaryCards({
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <LastRefreshed updatedAt={updatedAt} onRefresh={onRefresh} isLoading={isLoading} />
+        <LastRefreshed updatedAt={updatedAt} />
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
@@ -396,7 +373,7 @@ function SessionsTab({
   dateFrom: Date;
   dateTo: Date;
 }) {
-  const { data: sessions = [], isLoading, refetch, dataUpdatedAt } = useHQCashDrawerSessions(filters, dateFrom, dateTo);
+  const { data: sessions = [], isLoading, dataUpdatedAt } = useHQCashDrawerSessions(filters, dateFrom, dateTo);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<HQSortKey>("business_date");
   const [sortAsc, setSortAsc] = useState(false);
@@ -470,7 +447,7 @@ function SessionsTab({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
+          <LastRefreshed updatedAt={dataUpdatedAt} />
           <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5">
             <Printer className="h-3.5 w-3.5" />
             Print
@@ -682,7 +659,7 @@ function NoSaleTab({
   dateFrom: Date;
   dateTo: Date;
 }) {
-  const { data: ops = [], isLoading, refetch, dataUpdatedAt } = useHQNoSaleOperations(filters, dateFrom, dateTo);
+  const { data: ops = [], isLoading, dataUpdatedAt } = useHQNoSaleOperations(filters, dateFrom, dateTo);
   const [employeeFilter, setEmployeeFilter] = useState("all");
   const [drawerFilter, setDrawerFilter] = useState("all");
 
@@ -892,7 +869,7 @@ function NoSaleTab({
                 ))}
               </SelectContent>
             </Select>
-            <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
+            <LastRefreshed updatedAt={dataUpdatedAt} />
             <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
               <Download className="h-3.5 w-3.5" />
               Export CSV
@@ -987,7 +964,7 @@ function VarianceTrendsTab({
   dateFrom: Date;
   dateTo: Date;
 }) {
-  const { data: trend = [], isLoading, refetch, dataUpdatedAt } = useHQVarianceTrend(filters, dateFrom, dateTo);
+  const { data: trend = [], isLoading, dataUpdatedAt } = useHQVarianceTrend(filters, dateFrom, dateTo);
   const [showAllStats, setShowAllStats] = useState(false);
 
   const isMultiMerchant = !filters.merchantIds || filters.merchantIds.length !== 1;
@@ -1052,7 +1029,7 @@ function VarianceTrendsTab({
                 <span className="inline-block w-2 h-2 rounded-sm bg-red-500/30 mr-1" />beyond alert
               </p>
             </div>
-            <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
+            <LastRefreshed updatedAt={dataUpdatedAt} />
           </div>
         </CardHeader>
         <CardContent>
@@ -1287,7 +1264,7 @@ export function CashDrawerAnalytics({ lockedMerchantId }: { lockedMerchantId?: s
     lockedMerchantId ? { merchantIds: [lockedMerchantId] } : {}
   );
 
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats, dataUpdatedAt } =
+  const { data: stats, isLoading: statsLoading, dataUpdatedAt } =
     useHQCashDrawerSummaryStats(filters, dateRange.from, dateRange.to);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
@@ -1370,7 +1347,6 @@ export function CashDrawerAnalytics({ lockedMerchantId }: { lockedMerchantId?: s
         stats={stats}
         isLoading={statsLoading}
         updatedAt={dataUpdatedAt}
-        onRefresh={refetchStats}
       />
 
       {/* Tabs */}

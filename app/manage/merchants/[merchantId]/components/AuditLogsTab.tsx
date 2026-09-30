@@ -33,7 +33,6 @@ import {
   Calendar as CalendarIcon,
   User,
   MapPin,
-  RefreshCw,
   Download,
   Info,
   AlertTriangle,
@@ -197,7 +196,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     setPage(1);
   };
 
-  const { data, isLoading, refetch, isFetching } = useAuditLogs(
+  const { data, isLoading, isFetching } = useAuditLogs(
     {
       search: filters.search,
       location_id: filters.location_id === "all" ? undefined : filters.location_id,
@@ -320,17 +319,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             <span className="hidden text-sm text-muted-foreground tabular-nums sm:inline">
               {total.toLocaleString()} logs
             </span>
-            <Button
-              variant="outline"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-            >
-              <RefreshCw
-                className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")}
-              />
-              Refresh
-            </Button>
             <Button
               variant="outline"
               onClick={handleExport}

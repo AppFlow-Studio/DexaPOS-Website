@@ -30,7 +30,6 @@ import {
 } from '@/components/ui/collapsible'
 import {
   Search,
-  RefreshCw,
   ChevronDown,
   ChevronRight,
   FolderOpen,
@@ -136,8 +135,6 @@ export function CategoriesTable({
   const {
     data: categories,
     isLoading,
-    refetch,
-    isFetching,
   } = useAdminCategories(merchantId, locationId)
 
   // Sync categories to local order state
@@ -324,19 +321,6 @@ export function CategoriesTable({
               <Button size="sm" onClick={handleCreateCategory}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Category
-              </Button>
-
-              {/* Refresh */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`}
-                />
-                Refresh
               </Button>
             </div>
           </div>

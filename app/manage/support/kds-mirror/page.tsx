@@ -2,11 +2,8 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { Eye, RefreshCw } from "lucide-react";
+import { Eye } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PageHeader,
@@ -23,10 +20,9 @@ import {
   MirrorBlindSpotNotice,
   RealtimeStatus,
 } from "./components/KdsMirrorControls";
-import { KdsSendLedger, type KdsSendLedgerHandle } from "./components/KdsSendLedger";
+import { KdsSendLedger } from "./components/KdsSendLedger";
 import {
   KdsUnsentItems,
-  type KdsUnsentItemsHandle,
 } from "./components/KdsUnsentItems";
 import { KdsStationBoard } from "./components/KdsStationBoard";
 import { KdsDisplayHealthCards } from "./components/KdsDisplayHealthCards";
@@ -39,7 +35,6 @@ import {
   type TimelineWindowKey,
 } from "./components/timelineWindows";
 import {
-  kdsMirrorKeys,
   useKdsDisplays,
   useKdsMirror,
   useKdsRoutingHealth,
@@ -89,19 +84,11 @@ function PickScope({ hint }: { hint: string }) {
 function KdsMirrorPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
 
   const merchantId = searchParams.get("merchant");
   const locationId = searchParams.get("location");
   const displayParam = searchParams.get("display");
   const highlightOrderId = searchParams.get("order");
-
-  // The single Refresh button in the header drives all views: it invalidates
-  // the board, and re-anchors + refetches the send ledger and the
-  // unsent-items view through these handles (neither tab may own a second
-  // refresh button).
-  const ledgerRef = React.useRef<KdsSendLedgerHandle>(null);
-  const unsentRef = React.useRef<KdsUnsentItemsHandle>(null);
 
   // A deep link to a specific order opens on the send ledger (the order row is
   // the reason they came); a ?tab= param (e.g. the old /kds-truth redirect)
@@ -201,18 +188,6 @@ function KdsMirrorPageInner() {
   const selectedDisplay =
     (displays.data ?? []).find((d) => d.id === displayId) ?? null;
 
-  const handleRefresh = React.useCallback(() => {
-    void queryClient.invalidateQueries({
-      queryKey: kdsMirrorKeys.board(locationId ?? "", displayId),
-    });
-    // The device-truth tab shares the same Refresh button.
-    void queryClient.invalidateQueries({ queryKey: ["hq-kds-device-truth"] });
-    // Re-anchor the ledger + unsent windows to now and refetch their current
-    // windows. No-ops when the tab isn't mounted (ref is null).
-    ledgerRef.current?.refresh();
-    unsentRef.current?.refresh();
-  }, [queryClient, locationId, displayId]);
-
   return (
     <PageShell as="div">
       <PageHeader
@@ -224,17 +199,6 @@ function KdsMirrorPageInner() {
               status={realtime.status}
               isFetching={liveBoard.isFetching}
             />
-            <Button
-              variant="outline"
-              className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
-              onClick={handleRefresh}
-              disabled={!locationId}
-            >
-              <RefreshCw
-                className={cn("h-4 w-4", liveBoard.isFetching && "animate-spin")}
-              />
-              Refresh
-            </Button>
           </>
         }
       />
@@ -354,7 +318,6 @@ function KdsMirrorPageInner() {
             >
               {locationId ? (
                 <KdsSendLedger
-                  ref={ledgerRef}
                   locationId={locationId}
                   orderId={highlightOrderId}
                   onShowOnBoard={(orderId) => {
@@ -378,7 +341,6 @@ function KdsMirrorPageInner() {
             >
               {locationId ? (
                 <KdsUnsentItems
-                  ref={unsentRef}
                   locationId={locationId}
                   orderId={highlightOrderId}
                   onClearOrder={() => setParams({ order: null })}

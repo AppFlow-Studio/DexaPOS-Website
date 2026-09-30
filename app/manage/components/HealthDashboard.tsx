@@ -14,7 +14,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { Search, RefreshCw, AlertTriangle, CheckCircle2, Activity, Info } from 'lucide-react'
+import { Search, AlertTriangle, CheckCircle2, Activity, Info } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection, PanelRow } from '@/components/dashboard/shell/PanelSection'
 import { useMerchantHealthGrid } from '@/lib/queries/use-merchants'
@@ -212,7 +212,7 @@ export function HealthDashboard() {
     const needsMerchantAccess = !authLoading && !isSuperAdmin && !!userId
     const isResolvingAccess = needsMerchantAccess && accessLoading
 
-    const { data: healthData, isLoading: healthLoading, refetch } = useMerchantHealthGrid(
+    const { data: healthData, isLoading: healthLoading } = useMerchantHealthGrid(
         accessibleMerchantIds
     )
 
@@ -302,17 +302,6 @@ export function HealthDashboard() {
                                     </ul>
                                 </PopoverContent>
                             </Popover>
-
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
-                                onClick={() => refetch()}
-                                disabled={healthLoading}
-                            >
-                                <RefreshCw className={`mr-2 h-4 w-4 ${healthLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} />
-                                Refresh
-                            </Button>
                         </div>
                     }
                 >

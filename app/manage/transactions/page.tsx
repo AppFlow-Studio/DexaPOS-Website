@@ -46,7 +46,6 @@ import {
     Download,
     Info,
     MoreHorizontal,
-    RefreshCcwDot,
     X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -582,7 +581,6 @@ function TransactionsPageInner() {
     const queryClient = useQueryClient()
     const [isExporting, setIsExporting] = useState(false)
     const [exportFormat, setExportFormat] = useState<ExportFormat | null>(null)
-    const [isRefreshing, startRefreshTransition] = useTransition()
     const [isRefunding, startRefundTransition] = useTransition()
     const [refundTarget, setRefundTarget] = useState<PlatformTransaction | null>(null)
     // The view is in `?view=` so it survives a reload and a shared link.
@@ -647,7 +645,6 @@ function TransactionsPageInner() {
         data: transactionSummary,
         isLoading: summaryLoading,
         isFetching: summaryFetching,
-        refetch: refetchTransactionSummary,
     } = usePlatformTransactionSummary(filters)
     const {
         data: transactionsData,
@@ -668,7 +665,6 @@ function TransactionsPageInner() {
         // `isPending` (no data yet) also covers the held-back query.
         isPending: trendLoading,
         isFetching: trendFetching,
-        refetch: refetchSalesTrend,
     } = usePlatformSalesTrend(secondaryReady)
 
     const transactions = transactionsData?.data || []
@@ -791,18 +787,6 @@ function TransactionsPageInner() {
         return () => observer.disconnect()
     }, [activeTab])
 
-    const handleRefresh = () => {
-        startRefreshTransition(() => {
-            void (async () => {
-                try {
-                    await Promise.all([refetchTransactions(), refetchTransactionSummary(), refetchSalesTrend()])
-                    toast.success('Transactions refreshed')
-                } catch {
-                    toast.error('Failed to refresh transactions')
-                }
-            })()
-        })
-    }
 
     const toggleColumnVisibility = (key: TransactionColumnKey) => {
         setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -1089,15 +1073,6 @@ function TransactionsPageInner() {
                 subtitle="Payment ledger, settlements, and disputes across all merchants"
                 actions={
                     <>
-                        <Button
-                            variant="outline"
-                            className="h-9 px-4 text-[0.8125rem] font-medium"
-                            onClick={handleRefresh}
-                            disabled={isRefreshing}
-                        >
-                            <RefreshCcwDot className="mr-2 h-4 w-4" />
-                            {isRefreshing ? 'Refreshing…' : 'Refresh'}
-                        </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button

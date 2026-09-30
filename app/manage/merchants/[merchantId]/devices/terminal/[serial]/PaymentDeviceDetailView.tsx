@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table'
 import {
     ArrowLeft, CreditCard, Wifi, WifiOff, Clock, AlertTriangle, CheckCircle2,
-    XCircle, Loader2, RefreshCw, Activity, Layers, FolderOpen, KeyRound, Cpu,
+    XCircle, Loader2, Activity, Layers, FolderOpen, KeyRound, Cpu,
     Hash, Store, Server, Banknote, PauseCircle, Receipt, Smartphone, Building2,
     ExternalLink,
 } from 'lucide-react'
@@ -921,7 +921,7 @@ function BatchesTab({ batches, payments }: { batches: DeviceBatch[]; payments: D
 }
 
 export function PaymentDeviceDetailView({ merchantId, serial }: { merchantId: string; serial: string }) {
-    const { data: result, isLoading, isFetching, refetch } = useQuery({
+    const { data: result, isLoading } = useQuery({
         queryKey: ['admin', 'payment-device-detail', merchantId, serial],
         queryFn: () => getPaymentDeviceDetail(merchantId, serial),
         enabled: !!merchantId && !!serial,
@@ -955,13 +955,10 @@ export function PaymentDeviceDetailView({ merchantId, serial }: { merchantId: st
     return (
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
             {/* Header */}
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-4">
                 <Link href={`/manage/merchants/${merchantId}?tab=devices`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
                     <ArrowLeft className="h-4 w-4" /> Devices
                 </Link>
-                <button onClick={() => refetch()} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                    <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
-                </button>
             </div>
 
             {/* Hero */}

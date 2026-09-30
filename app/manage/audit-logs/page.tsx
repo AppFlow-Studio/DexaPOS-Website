@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Copy,
   Download,
-  RefreshCcwDot,
   Search,
   ShieldAlert,
 } from 'lucide-react'
@@ -592,15 +591,6 @@ export default function AuditLogsPage() {
         subtitle="Platform-wide event history with anomaly detection and flagging"
         actions={
           <>
-            <Button
-              variant="outline"
-              className="h-9 px-4 text-[0.8125rem] font-medium"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCcwDot className="mr-2 h-4 w-4" />
-              {isFetching ? 'Refreshing…' : 'Refresh'}
-            </Button>
             <Button
               variant="outline"
               className="h-9 px-4 text-[0.8125rem] font-medium"

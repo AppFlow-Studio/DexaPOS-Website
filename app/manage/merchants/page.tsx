@@ -18,7 +18,6 @@ import {
     Search,
     ChevronLeft,
     ChevronRight,
-    RefreshCw,
     TrendingUp,
     TrendingDown,
     Clock,
@@ -83,7 +82,7 @@ export default function MerchantsPage() {
     // Fetch data with role-based filtering
     // 10 per page, like every table (UI-DESIGN-SYSTEM §5.7); the grid view shares the page.
     const pageSize = 10
-    const { data, isLoading, isFetching, refetch } = useMerchants(
+    const { data, isLoading, isFetching } = useMerchants(
         activeFilters,
         page,
         accessibleMerchantIds,
@@ -252,18 +251,6 @@ export default function MerchantsPage() {
                             <List className="h-4 w-4" />
                         </Button>
                     </div>
-
-                    {/* Refresh */}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Refresh merchants"
-                        onClick={() => refetch()}
-                        disabled={isFetching}
-                        className="size-8 shrink-0 border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-                    >
-                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                    </Button>
                 </div>
             </div>
 

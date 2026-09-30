@@ -190,7 +190,7 @@ export function BatchReconciliationSection({
 
   return (
     <div className="min-w-0 space-y-4">
-      <LedgerToolbar onRefresh={() => void refetchBatches()} refreshing={batchesFetching}>
+      <LedgerToolbar>
         {!scopedMerchantId && (
           <FilterSelect
             value={merchantId}

@@ -3,7 +3,7 @@
 import { Fragment, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 import Link from 'next/link'
-import { CheckCircle2, ChevronRight, CircleAlert, Download, RefreshCcwDot } from 'lucide-react'
+import { CheckCircle2, ChevronRight, CircleAlert, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -108,7 +108,7 @@ export function LuqraTransactionsTable({
     const dateFrom = toIsoDate(range?.from)
     const dateTo = toIsoDate(range?.to)
 
-    const { data, isLoading, isFetching, refetch } = useCachedLuqraTransactions(merchantId, {
+    const { data, isLoading, isFetching } = useCachedLuqraTransactions(merchantId, {
         locationId: locationId === 'all' ? null : locationId,
         dateFrom: fixedDepositId || fixedBatchId ? null : dateFrom,
         dateTo: fixedDepositId || fixedBatchId ? null : dateTo,
@@ -232,15 +232,6 @@ export function LuqraTransactionsTable({
                 </Field>
 
                 <div className="ml-auto flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                        onClick={() => void refetch()}
-                        disabled={isFetching || sync.isPending}
-                    >
-                        <RefreshCcwDot className="h-3.5 w-3.5" />
-                        Refresh
-                    </Button>
                     <Button
                         className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
                         onClick={handleSync}

@@ -378,7 +378,7 @@ export function ChargebacksSection({
         </div>
       )}
 
-      <LedgerToolbar onRefresh={() => void refetch()} refreshing={isFetching}>
+      <LedgerToolbar>
         {!scopedMerchantId && (
           <FilterSelect
             value={merchantId}

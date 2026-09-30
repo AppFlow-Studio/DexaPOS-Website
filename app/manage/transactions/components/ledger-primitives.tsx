@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { RefreshCcwDot } from 'lucide-react'
 import { DatePopover } from '@/components/ui/date-popover'
 import { Button } from '@/components/ui/button'
 import {
@@ -258,36 +257,9 @@ export function LoadError({
     )
 }
 
-/**
- * A tab's toolbar: the filters wrap on the left while Refresh stays pinned to
- * the top-right corner, so it never drops onto a line of its own. On phones
- * Refresh is icon-only to leave the filters their width.
- */
-export function LedgerToolbar({
-    children,
-    onRefresh,
-    refreshing = false,
-}: {
-    children: React.ReactNode
-    onRefresh: () => void
-    refreshing?: boolean
-}) {
-    return (
-        <div className="flex min-w-0 items-start gap-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div>
-            <Button
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0 px-3 sm:px-4"
-                onClick={onRefresh}
-                disabled={refreshing}
-                aria-label="Refresh"
-            >
-                <RefreshCcwDot className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-                <span className="hidden sm:inline">Refresh</span>
-            </Button>
-        </div>
-    )
+/** A tab's toolbar: the filters wrap across the full width. */
+export function LedgerToolbar({ children }: { children: React.ReactNode }) {
+    return <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
 }
 
 export interface FilterOption {

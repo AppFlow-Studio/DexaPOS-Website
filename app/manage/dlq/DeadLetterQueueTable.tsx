@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Eye,
   MoreHorizontal,
-  RefreshCcwDot,
   RotateCcw,
   Search,
   X,
@@ -371,17 +370,6 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
         <PanelSection
           label="Failed deliveries"
           caption="Newest first. Pending and retrying views refresh every 30 seconds."
-          action={
-            <Button
-              variant="outline"
-              className="h-9 px-4 text-[0.8125rem] font-medium"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCcwDot className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
-              Refresh
-            </Button>
-          }
         >
           {/* Toolbar (§5.2): search left, muted filter pills right. */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

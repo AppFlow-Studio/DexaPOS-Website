@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { DateRange } from 'react-day-picker'
-import { Banknote, CheckCircle2, ChevronRight, CircleAlert, CreditCard, Link2, Link2Off, RefreshCcwDot, ShieldCheck } from 'lucide-react'
+import { Banknote, CheckCircle2, ChevronRight, CircleAlert, CreditCard, Link2, Link2Off, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -269,15 +269,6 @@ export function MerchantPaymentsTab({
                         onChange={setHiddenFields}
                         className="md:inline-flex xl:hidden"
                     />
-                    <Button
-                        variant="outline"
-                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                        onClick={() => void refetch()}
-                        disabled={isFetching}
-                    >
-                        <RefreshCcwDot className="h-3.5 w-3.5" />
-                        Refresh
-                    </Button>
                 </div>
             </div>
 

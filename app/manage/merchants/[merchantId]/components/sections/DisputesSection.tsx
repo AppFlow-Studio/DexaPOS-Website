@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { DateRange } from 'react-day-picker'
-import { ChevronDown, ChevronRight, Download, Link2, Link2Off, RefreshCcwDot, ShieldAlert, ShieldCheck, AlertTriangle, Scale } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, Link2, Link2Off, ShieldAlert, ShieldCheck, AlertTriangle, Scale } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -146,7 +146,7 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
         return rows.filter((r) => !!r.luqra_mid).map((r) => ({ id: r.id, name: r.name }))
     }, [midsResult])
 
-    const { data, isLoading, isFetching, refetch } = useCachedLuqraChargebacks(merchantId, {
+    const { data, isLoading, refetch } = useCachedLuqraChargebacks(merchantId, {
         locationId: locationId === 'all' ? null : locationId,
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
@@ -261,25 +261,14 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                 label="Disputes"
                 caption="Chargebacks cached locally from Luqra. Sync to pull the latest for the selected date range."
                 action={
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            variant="outline"
-                            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                            onClick={() => void refetch()}
-                            disabled={isFetching}
-                        >
-                            <RefreshCcwDot className="h-3.5 w-3.5" />
-                            Refresh
-                        </Button>
-                        <Button
-                            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
-                            onClick={handleSync}
-                            disabled={sync.isPending}
-                        >
-                            <Download className="h-3.5 w-3.5" />
-                            {sync.isPending ? 'Syncing…' : 'Sync from Luqra'}
-                        </Button>
-                    </div>
+                    <Button
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
+                        onClick={handleSync}
+                        disabled={sync.isPending}
+                    >
+                        <Download className="h-3.5 w-3.5" />
+                        {sync.isPending ? 'Syncing…' : 'Sync from Luqra'}
+                    </Button>
                 }
             >
                 <div className="space-y-6">

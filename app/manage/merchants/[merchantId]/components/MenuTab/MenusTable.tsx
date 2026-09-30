@@ -39,7 +39,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search,
-  RefreshCw,
   ChevronDown,
   ChevronRight,
   UtensilsCrossed,
@@ -161,8 +160,6 @@ export function MenusTable({
   const {
     data: menus,
     isLoading,
-    refetch,
-    isFetching,
   } = useAdminMenus(merchantId, locationId)
 
   // Filter by search
@@ -417,12 +414,6 @@ export function MenusTable({
               <Button size="sm" onClick={handleCreateMenu}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Menu
-              </Button>
-
-              {/* Refresh */}
-              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-                Refresh
               </Button>
             </div>
           </div>
