@@ -22,7 +22,7 @@ import {
 } from "./components/TaxBreakdownTable";
 import { TaxCategoryChart } from "./components/TaxCategoryChart";
 import { TaxLocationTable } from "./components/TaxLocationTable";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
 import { PageShell } from "@/components/dashboard/shell";
@@ -46,7 +46,6 @@ export default function TaxReportPage() {
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
@@ -97,7 +96,6 @@ export default function TaxReportPage() {
       <ReportPageHeader
         title="Tax Report"
         description="Tax collected, refunded and net liability"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

@@ -30,7 +30,6 @@ import {
   Volume2,
 } from "lucide-react";
 import {
-  useGatedLocation,
   useGatedLocationId,
 } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
@@ -50,7 +49,6 @@ import {
   type StationPosConfigOverrides,
 } from "@/lib/pos/pos-config";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -122,7 +120,6 @@ export default function PosSettingsPage() {
   const gatedLocationId = useGatedLocationId();
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
-  const selectedLocation = useGatedLocation();
   const clerkOrgId = useClerkOrgId();
 
   const {
@@ -214,7 +211,6 @@ export default function PosSettingsPage() {
         <PageHeader
           title="POS defaults"
           subtitle="Configure location-level POS behavior and station overrides."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
 
         <Panel padded>
@@ -237,12 +233,6 @@ export default function PosSettingsPage() {
         <PageHeader
           title="POS defaults"
           subtitle="Loading location behavior and station overrides."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <PosSettingsBodySkeleton />
       </PageShell>
@@ -255,12 +245,6 @@ export default function PosSettingsPage() {
         <PageHeader
           title="POS defaults"
           subtitle="Configure location-level POS behavior and station overrides."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Alert variant="destructive">
           <Settings2 className="h-4 w-4" />
@@ -280,12 +264,6 @@ export default function PosSettingsPage() {
       <PageHeader
         title="POS defaults"
         subtitle="Set location behavior, then override display and sound only where a station needs it."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <>
             <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">

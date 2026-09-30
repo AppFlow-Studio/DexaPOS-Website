@@ -1,99 +1,118 @@
-# Valor Recurring / SaaS Billing — Production Promotion Checklist
+# Valor SaaS Billing: Production Promotion Checklist
 
-Gating checklist to take the separated subscription billing (PR #303 + the
-SUB08/A40 fixes in this change) from staging to production. Companion to the
-sandbox E2E write-up: [VALOR-RECURRING-E2E-2026-09-07.md](./VALOR-RECURRING-E2E-2026-09-07.md).
+**Last verified:** 2026-09-29, by read-only SQL against staging (`dfwqakoyittmrwbqvxgw`) and
+prod (`hifouuofcaytijrkbvcy`), plus one live $1.04 subscription on prod.
 
-Environments: staging Supabase `dfwqakoyittmrwbqvxgw`; production Supabase
-`hifouuofcaytijrkbvcy` (see [[project_supabase_staging_prod_link]] semantics —
-verify the pooler-url target before any `db push`). Rollout is staging-first.
+This replaces the 2026-09-07 version. That version listed the A44 vault error and the prod
+migration gap as blockers. Both are resolved; see "Superseded" at the end.
 
-## 0. Hard blocker — must clear before anything else
+Related: [sandbox finding](./VALOR-SANDBOX-ADD-SUBSCRIPTION-EMPTY-200-2026-09-29.md),
+[central rail plan](./CENTRAL-SAAS-BILLING-RAIL-PLAN.md),
+[phased rollout](./saas-billing-phased-rollout.md),
+[online settlement plan](../payments/PLAN-2026-09-29-VALOR-ONLINE-ORDER-SETTLEMENT.md).
 
-- [ ] **A44 cross-host vault** resolved with Valor. The card is vaulted on the
-      Vault host but `/?addSub` runs on the transaction host, and the vault
-      reference is rejected (`INVALID PAYMENT INFO`). Awaiting Valor's answer
-      (email sent to isvsupport@valorpaytech.com). Once answered, implement their
-      pattern (vault on the same host as the subscription API, or pass a
-      Passage.js token / card at subscription-create time) and **re-run the
-      staging vault-based E2E until `/?addSub` returns `S00`**. Until this is
-      green on staging, do not promote.
+## Where prod stands
 
-## 1. Credentials & environment (production)
+| Item | State |
+|---|---|
+| Billing schema and RPCs | Applied |
+| 8 billing edge functions and `valor-webhook` | Deployed |
+| Edge secrets (`VALOR_ENV=production`, transaction, vault and boarding hosts, webhook secret, internal secret) | Set |
+| Central credentials, EPI `2501496431` | Seeded 2026-09-29 |
+| Vault on the central merchant | Enabled by Valor 2026-09-29 |
+| Create a subscription and charge the card | **Proven**: `S00`, Valor subscription `253837` |
+| Recurring webhook delivered and signature verified | **Proven** |
+| Webhook applied to the invoice | **Failed**; fixed in code, not deployed |
+| Billing cron jobs | None installed |
+| Feature paywall | Dark |
 
-- [ ] `VALOR_ENV=production` set on prod Supabase Edge Function secrets **and** the web app.
-- [ ] `VALOR_BASE_URL` set to the **prod transaction host** (unpublished — obtain from Valor). The code refuses to run in production without it; it never guesses a host.
-- [ ] Prod Vault host confirmed (may differ from `demo.valorpaytech.com`) and consistent with the A44 resolution.
-- [ ] `VALOR_WEBHOOK_SECRET` set for prod.
-- [ ] Confirm the prod app `SUPABASE_SERVICE_ROLE_KEY` matches the value the Edge Functions receive (a mismatch reproduces the "Unauthorized" seen locally). Optionally harden the server action to also send `x-internal-secret`.
+## 1. Clean up the test (do first)
 
-## 2. Valor merchant / account setup (production)
+- [ ] Cancel the Sakura Tea Test subscription in HQ. It is active, priced at $82.16 on our side,
+      and Valor schedule `253837` will charge $1.04 on 2026-10-29.
+- [ ] Confirm in the Valor portal that schedule `253837` is gone.
+- [ ] Optional: void the $1.04 charge, transaction `11013174026`.
 
-- [ ] DEXA SaaS billing account boarded with **real underwriting MIDs / prod EPI** (sandbox used the public surcharge EPI `2412333540`). Persisted as a `merchant_processor_accounts` row (`processor='valor'`, `purpose='subscription'`, `is_active`, `is_primary`).
-- [ ] Confirm **surcharge intent**: the `surchargeIndicator='1'` path is hardcoded to the sandbox surcharge EPI only; a real prod EPI falls through to `'0'` (traditional / no surcharge). Verify that matches the intended prod billing model.
-- [ ] Per-location primary Valor cards vaulted for every location that will bill (and the merchant-wide card for the tier, if used).
+## 2. Promote code
 
-## 3. Database migration (production)
+All of this is uncommitted in the working tree as of 2026-09-29.
 
-> **CONFIRMED 2026-09-07 (prod `hifouuofcaytijrkbvcy`):** `merchant_subscriptions`
-> is missing `processor_subscription_id` / `_status` / `_next_payment_at`, so
-> `20260906120000` aborts in preflight with `42703`. Cause: version slots
-> `20260830120000` and `20260830130000` on prod hold the **reservation** migrations
-> (`create_public_reservation_approval_mode`, `expire_stale_reservation_requests`),
-> so the two **billing** migrations that own those slots in the repo
-> (`subscription_billing_grace_and_retry_foundation`, `valor_saas_billing_lifecycle`)
-> never ran. A `db push` **silently skips** them and re-fails. Prod's max version is
-> `20260904120000`. The migration preflight aborted → **nothing was written; prod is unchanged.**
+- [ ] **Web app**
+  - Valor auto-boarding shows "Coming soon"; status and "Set live" remain.
+  - The online-store toggle checks for a live Valor account instead of an NMI device.
+  - Per-service card surcharge input removed from the billing catalog.
+  - Saved cards show brand and last four; existing cards repair themselves when listed.
+- [ ] **`valor-webhook`**: attaches the first payment's transaction to the invoice that was
+      settled inline. Also stops storing full payloads for events it ignores.
+- [ ] **`billing-charge-subscription`**: sends `failure_notification: 0` when the merchant has
+      no email or phone, instead of failing with `SUB21`.
 
-- [ ] Apply the ready-made reconciliation set in [`prod-reconcile/`](./prod-reconcile/) **out-of-band, in order** (do NOT `db push`, do NOT bypass the preflight):
-  1. [ ] `prod-reconcile/20260905120000_subscription_billing_grace_and_retry_foundation.sql`
-  2. [ ] `prod-reconcile/20260905130000_valor_saas_billing_lifecycle.sql` (adds the missing `processor_*` columns + `valor_recurring_webhook_events`)
-  3. [ ] `supabase/migrations/20260906120000_separate_subscription_billing_scopes.sql` (slot is free on prod)
-- [ ] Record all three versions in `supabase_migrations.schema_migrations` (see the reconcile README) so future `db push` stays consistent. Note the **permanent** version-number divergence (billing lives under `20260905*` on prod vs `20260830*` in the repo).
-- [ ] Verify the RPCs exist afterward:
-  - [ ] `resolve_subscription_billing_profile`
-  - [ ] `prepare_migrated_subscription`
-- [ ] Run the whole set on an **isolated prod copy** first; compare historical invoice IDs/amounts/statuses/card links before/after. Known native-schedule blockers must roll it back.
-- [ ] Regenerate Supabase TypeScript types for both RPCs and remove the temporary RPC adapter casts.
+Confirm the prod web app has `INTERNAL_NOTIFICATION_SECRET` set. The first prod charge passed
+auth, so it is either set or the service-role key matches.
 
-## 4. Deploy website + Edge Functions together (production)
+## 3. Apply migrations
 
-Deploy these six functions with the web app, including `_shared/subscription-billing-scope.ts` and `_shared/valor.ts` (which carry the A40 fix):
+Apply out of band and record each version in `supabase_migrations.schema_migrations`. Do not
+`db push`; other local migrations are pending.
 
-- [ ] `billing-charge-subscription` (SUB08 clamp + A40 normalize)
-- [ ] `billing-generate-monthly-invoices`
+- [ ] `20260930130000_uniform_card_surcharge.sql`. Applied to staging. Also resets `loyalty`
+      from 0% to the platform rate on prod.
+- [ ] `20260930140000_valor_online_order_settlement.sql`. **Not yet applied to staging.** Apply
+      and test there first.
+- [ ] After the second one, run the replay query in the settlement plan.
+
+## 4. Install cron jobs
+
+Valor charges its own schedules and the webhook creates the month's invoice if it is missing.
+These still need a schedule on prod:
+
 - [ ] `billing-retry-due-invoices`
 - [ ] `billing-suspend-overdue`
-- [ ] `billing-handle-failure`
-- [ ] `valor-webhook`
-- [ ] Do **not** resume old worker versions after the migration.
+- [ ] `billing-send-renewal-reminders`
+- [ ] `billing-generate-monthly-invoices`, for any subscription without a Valor schedule
 
-## 5. Webhook & cron (production)
+## 5. Ask Valor or Mtech
 
-- [ ] Register the recurring subscription webhook in the Valor **prod** dashboard; verify delivery/replay against **both** a merchant-tier and a location subscription ID.
-- [ ] Verify existing billing cron jobs (monthly invoice generation, retry-due, suspend-overdue) point at the updated functions. No new cron / env var is introduced.
+- [ ] Scope webhook delivery to the DEXAPOS ISV. Prod receives events for about 100 EPIs that
+      are not ours.
+- [ ] Fix sandbox Add Subscription, or issue a sandbox EPI under our ISV.
+- [ ] Confirm whether a 4% card surcharge folded into the amount is acceptable on a
+      traditional MID (`surchargeIndicator: 0`).
 
-## 6. Cutover of existing accounts (production)
+## 6. Still unverified
 
-- [ ] For each "Migrated billing: setup required" replacement row: add the correct scope card, agree a cutover date that doesn't duplicate a paid period, tick the reconciliation confirmation, then **Prepare without charging** (no invoice/charge, stays canceled).
-- [ ] On/after the reviewed date, review pricing and **Save & Charge** with that start date; Valor approval required. Reconcile old balances out-of-band — they are not rolled into the replacement's first bill.
-- [ ] Do **not** restore the old unique-location schema after replacement rows exist; use a forward fix or coordinated backup restore.
+- [ ] **Declined first charge.** Valor charges during the create call and we mark the invoice
+      paid on `S00`. If Valor returns `S00` when that charge declines, we would record a payment
+      that never happened. Test with a card that declines.
+- [ ] **Second cycle.** The first scheduled charge is 2026-10-29. Confirm the webhook creates
+      and settles that month's invoice.
+- [ ] **Webhook fix live.** Proven by unit tests only. The next new subscription on prod is the
+      first real test.
+- [ ] **Refund or void** of a subscription charge from our side.
+- [ ] **Card display** in a browser, and the repair of existing cards against the prod vault.
 
-## 7. POS compatibility
+## 7. Onboard merchants
 
-- [ ] Verify any POS query assuming one `merchant_subscriptions` row per `location_id` filters `metadata.billing_scope='location'` and handles `canceled` / `billing_setup_required` rows. POS code is not modified by this change and must be checked before shared rollout.
+- [ ] Provision the subscription rail per location ("Set up subscription billing").
+- [ ] Vault a card per location.
+- [ ] Review pricing, then Save & charge.
 
-## 8. Verification gates (all must pass before launch)
+## 8. Phase 2: enforce the paywall (later)
 
-- [ ] Staging **vault-based** E2E green: `add_subscription` returns `S00` + `subscription_id`; invoice → paid; subscription active; `processor_subscription_id` stored.
-- [ ] Separate invoice/subscription/schedule IDs per scope; no tier line in location invoices; no cross-location card fallback; isolated card replacement.
-- [ ] Held/archived invoices never reach Valor (payment, retry, invoice-gen, failure-handler, suspend, webhook).
-- [ ] Failed activation rolls back to the previous tier (no unpaid access); recurring webhook delivery/replay reconciles correctly.
-- [ ] A **prod smoke test** with a real card (small amount) end-to-end incl. the first recurring cycle + webhook.
-- [ ] Recordings captured (no secrets / full card data) and verifier sign-off obtained.
+Unchanged. Run `grandfather-comp-backfill.sql`, then set `PAYWALL_ENABLED = true`.
 
-## Status snapshot (2026-09-07)
+## Known limitation
 
-- ✅ Staging: migration applied; 6 Edge Functions deployed (incl. SUB08/A40 fixes); wizard / cutover panel / scope-gated card UI / Passage.js vault save / live pricing verified; recurring charge proven via isolation (card path) → Valor sub `55000`.
-- ❌ Blocked on **A44** (section 0) for the real vault path.
-- ⏳ All of sections 1–7 are prod-only and untested in sandbox.
+Staging cannot create a Valor subscription. The sandbox returns an empty HTTP 200 for every
+valid Add Subscription request, including Valor's own documented example. Everything else in
+the flow can be tested on staging.
+
+## Superseded from the 2026-09-07 version
+
+| Old item | Outcome |
+|---|---|
+| A44 cross-host vault blocker | Not cross-host. The keys were wrong; fixed 2026-09-10. |
+| Prod missing the `20260830*` billing migrations | Both are on prod's ledger. |
+| `prod-reconcile/` migration set | No longer needed. |
+| "EPI not provisioned for native recurring" | Disproved; see the sandbox finding. |
+| Register the recurring webhook on prod | Done; events are arriving. |

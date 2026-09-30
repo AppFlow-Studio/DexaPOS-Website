@@ -131,6 +131,34 @@ export async function postWithHeaderCredentials<
 }
 
 /**
+ * GET from a vault endpoint, with credentials in headers.
+ *
+ * The read-side twin of `postWithHeaderCredentials`: same host, same header
+ * pair, no body.
+ */
+export async function getWithHeaderCredentials<
+  TBody extends ValorEnvelope = ValorEnvelope,
+>(
+  path: string,
+  options: ValorRequestOptions
+): Promise<ValorResponse<TBody>> {
+  const endpoints = options.endpoints ?? resolveValorEndpoints();
+  const doFetch = options.fetchImpl ?? fetch;
+
+  const response = await doFetch(`${endpoints.vaultBaseUrl}${path}`, {
+    method: "GET",
+    headers: {
+      "Valor-App-ID": options.credentials.appId,
+      "Valor-App-Key": options.credentials.appKey,
+    },
+    signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    cache: "no-store",
+  });
+
+  return readResponse<TBody>(response);
+}
+
+/**
  * Extract a human-readable error from a failed Valor response.
  *
  * The vault endpoints return an `error` array of strings; the securelink hosts

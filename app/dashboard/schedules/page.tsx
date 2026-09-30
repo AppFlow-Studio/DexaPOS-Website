@@ -7,6 +7,7 @@ import { ScheduleReports } from "@/components/scheduling/reports/ScheduleReports
 import { PageHeader, PageShell } from "@/components/dashboard/shell";
 import { BarChart3, CalendarDays } from "lucide-react";
 
+// Menu schedules live under Menus (/dashboard/menu/schedules).
 const SCHEDULE_TABS = [
   { value: "staff", label: "Staff shifts", icon: CalendarDays },
   { value: "reports", label: "Reports", icon: BarChart3 },
@@ -69,7 +70,6 @@ export default function SchedulesPage() {
         <TabsContent value="reports" className="mt-5">
           <ScheduleReports />
         </TabsContent>
-
       </Tabs>
     </PageShell>
   );

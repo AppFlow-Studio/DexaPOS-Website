@@ -70,6 +70,16 @@ describe('Valor SaaS recurring request contract', () => {
     })
   })
 
+  it('turns failure notifications off when there is no email or phone (Valor SUB21)', () => {
+    const { email: _email, ...withoutContact } = baseParams
+    expect(
+      buildUpdateSubscriptionBody({
+        ...withoutContact,
+        subscriptionId: 'valor-sub-789',
+      }).failure_notification,
+    ).toBe('0')
+  })
+
   it('supports validate-only card replacement without charging', () => {
     expect(
       buildUpdateSubscriptionBody({

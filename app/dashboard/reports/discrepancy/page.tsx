@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import { exportToCsv } from "@/utils/export";
 import { Download } from "lucide-react";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
@@ -122,7 +122,6 @@ export default function DiscrepancyReportPage() {
   const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
   const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
   const { data: voidsData, isLoading: voidsLoading, isError: voidsError } = useVoidsReport(queryDateRange.from, queryDateRange.to);
   const { data: financialKPIs, isLoading: analyticsLoading, isError: analyticsError } = useFinancialKPIs(queryDateRange.from, queryDateRange.to);
@@ -260,7 +259,6 @@ export default function DiscrepancyReportPage() {
       <ReportPageHeader
         title="Discrepancy Report"
         description="Voids and refunds unified timeline"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

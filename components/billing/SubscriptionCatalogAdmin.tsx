@@ -58,7 +58,6 @@ type BillableServiceFormState = {
   basePriceMonthly: string
   additionalUnitPrice: string
   includedQuantity: string
-  cardSurchargePct: string
   unitLabel: string
   isActive: boolean
 }
@@ -95,7 +94,6 @@ function serviceToFormState(service?: BillableServiceRecord | null): BillableSer
         ? ''
         : String(service.additional_unit_price),
     includedQuantity: String(service?.included_quantity ?? 0),
-    cardSurchargePct: String(service?.card_surcharge_pct ?? 4),
     unitLabel: service?.unit_label ?? 'unit',
     isActive: service?.is_active ?? true,
   }
@@ -252,7 +250,6 @@ export function SubscriptionCatalogAdmin() {
             ? parseMoneyInput(billableServiceForm.additionalUnitPrice)
             : null,
         includedQuantity: parsePositiveInteger(billableServiceForm.includedQuantity),
-        cardSurchargePct: parsePercentInput(billableServiceForm.cardSurchargePct),
         unitLabel: billableServiceForm.unitLabel.trim() || 'unit',
         isActive: billableServiceForm.isActive,
         metadata: { source: 'hq_billing_catalog' },
@@ -548,20 +545,12 @@ export function SubscriptionCatalogAdmin() {
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label>Card Surcharge %</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step="0.01"
-                value={billableServiceForm.cardSurchargePct}
-                onChange={(event) =>
-                  setBillableServiceForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                }
-              />
-            </div>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Card surcharge is one platform-wide rate applied to the whole invoice. It is not set per
+            service.
+          </p>
 
           <label className="flex items-center gap-2 text-sm">
             <Checkbox

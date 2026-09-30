@@ -41,7 +41,6 @@ import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 import { ReportExportButtons } from "./components/ReportExportButtons";
 import { formatDateForExport, type ExportColumn } from "@/utils/export";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -272,16 +271,6 @@ export default function ReportsPage() {
       <PageHeader
         title="Sales Overview"
         subtitle="Review revenue, order volume, product performance, and sales mix for the selected period."
-        indicator={
-          <LocationIndicator
-            isAllLocations={!selectedLocation || Array.isArray(selectedLocation)}
-            locationName={
-              selectedLocation && !Array.isArray(selectedLocation)
-                ? selectedLocation.name
-                : null
-            }
-          />
-        }
         actions={
           <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
             <DateRangePicker

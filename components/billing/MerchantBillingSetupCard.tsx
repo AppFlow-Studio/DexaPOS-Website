@@ -27,6 +27,7 @@ import {
 } from '@/app/manage/actions/merchant-billing'
 import { PageHeader } from '@/components/dashboard/shell'
 import { PassageCheckout } from '@/lib/payments/valor/passageClient'
+import { formatBillingCard } from '@/lib/subscription-billing/card-display'
 
 interface BillingLocationOption {
   id: string
@@ -49,11 +50,6 @@ const MERCHANT_WIDE_VALUE = '__merchant_wide__'
 function maskLastFour(lastFour?: string | null): string {
   if (!lastFour) return '•••• ••••'
   return `•••• ${lastFour}`
-}
-
-function formatCardExpiry(month?: number | null, year?: number | null): string | null {
-  if (!month || !year) return null
-  return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`
 }
 
 export function MerchantBillingSetupCard({
@@ -167,7 +163,7 @@ export function MerchantBillingSetupCard({
     setBillingEmail('')
   }, [scopedPrimaryProfile])
 
-  const saveValorCard = (paymentToken: string, paymentMethod?: string) => {
+  const saveValorCard = (paymentToken: string) => {
     const scopedLocationId = selectedScope === MERCHANT_WIDE_VALUE ? null : selectedScope
 
     startTransition(async () => {
@@ -184,8 +180,6 @@ export function MerchantBillingSetupCard({
         paymentToken,
         cardholderName,
         billingEmail,
-        cardBrand: paymentMethod ?? null,
-        cardLastFour: null,
       })
 
       if (!result.success) {
@@ -307,7 +301,7 @@ export function MerchantBillingSetupCard({
             ) : (
               <div className="space-y-2.5">
                 {scopedProfiles.map((profile) => {
-                  const expiry = formatCardExpiry(profile.card_exp_month, profile.card_exp_year)
+                  const card = formatBillingCard(profile)
                   return (
                     <div
                       key={profile.id}
@@ -334,12 +328,8 @@ export function MerchantBillingSetupCard({
                             </>
                           ) : (
                             <>
-                              <div className="truncate text-sm font-medium capitalize">
-                                {profile.card_brand || 'Card'} {maskLastFour(profile.card_last_four)}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {expiry ? `Expires ${expiry}` : 'Card on file'}
-                              </div>
+                              <div className="truncate text-sm font-medium">{card.label}</div>
+                              <div className="text-xs text-muted-foreground">{card.detail}</div>
                             </>
                           )}
                         </div>
@@ -431,9 +421,7 @@ export function MerchantBillingSetupCard({
                   isDemo={cardSetup.isDemo}
                   formAction="/api/valor/passage-callback"
                   submitText={isPending ? 'Saving...' : 'Save Card'}
-                  onTokenReceived={({ token, method: paymentMethod }) =>
-                    saveValorCard(token, paymentMethod)
-                  }
+                  onTokenReceived={({ token }) => saveValorCard(token)}
                   onError={(error) =>
                     setCardFormError(error.message || 'Valor card tokenization failed.')
                   }

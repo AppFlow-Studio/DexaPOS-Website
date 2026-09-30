@@ -70,9 +70,7 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
-  Settings2,
   Mail,
-  Gift,
   DollarSign,
   CalendarClock,
   ShieldAlert,
@@ -269,11 +267,6 @@ const navMain = [
         icon: FileText,
       },
       {
-        title: "Billing & Payments",
-        url: "/dashboard/subscriptions/billing",
-        icon: CreditCard,
-      },
-      {
         title: "Devices",
         url: "/dashboard/devices",
         icon: Monitor,
@@ -304,7 +297,7 @@ const navMain = [
             icon: GitCompare,
           },
           {
-            title: "Orders",
+            title: "Order Reports",
             url: "/dashboard/orders/reports",
             icon: ShoppingCart,
           },
@@ -561,7 +554,7 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                                 {/* Expand-only, like Orders/Tables/Tips/Settings:
                                     the whole row toggles rather than navigating.
                                     The landing page is reachable from the
-                                    "General" sub-item below. */}
+                                    "Sales Overview" sub-item below. */}
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isReportsActive}
@@ -581,7 +574,7 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                                       >
                                         <Link href={menuItem.url}>
                                           <BarChart3 className="h-3 w-3" />
-                                          <span>General</span>
+                                          <span>Sales Overview</span>
                                         </Link>
                                       </SidebarMenuSubButton>
                                     </SidebarMenuSubItem>
@@ -766,7 +759,11 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                                   : menuItem.url === "/dashboard/staff"
                                     ? isTeamWorkspacePath(pathname)
                                     : pathname === menuItem.url ||
-                                      pathname.startsWith(menuItem.url + "/")
+                                      // Every page starts with "/dashboard/", so the
+                                      // home item matches exactly or it lights up
+                                      // alongside whichever page is really open.
+                                      (menuItem.url !== "/dashboard" &&
+                                        pathname.startsWith(menuItem.url + "/"))
                               }
                             >
                               <Link href={menuItem.url}>
@@ -787,128 +784,17 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {/* Settings submenu */}
+          {/* Settings — sub-pages live in the in-page settings nav */}
           <SidebarMenuItem>
-            <Collapsible
-              defaultOpen={pathname.startsWith("/dashboard/settings")}
-              className="group"
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.startsWith("/dashboard/settings")}
             >
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton
-                  isActive={pathname.startsWith("/dashboard/settings")}
-                  className="w-full"
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
-                  <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={
-                        pathname === "/dashboard/settings" &&
-                        !pathname.includes("/stations")
-                      }
-                    >
-                      <Link href="/dashboard/settings">
-                        <Settings className="h-3 w-3" />
-                        <span>General</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/stations"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/stations">
-                        <Monitor className="h-3 w-3" />
-                        <span>Stations</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/pos"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/pos">
-                        <Settings2 className="h-3 w-3" />
-                        <span>POS Settings</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/prep-stations"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/prep-stations">
-                        <Flame className="h-3 w-3" />
-                        <span>Prep Stations</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/customer-display"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/customer-display">
-                        <MonitorPlay className="h-3 w-3" />
-                        <span>Customer Display</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/receipt-templates"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/receipt-templates">
-                        <Receipt className="h-3 w-3" />
-                        <span>Receipt Templates</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith("/dashboard/settings/tips")}
-                    >
-                      <Link href="/dashboard/settings/tips">
-                        <DollarSign className="h-3 w-3" />
-                        <span>Tip Configuration</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith("/dashboard/settings/loyalty")}
-                    >
-                      <Link href="/dashboard/settings/loyalty">
-                        <Gift className="h-3 w-3" />
-                        <span>Loyalty</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
+              <Link href="/dashboard/settings">
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
           {/* Support */}
           <SidebarMenuItem>

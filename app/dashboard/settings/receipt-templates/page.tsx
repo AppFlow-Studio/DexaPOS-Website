@@ -30,7 +30,6 @@ import { ReceiptSettingsForm } from "./components/ReceiptSettingsForm";
 import { DEFAULT_TEMPLATE_VALUES, TEMPLATE_TYPES } from "./constants";
 import type { TemplateType, ReceiptTemplateFormData, ReceiptTemplate } from "./types";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -196,7 +195,6 @@ export default function ReceiptTemplatesPage() {
         <PageHeader
           title="Receipt templates"
           subtitle="Customize receipt and ticket layouts for your POS printers."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
 
         <Panel padded>
@@ -220,12 +218,6 @@ export default function ReceiptTemplatesPage() {
         <PageHeader
           title="Receipt templates"
           subtitle="Customize receipt and ticket layouts for your POS printers."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Skeleton className="h-11 w-full max-w-[800px] rounded-full" />
         <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
@@ -243,12 +235,6 @@ export default function ReceiptTemplatesPage() {
         <PageHeader
           title="Receipt templates"
           subtitle="Customize receipt and ticket layouts for your POS printers."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Panel padded>
           <div className="flex min-h-64 flex-col items-center justify-center text-center">
@@ -278,12 +264,6 @@ export default function ReceiptTemplatesPage() {
       <PageHeader
         title="Receipt templates"
         subtitle="Preview and customize every receipt and kitchen ticket format."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
       />
 
       {/* Tabs */}

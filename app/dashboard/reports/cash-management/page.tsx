@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import { exportToCsv } from "@/utils/export";
 import { format as dateFnsFormat } from "date-fns";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
@@ -93,7 +93,6 @@ export default function CashManagementPage() {
   const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
   const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
   const { data: cashTransactions, isLoading, isError } = useCashFlowReport(queryDateRange.from, queryDateRange.to);
 
@@ -160,7 +159,6 @@ export default function CashManagementPage() {
       <ReportPageHeader
         title="Cash Management"
         description="Cash drawer activity and cash payments"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}
