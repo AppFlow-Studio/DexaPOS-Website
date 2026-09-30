@@ -15,11 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PosSettingsBodySkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Bell,
   CreditCard,
+  Hash,
   Loader2,
   MapPin,
   Monitor,
@@ -30,7 +32,6 @@ import {
   Volume2,
 } from "lucide-react";
 import {
-  useGatedLocation,
   useGatedLocationId,
 } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
@@ -46,11 +47,11 @@ import {
   normalizeStationOverrides,
   type PosAppTheme,
   type PosConfig,
+  type PosOrderNumberScope,
   type PosUiScale,
   type StationPosConfigOverrides,
 } from "@/lib/pos/pos-config";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -122,7 +123,6 @@ export default function PosSettingsPage() {
   const gatedLocationId = useGatedLocationId();
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
-  const selectedLocation = useGatedLocation();
   const clerkOrgId = useClerkOrgId();
 
   const {
@@ -214,7 +214,6 @@ export default function PosSettingsPage() {
         <PageHeader
           title="POS defaults"
           subtitle="Configure location-level POS behavior and station overrides."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
 
         <Panel padded>
@@ -237,12 +236,6 @@ export default function PosSettingsPage() {
         <PageHeader
           title="POS defaults"
           subtitle="Loading location behavior and station overrides."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <PosSettingsBodySkeleton />
       </PageShell>
@@ -255,12 +248,6 @@ export default function PosSettingsPage() {
         <PageHeader
           title="POS defaults"
           subtitle="Configure location-level POS behavior and station overrides."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Alert variant="destructive">
           <Settings2 className="h-4 w-4" />
@@ -280,12 +267,6 @@ export default function PosSettingsPage() {
       <PageHeader
         title="POS defaults"
         subtitle="Set location behavior, then override display and sound only where a station needs it."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <>
             <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
@@ -484,6 +465,71 @@ export default function PosSettingsPage() {
                     }))
                   }
                 />
+              </div>
+            </PanelSection>
+          </Panel>
+
+          <Panel>
+            <PanelSection
+              icon={Hash}
+              label="Order Numbering"
+              caption="How guest-facing order numbers are counted across this location's registers."
+            >
+              <div className="space-y-4">
+                <RadioGroup
+                  value={locationConfig.ordering.orderNumberScope}
+                  onValueChange={(value) =>
+                    setLocationConfig((prev) => ({
+                      ...prev,
+                      ordering: {
+                        ...prev.ordering,
+                        orderNumberScope: value as PosOrderNumberScope,
+                      },
+                    }))
+                  }
+                  className="gap-3"
+                >
+                  <Label
+                    htmlFor="order-scope-per-station"
+                    className="flex cursor-pointer items-start justify-between gap-4 rounded-xl bg-muted/35 p-4"
+                  >
+                    <div className="space-y-1">
+                      <span className="font-medium">Per-station</span>
+                      <p className="text-sm text-muted-foreground">
+                        Each register keeps its own counter. Numbers read like{" "}
+                        <code>#S1-0042</code> so the kitchen can tell where an
+                        order was rung.
+                      </p>
+                    </div>
+                    <RadioGroupItem
+                      id="order-scope-per-station"
+                      value="per_station"
+                      className="mt-1"
+                    />
+                  </Label>
+                  <Label
+                    htmlFor="order-scope-location-wide"
+                    className="flex cursor-pointer items-start justify-between gap-4 rounded-xl bg-muted/35 p-4"
+                  >
+                    <div className="space-y-1">
+                      <span className="font-medium">Location-wide</span>
+                      <p className="text-sm text-muted-foreground">
+                        One shared counter across every register — numbers read
+                        like <code>#0042</code>.
+                      </p>
+                    </div>
+                    <RadioGroupItem
+                      id="order-scope-location-wide"
+                      value="location_wide"
+                      className="mt-1"
+                    />
+                  </Label>
+                </RadioGroup>
+                <p className="text-sm text-muted-foreground">
+                  Applies to new orders on POS after each device syncs. Switching
+                  mid-shift continues the counter above the highest number
+                  already used today; orders already open keep their number.
+                </p>
               </div>
             </PanelSection>
           </Panel>
@@ -946,7 +992,8 @@ export default function PosSettingsPage() {
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>
                 Location-wide: receipt/ticket content, payment methods, split
-                payments, UI defaults, and notification defaults.
+                payments, order numbering, UI defaults, and notification
+                defaults.
               </p>
               <p>
                 Station override: UI scale, app theme, notification sounds, and

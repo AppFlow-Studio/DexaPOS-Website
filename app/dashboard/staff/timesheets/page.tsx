@@ -7,7 +7,6 @@ import { CircleAlert, Clock3, Search, Store, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -370,13 +369,31 @@ export default function TimesheetsPage() {
         subtitle="Hours worked by each team member, by week or month."
         backHref="/dashboard/staff"
         backLabel="Back to Staff"
-        indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
         actions={<ExportMenu disabled={!data || isStale} onExport={onExport} />}
       />
 
       <PeriodControls period={period} today={today} onChange={setPeriod} />
 
       <TimesheetStats tiles={tiles} isLoading={query.isLoading} />
+
+      {data && !isStale && (
+        <Panel padded>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Needs attention</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Check unusual or incomplete shifts before using these hours.
+              </p>
+            </div>
+            <ReviewChips
+              counts={counts}
+              active={review}
+              onChange={(next) => updateParams({ view: next ? "shifts" : null, review: next, member: null })}
+              periodNoun={periodNoun(shownPeriod)}
+            />
+          </div>
+        </Panel>
+      )}
 
       <Panel>
         <PanelSection
@@ -426,9 +443,6 @@ export default function TimesheetsPage() {
             </div>
           ) : (
             <div className="min-w-0 space-y-5">
-              {/* Wraps rather than squeezing: with a member select and three
-                  review chips the row outgrows a laptop panel, and a squeezed
-                  chip rail clipped its last chip mid-word. */}
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-1 basis-80 flex-col gap-3 sm:flex-row sm:items-center">
                   <div className="relative min-w-0 flex-1 sm:max-w-sm">
@@ -463,25 +477,17 @@ export default function TimesheetsPage() {
                     </Select>
                   )}
                 </div>
-                <div className="flex min-w-0 max-w-full items-center gap-2">
-                  <ReviewChips
-                    counts={counts}
-                    active={review}
-                    onChange={(next) => updateParams({ review: next })}
-                    periodNoun={periodNoun(shownPeriod)}
-                  />
-                  {hasFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-9 shrink-0 rounded-full px-3 text-muted-foreground"
-                      onClick={clearFilters}
-                    >
-                      <X className="mr-1 h-4 w-4" />
-                      Clear filters
-                    </Button>
-                  )}
-                </div>
+                {hasFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 shrink-0 rounded-full px-3 text-muted-foreground"
+                    onClick={clearFilters}
+                  >
+                    <X className="mr-1 h-4 w-4" />
+                    Clear filters
+                  </Button>
+                )}
               </div>
 
               {view === "summary" ? (

@@ -237,17 +237,17 @@ export default function MerchantDetailsPage() {
                                 { value: 'overview', icon: LayoutDashboard, label: 'Overview' },
                                 { value: 'business-info', icon: Building2, label: 'Business' },
                                 { value: 'notes', icon: StickyNote, label: 'Notes' },
-                                { value: 'audit', icon: History, label: 'Audit' },
-                                { value: 'mids', icon: CreditCard, label: 'MIDs' },
-                                { value: 'valor-boarding', icon: CreditCard, label: 'Valor' },
-                                { value: 'settlements', icon: Banknote, label: 'Settlements' },
+                                { value: 'audit', icon: History, label: 'Activity Log' },
+                                { value: 'mids', icon: CreditCard, label: 'Merchant IDs' },
+                                ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Stations & Terminals' }] : []),
+                                { value: 'valor-boarding', icon: CreditCard, label: 'Valor Setup' },
+                                { value: 'settlements', icon: Banknote, label: 'Batches & Deposits' },
                                 { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
                                 { value: 'billing', icon: Receipt, label: 'Billing' },
                                 { value: 'platform-billing', icon: FileText, label: 'Platform Billing' },
                                 ...(canManageBilling ? [{ value: 'subscriptions', icon: CircleDollarSign, label: 'Subscriptions' }] : []),
                                 { value: 'online-store', icon: Globe, label: 'Online Store' },
                                 { value: 'support', icon: LifeBuoy, label: 'Support' },
-                                ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
                                 { value: 'locations', icon: MapPin, label: 'Locations' },
                             ] as Array<{ value: SectionKey; icon: React.ElementType; label: string }>).map(({ value, icon: Icon, label }) => (
                                 <button
@@ -281,19 +281,24 @@ export default function MerchantDetailsPage() {
                                     Notes
                                 </NavItem>
                                 <NavItem value="audit" icon={History} active={activeTab === 'audit'} onClick={setActiveTab}>
-                                    Audit
+                                    Activity Log
                                 </NavItem>
                             </NavGroup>
 
                             <NavGroup label="Processing">
                                 <NavItem value="mids" icon={CreditCard} active={activeTab === 'mids'} onClick={setActiveTab}>
-                                    MIDs
+                                    Merchant IDs (MIDs)
                                 </NavItem>
+                                {canManageDevices && (
+                                    <NavItem value="devices" icon={Monitor} active={activeTab === 'devices'} onClick={setActiveTab}>
+                                        Stations & Terminals
+                                    </NavItem>
+                                )}
                                 <NavItem value="valor-boarding" icon={CreditCard} active={activeTab === 'valor-boarding'} onClick={setActiveTab}>
-                                    Valor Boarding
+                                    Valor Setup
                                 </NavItem>
                                 <NavItem value="settlements" icon={Banknote} active={activeTab === 'settlements'} onClick={setActiveTab}>
-                                    Settlements
+                                    Batches & Deposits
                                 </NavItem>
                                 <NavItem value="disputes" icon={ShieldCheck} active={activeTab === 'disputes'} onClick={setActiveTab}>
                                     Disputes
@@ -318,11 +323,6 @@ export default function MerchantDetailsPage() {
                                 <NavItem value="support" icon={LifeBuoy} active={activeTab === 'support'} onClick={setActiveTab}>
                                     Support
                                 </NavItem>
-                                {canManageDevices && (
-                                    <NavItem value="devices" icon={Monitor} active={activeTab === 'devices'} onClick={setActiveTab}>
-                                        Devices
-                                    </NavItem>
-                                )}
                                 <NavItem value="locations" icon={MapPin} active={activeTab === 'locations'} onClick={setActiveTab}>
                                     Locations
                                 </NavItem>
@@ -344,7 +344,11 @@ export default function MerchantDetailsPage() {
                             {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
 
                             {activeTab === 'audit' && (
-                                <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                                <AuditLogsTab
+                                    merchantInfo={merchantDetails as unknown as MerchantInfoModel}
+                                    initialCategory={searchParams.get('category') === 'settlement' ? 'settlement' : undefined}
+                                    merchantLocations={merchantDetails.locations?.map((location) => ({ id: location.id, name: location.name })) ?? []}
+                                />
                             )}
 
                             {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}

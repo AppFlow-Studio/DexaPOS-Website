@@ -7,6 +7,8 @@ import {
   applyReportablePredicate,
   isOrderReportable,
 } from '@/lib/reporting/recognized-order'
+import { attachSettlementTerminals } from '@/lib/audit/attach-settlement-terminals'
+import type { SettlementBatchIdentity, SettlementTerminalAttribution } from '@/types/audit-log'
 
 // ============================================================================
 // TYPES
@@ -252,6 +254,10 @@ export interface PlatformAuditLogRow {
   changes?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
   pii_access_type?: string | null
+  /** Settlement rows only — the batch's linked terminal, resolved from its FK. */
+  settlement_terminal?: SettlementTerminalAttribution
+  /** Settlement batch rows only — the batch's own label fields. */
+  settlement_batch?: SettlementBatchIdentity
 }
 
 export interface PlatformAuditLogsResult {
@@ -760,7 +766,7 @@ export async function getPlatformAuditLogs(
   })
 
   return {
-    data: rows,
+    data: await attachSettlementTerminals(rows),
     total: count || 0
   }
 }

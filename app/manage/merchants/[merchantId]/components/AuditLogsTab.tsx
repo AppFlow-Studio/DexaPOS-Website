@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import React, { useState, useMemo } from "react";
 import {
   Table,
@@ -47,10 +48,11 @@ import {
   X,
 } from "lucide-react";
 import { useAuditLogs } from "@/app/dashboard/hooks/useAuditLogs";
+import { describeSettlementActivity } from "@/lib/audit/settlement-activity";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuditCategory, AuditSeverity } from "@/types/audit-log";
+import { AuditCategory, AuditSeverity, type AuditLogWithLocation } from "@/types/audit-log";
 import { DateRange } from "react-day-picker";
 import { MerchantInfoModel } from "@/types/db-modles";
 
@@ -60,6 +62,8 @@ const SEVERITY_COLORS: Record<AuditSeverity, string> = {
     "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   critical: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 };
+
+const EMPTY_LOGS: AuditLogWithLocation[] = [];
 
 const SEVERITY_ICONS = {
   info: <Info className="h-3 w-3" />,
@@ -138,6 +142,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   merchant: <Shield className="h-3.5 w-3.5" />,
   user_management: <User className="h-3.5 w-3.5" />,
   device: <Activity className="h-3.5 w-3.5" />,
+  settlement: <Activity className="h-3.5 w-3.5" />,
   notes: <FileText className="h-3.5 w-3.5" />,
   settings: <Shield className="h-3.5 w-3.5" />,
   authentication: <Shield className="h-3.5 w-3.5" />,
@@ -159,6 +164,8 @@ const CATEGORY_COLORS: Record<string, string> = {
     "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
   device:
     "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
+  settlement:
+    "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
   notes:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   settings: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -172,13 +179,51 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 interface AuditLogsTabProps {
     merchantInfo: MerchantInfoModel;
+    initialCategory?: AuditCategory;
+    merchantLocations?: { id: string; name: string }[];
 }
 
-export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
-  // Admin view assumes all locations for now
-  const locations: {id: string, name: string}[] = []; 
-  const isAllLocations = true; 
-  const selectedLocationId = null;
+function AuditActionSummary({
+  log,
+  merchantId,
+}: {
+  log: AuditLogWithLocation;
+  merchantId: string;
+}) {
+  // The terminal is resolved server-side from the batch FK (GetAuditLogs).
+  const settlement = describeSettlementActivity(log);
+  return (
+    <div className="flex flex-col">
+      <span className="text-sm font-medium">
+        {settlement?.title ?? formatKey(log.action)}
+      </span>
+      {settlement ? (
+        <>
+          <span className="text-xs text-muted-foreground">
+            {[settlement.batchLabel, settlement.terminalLabel].filter(Boolean).join(' · ')}
+          </span>
+          {settlement.terminalSerial && (
+            <Link
+              href={`/manage/merchants/${merchantId}/devices/terminal/${encodeURIComponent(settlement.terminalSerial)}`}
+              onClick={(event) => event.stopPropagation()}
+              className="w-fit text-xs text-primary hover:underline"
+            >
+              View terminal and its batches
+            </Link>
+          )}
+        </>
+      ) : log.resource_name ? (
+        <span className="text-xs text-muted-foreground">
+          {log.resource_type}: {log.resource_name}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations = [] }: AuditLogsTabProps) {
+  const locations = merchantLocations;
+  const isAllLocations = true;
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 7),
@@ -188,7 +233,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
   const [filters, setFilters] = useState({
     search: "",
     location_id: "all",
-    action_category: "" as AuditCategory | "",
+    action_category: (initialCategory ?? "") as AuditCategory | "",
     severity: "" as AuditSeverity | "",
     actor_user_id: "",
   });
@@ -213,7 +258,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     (page - 1) * pageSize,
     merchantInfo?.clerk_org_id // Pass orgIdOverride
   );
-
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setPage(1); // Reset to first page on filter change
@@ -241,6 +285,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
       const headers = [
         'Timestamp',
         'Action',
+        'Batch Terminal',
+        'Terminal Serial',
         'Category',
         'Actor',
         'Severity',
@@ -251,20 +297,25 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
         'Metadata',
       ]
 
-      const rowsCsv = logs.map((log) => [
-        log.created_at,
-        log.action,
-        log.action_category,
-        log.actor_name,
-        log.severity,
-        log.resource_type,
-        log.resource_name,
-        log.location?.name || 'Global',
-        log.changes ? JSON.stringify(log.changes) : '',
-        log.metadata ? JSON.stringify(log.metadata) : '',
-      ].map(escapeCsvValue).join(','))
+      const rowsCsv = logs.map((log) => {
+        const settlement = describeSettlementActivity(log)
+        return [
+          log.created_at,
+          settlement?.title ?? formatKey(log.action),
+          settlement?.terminalLabel ?? '',
+          settlement?.terminalSerial ?? '',
+          log.action_category,
+          log.actor_name,
+          log.severity,
+          log.resource_type,
+          log.resource_name,
+          log.location?.name || 'Global',
+          log.changes ? JSON.stringify(log.changes) : '',
+          log.metadata ? JSON.stringify(log.metadata) : '',
+        ].map(escapeCsvValue).join(',')
+      })
 
-      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\\n')
+      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\n')
       const timestamp = format(new Date(), 'yyyy-MM-dd_HHmm')
       downloadCsv(`DEXA_Merchant_Audit_${timestamp}.csv`, csv)
     } finally {
@@ -272,7 +323,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     }
   }
 
-  const logs = data?.data || [];
+  const logs = data?.data ?? EMPTY_LOGS;
   const total = data?.total || 0;
 
   // Get unique actors from logs for the actor filter
@@ -306,6 +357,11 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
           <p className="text-muted-foreground text-sm mt-1">
             Track all administrative actions for {merchantInfo.name}
           </p>
+          {filters.action_category === 'settlement' && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Terminal details identify the reader linked to a batch, not necessarily who initiated its settlement.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -472,6 +528,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   <SelectItem value="merchant">Merchant</SelectItem>
                   <SelectItem value="user_management">User Management</SelectItem>
                   <SelectItem value="device">Device</SelectItem>
+                  <SelectItem value="settlement">Settlements & Batches</SelectItem>
                   <SelectItem value="notes">Notes</SelectItem>
                   <SelectItem value="settings">Settings</SelectItem>
                   <SelectItem value="authentication">Authentication</SelectItem>
@@ -710,16 +767,10 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">
-                          {log.action}
-                        </span>
-                        {log.resource_name && (
-                          <span className="text-xs text-muted-foreground">
-                            {log.resource_type}: {log.resource_name}
-                          </span>
-                        )}
-                      </div>
+                      <AuditActionSummary
+                        log={log}
+                        merchantId={merchantInfo.id}
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge

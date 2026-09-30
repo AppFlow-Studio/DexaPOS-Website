@@ -74,6 +74,17 @@ const nextConfig: NextConfig = {
         destination: "/dashboard/website/pages/home",
         permanent: false,
       },
+      // Billing & Payments was a third rendering of the same invoice list the
+      // subscription page already showed twice (as "Transactions" and again as
+      // "Billing History"). The three are now one table on that page's Billing
+      // tab. The route stays as a redirect because it is baked into billing
+      // emails already delivered — `?section=` lands the merchant on the tab
+      // the email's button promised.
+      {
+        source: "/dashboard/subscriptions/billing",
+        destination: "/dashboard/subscriptions?section=billing",
+        permanent: false,
+      },
       // The design workspace became `/style`, matching what the button that
       // opens it has always been called.
       {

@@ -47,7 +47,6 @@ import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
 import { validateQrBrandingColors } from "@/lib/qr/branding-rules";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -401,9 +400,6 @@ function CompletedSetupPanel({
       <PageHeader
         title="Online Ordering"
         subtitle="Manage how customers discover, place, and receive orders from this location."
-        indicator={
-          <LocationIndicator isAllLocations={false} locationName={locationName} />
-        }
         actions={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
           {settings.enabled && storeUrl ? (
@@ -1428,7 +1424,6 @@ export default function OnlineOrderingPage() {
         <PageHeader
           title="Online Ordering"
           subtitle="Manage storefront setup, fulfillment, integrations, and customer notifications."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
         <Panel>
           <PanelSection
@@ -1476,7 +1471,6 @@ export default function OnlineOrderingPage() {
       <PageShell>
         <PageHeader
           title="Online Ordering"
-          indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
         />
         <Panel>
           <PanelSection
@@ -1574,12 +1568,7 @@ export default function OnlineOrderingPage() {
         <PageHeader
           title="Online Ordering"
           subtitle="Request and track storefront setup for this location."
-          indicator={
-            <div className="flex flex-wrap items-center gap-2">
-              <LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />
-              <Badge variant={getStatusTone(status)}>{getStatusLabel(status)}</Badge>
-            </div>
-          }
+          indicator={<Badge variant={getStatusTone(status)}>{getStatusLabel(status)}</Badge>}
         />
         <FeaturePaywall
           serviceCode="online_ordering"

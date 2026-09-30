@@ -2,6 +2,11 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
+  buildReportingQueryRange,
+  DEFAULT_REPORTING_TIMEZONE,
+  parseReportDateKey,
+} from "@/lib/reporting/date-range";
+import {
   LocationComparisonData,
   DaypartData,
   LocationSummary,
@@ -10,13 +15,47 @@ import {
 } from "./location-analytics";
 
 // ============================================================================
-// FALLBACK ANALYTICS - Query orders directly when analytics tables are empty
+// LOCATION COMPARISON — built on the shared report calculation
+//
+// Every figure comes from the `get_sales_report` RPC (supabase/migrations/
+// 20260930150000_report_number_consistency.sql), the same calculation behind
+// Sales Overview, Financials and Sales by Items. So only paid orders count,
+// money is on the lane the order was charged on, refunds are subtracted on the
+// day they happened, and days/hours are in each location's own timezone.
+// (Previously these functions summed raw `orders.subtotal` with no payment
+// gate, counting unpaid open checks as sales, with UTC day boundaries.)
 // ============================================================================
 
-/**
- * Get merchant ID from clerk org ID
- */
-async function getMerchantId(clerkOrgId: string): Promise<string | null> {
+type SalesReportGroupBy =
+  | "total"
+  | "location"
+  | "location_day"
+  | "location_hour"
+  | "location_dow_hour";
+
+/** One row of `get_sales_report`. Grouping keys are present only when grouped by. */
+interface SalesReportRow {
+  day?: string;
+  hour?: number;
+  /** ISO day of week: 1 = Monday … 7 = Sunday */
+  dow?: number;
+  location_id?: string;
+  gross_sales: number;
+  discounts: number;
+  refunds: number;
+  net_sales: number;
+  tips: number;
+  order_count: number;
+  avg_order_value: number;
+}
+
+interface ReportContext {
+  merchantId: string;
+  locationNames: Map<string, string>;
+  timezones: Map<string, string>;
+}
+
+async function getReportContext(clerkOrgId: string): Promise<ReportContext | null> {
   const supabase = createServerSupabaseClient();
   const { data: merchant, error } = await supabase
     .from("merchants")
@@ -25,15 +64,69 @@ async function getMerchantId(clerkOrgId: string): Promise<string | null> {
     .single();
 
   if (error || !merchant) {
-    console.error("[FallbackAnalytics] Error getting merchant:", error);
+    console.error("[LocationComparison] Error getting merchant:", error);
     return null;
   }
 
-  return merchant.id;
+  const { data: locations } = await supabase
+    .from("locations")
+    .select("id, name, timezone")
+    .eq("merchant_id", merchant.id);
+
+  return {
+    merchantId: merchant.id,
+    locationNames: new Map((locations ?? []).map((l) => [l.id, l.name ?? "Unknown"])),
+    timezones: new Map(
+      (locations ?? []).map((l) => [l.id, l.timezone ?? DEFAULT_REPORTING_TIMEZONE])
+    ),
+  };
 }
 
 /**
- * Get location comparison data by querying orders directly
+ * Run `get_sales_report` for calendar days `startDate`..`endDate` (inclusive,
+ * "yyyy-MM-dd"), anchored to the selected locations' timezones.
+ */
+async function fetchSalesReport(
+  ctx: ReportContext,
+  locationIds: string[] | null,
+  startDate: string,
+  endDate: string,
+  groupBy: SalesReportGroupBy
+): Promise<SalesReportRow[]> {
+  const ids = locationIds && locationIds.length > 0 ? locationIds : null;
+  const range = buildReportingQueryRange(
+    { from: parseReportDateKey(startDate), to: parseReportDateKey(endDate) },
+    (ids ?? Array.from(ctx.timezones.keys())).map((id) => ctx.timezones.get(id))
+  );
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await (supabase as any).rpc("get_sales_report", {
+    p_merchant_id: ctx.merchantId,
+    p_location_ids: ids,
+    p_start: range.from.toISOString(),
+    p_end: range.to.toISOString(),
+    p_group_by: groupBy,
+  });
+
+  if (error) {
+    console.error(`[LocationComparison] get_sales_report(${groupBy}) failed:`, error);
+    return [];
+  }
+
+  return ((data as SalesReportRow[] | null) ?? []).map((r) => ({
+    ...r,
+    gross_sales: Number(r.gross_sales) || 0,
+    discounts: Number(r.discounts) || 0,
+    refunds: Number(r.refunds) || 0,
+    net_sales: Number(r.net_sales) || 0,
+    tips: Number(r.tips) || 0,
+    order_count: Number(r.order_count) || 0,
+    avg_order_value: Number(r.avg_order_value) || 0,
+  }));
+}
+
+/**
+ * Daily sales per location (line chart).
  */
 export async function getLocationComparisonFromOrders(
   clerkOrgId: string,
@@ -41,93 +134,40 @@ export async function getLocationComparisonFromOrders(
   startDate: string,
   endDate: string
 ): Promise<LocationComparisonData[]> {
-  const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  const ctx = await getReportContext(clerkOrgId);
+  if (!ctx) return [];
 
-  const supabase = createServerSupabaseClient();
+  const rows = await fetchSalesReport(ctx, locationIds, startDate, endDate, "location_day");
 
-  try {
-    // Query orders grouped by location and date
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        location_id,
-        locations!inner(name),
-        created_at,
-        subtotal,
-        discount_amount,
-        tax_amount,
-        tip_amount,
-        total_amount
-      `
-      )
-      .eq("merchant_id", merchantId)
-      .in("location_id", locationIds)
-      .not("status", "in", '("draft","cancelled","void")')
-      .gte("created_at", `${startDate}T00:00:00`)
-      .lte("created_at", `${endDate}T23:59:59`);
+  return rows
+    .filter((r) => r.location_id && r.day)
+    .map((r) => ({
+      location_id: r.location_id!,
+      location_name: ctx.locationNames.get(r.location_id!) ?? "Unknown",
+      business_date: r.day!,
+      gross_sales: r.gross_sales,
+      net_sales: r.net_sales,
+      order_count: r.order_count,
+      avg_ticket: r.avg_order_value,
+      tips_total: r.tips,
+      discounts_total: r.discounts,
+      labor_cost_percentage: 0,
+      items_sold: 0,
+    }))
+    .sort((a, b) => a.business_date.localeCompare(b.business_date));
+}
 
-    if (error) {
-      console.error("Error getting orders for comparison:", error);
-      return [];
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    // Aggregate by location and date
-    const aggregated = new Map<string, LocationComparisonData>();
-
-    data.forEach((order: any) => {
-      const date = order.created_at.split("T")[0];
-      const key = `${order.location_id}-${date}`;
-      const locationName = order.locations?.name || "Unknown";
-
-      if (!aggregated.has(key)) {
-        aggregated.set(key, {
-          location_id: order.location_id,
-          location_name: locationName,
-          business_date: date,
-          gross_sales: 0,
-          net_sales: 0,
-          order_count: 0,
-          avg_ticket: 0,
-          tips_total: 0,
-          discounts_total: 0,
-          labor_cost_percentage: 0,
-          items_sold: 0,
-        });
-      }
-
-      const agg = aggregated.get(key)!;
-      agg.gross_sales += Number(order.subtotal) || 0;
-      agg.net_sales +=
-        (Number(order.subtotal) || 0) - (Number(order.discount_amount) || 0);
-      agg.order_count += 1;
-      agg.tips_total += Number(order.tip_amount) || 0;
-      agg.discounts_total += Number(order.discount_amount) || 0;
-    });
-
-    // Calculate avg ticket
-    aggregated.forEach((agg) => {
-      agg.avg_ticket =
-        agg.order_count > 0 ? agg.gross_sales / agg.order_count : 0;
-    });
-
-    return Array.from(aggregated.values()).sort((a, b) =>
-      a.business_date.localeCompare(b.business_date)
-    );
-  } catch (err) {
-    console.error("Error in getLocationComparisonFromOrders:", err);
-    return [];
-  }
+/** Location-local hour → daypart. */
+function getDaypart(hour: number): string {
+  if (hour >= 5 && hour <= 10) return "breakfast";
+  if (hour >= 11 && hour <= 14) return "lunch";
+  if (hour >= 15 && hour <= 17) return "afternoon";
+  if (hour >= 18 && hour <= 21) return "dinner";
+  return "late_night";
 }
 
 /**
- * Get daypart comparison data by querying orders directly
+ * Net sales per location per daypart (bar chart).
  */
 export async function getDaypartComparisonFromOrders(
   clerkOrgId: string,
@@ -135,95 +175,44 @@ export async function getDaypartComparisonFromOrders(
   startDate: string,
   endDate: string
 ): Promise<DaypartData[]> {
-  const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  const ctx = await getReportContext(clerkOrgId);
+  if (!ctx) return [];
 
-  const supabase = createServerSupabaseClient();
+  const rows = await fetchSalesReport(ctx, locationIds, startDate, endDate, "location_hour");
 
-  try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        location_id,
-        locations!inner(name),
-        created_at,
-        subtotal
-      `
-      )
-      .eq("merchant_id", merchantId)
-      .in("location_id", locationIds)
-      .not("status", "in", '("draft","cancelled","void")')
-      .gte("created_at", `${startDate}T00:00:00`)
-      .lte("created_at", `${endDate}T23:59:59`);
+  const aggregated = new Map<string, DaypartData>();
+  const locationTotals = new Map<string, number>();
 
-    if (error) {
-      console.error("Error getting orders for daypart:", error);
-      return [];
-    }
+  rows.forEach((r) => {
+    if (!r.location_id || r.hour === undefined) return;
+    const daypart = getDaypart(r.hour);
+    const key = `${r.location_id}-${daypart}`;
 
-    if (!data || data.length === 0) {
-      return [];
-    }
+    locationTotals.set(r.location_id, (locationTotals.get(r.location_id) || 0) + r.net_sales);
 
-    // Helper to get daypart from hour
-    const getDaypart = (hour: number): string => {
-      if (hour >= 5 && hour <= 10) return "breakfast";
-      if (hour >= 11 && hour <= 14) return "lunch";
-      if (hour >= 15 && hour <= 17) return "afternoon";
-      if (hour >= 18 && hour <= 21) return "dinner";
-      return "late_night";
+    const agg = aggregated.get(key) ?? {
+      location_id: r.location_id,
+      location_name: ctx.locationNames.get(r.location_id) ?? "Unknown",
+      daypart,
+      total_sales: 0,
+      order_count: 0,
+      pct_of_daily_sales: 0,
     };
+    agg.total_sales += r.net_sales;
+    agg.order_count += r.order_count;
+    aggregated.set(key, agg);
+  });
 
-    // Aggregate by location and daypart
-    const aggregated = new Map<string, DaypartData>();
-    const locationTotals = new Map<string, number>();
+  aggregated.forEach((agg) => {
+    const total = locationTotals.get(agg.location_id) || 0;
+    agg.pct_of_daily_sales = total > 0 ? (agg.total_sales / total) * 100 : 0;
+  });
 
-    data.forEach((order: any) => {
-      const hour = new Date(order.created_at).getHours();
-      const daypart = getDaypart(hour);
-      const key = `${order.location_id}-${daypart}`;
-      const locationName = order.locations?.name || "Unknown";
-      const sales = Number(order.subtotal) || 0;
-
-      // Track location totals for percentage
-      locationTotals.set(
-        order.location_id,
-        (locationTotals.get(order.location_id) || 0) + sales
-      );
-
-      if (!aggregated.has(key)) {
-        aggregated.set(key, {
-          location_id: order.location_id,
-          location_name: locationName,
-          daypart,
-          total_sales: 0,
-          order_count: 0,
-          pct_of_daily_sales: 0,
-        });
-      }
-
-      const agg = aggregated.get(key)!;
-      agg.total_sales += sales;
-      agg.order_count += 1;
-    });
-
-    // Calculate percentages
-    aggregated.forEach((agg) => {
-      const total = locationTotals.get(agg.location_id) || 1;
-      agg.pct_of_daily_sales = (agg.total_sales / total) * 100;
-    });
-
-    return Array.from(aggregated.values());
-  } catch (err) {
-    console.error("Error in getDaypartComparisonFromOrders:", err);
-    return [];
-  }
+  return Array.from(aggregated.values());
 }
 
 /**
- * Get comparison summary by querying orders directly
+ * Per-location totals, best and worst day (radar chart / summary).
  */
 export async function getComparisonSummaryFromOrders(
   clerkOrgId: string,
@@ -231,116 +220,44 @@ export async function getComparisonSummaryFromOrders(
   startDate: string,
   endDate: string
 ): Promise<LocationSummary[]> {
-  const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  const ctx = await getReportContext(clerkOrgId);
+  if (!ctx) return [];
 
-  const supabase = createServerSupabaseClient();
+  const [totals, daily] = await Promise.all([
+    fetchSalesReport(ctx, locationIds, startDate, endDate, "location"),
+    fetchSalesReport(ctx, locationIds, startDate, endDate, "location_day"),
+  ]);
 
-  try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        location_id,
-        locations!inner(name),
-        created_at,
-        subtotal,
-        discount_amount,
-        tip_amount,
-        total_amount
-      `
-      )
-      .eq("merchant_id", merchantId)
-      .in("location_id", locationIds)
-      .not("status", "in", '("draft","cancelled","void")')
-      .gte("created_at", `${startDate}T00:00:00`)
-      .lte("created_at", `${endDate}T23:59:59`);
+  return totals
+    .filter((t) => t.location_id)
+    .map((t) => {
+      const days = daily
+        .filter((d) => d.location_id === t.location_id && d.day)
+        .sort((a, b) => b.net_sales - a.net_sales);
+      const dayCount = days.length || 1;
 
-    if (error) {
-      console.error("Error getting orders for summary:", error);
-      return [];
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    // Aggregate by location
-    const aggregated = new Map<
-      string,
-      {
-        location_id: string;
-        location_name: string;
-        total_gross_sales: number;
-        total_net_sales: number;
-        total_orders: number;
-        total_tips: number;
-        daily_sales: Map<string, number>;
-      }
-    >();
-
-    data.forEach((order: any) => {
-      const date = order.created_at.split("T")[0];
-      const locationName = order.locations?.name || "Unknown";
-      const gross = Number(order.subtotal) || 0;
-      const net = gross - (Number(order.discount_amount) || 0);
-
-      if (!aggregated.has(order.location_id)) {
-        aggregated.set(order.location_id, {
-          location_id: order.location_id,
-          location_name: locationName,
-          total_gross_sales: 0,
-          total_net_sales: 0,
-          total_orders: 0,
-          total_tips: 0,
-          daily_sales: new Map(),
-        });
-      }
-
-      const agg = aggregated.get(order.location_id)!;
-      agg.total_gross_sales += gross;
-      agg.total_net_sales += net;
-      agg.total_orders += 1;
-      agg.total_tips += Number(order.tip_amount) || 0;
-      agg.daily_sales.set(date, (agg.daily_sales.get(date) || 0) + gross);
-    });
-
-    // Calculate summary metrics
-    const results: LocationSummary[] = [];
-
-    aggregated.forEach((agg) => {
-      const dailySalesArray = Array.from(agg.daily_sales.entries());
-      const sortedByValue = [...dailySalesArray].sort((a, b) => b[1] - a[1]);
-      const totalDays = dailySalesArray.length || 1;
-
-      results.push({
-        location_id: agg.location_id,
-        location_name: agg.location_name,
-        total_gross_sales: agg.total_gross_sales,
-        total_net_sales: agg.total_net_sales,
-        total_orders: agg.total_orders,
-        avg_daily_sales: agg.total_gross_sales / totalDays,
-        avg_ticket:
-          agg.total_orders > 0 ? agg.total_gross_sales / agg.total_orders : 0,
-        total_tips: agg.total_tips,
+      return {
+        location_id: t.location_id!,
+        location_name: ctx.locationNames.get(t.location_id!) ?? "Unknown",
+        total_gross_sales: t.gross_sales,
+        total_net_sales: t.net_sales,
+        total_orders: t.order_count,
+        avg_daily_sales: t.net_sales / dayCount,
+        avg_ticket: t.avg_order_value,
+        total_tips: t.tips,
         labor_cost_pct: 0, // Not available without labor data
-        best_day: sortedByValue[0]?.[0] || "",
-        best_day_sales: sortedByValue[0]?.[1] || 0,
-        worst_day: sortedByValue[sortedByValue.length - 1]?.[0] || "",
-        worst_day_sales: sortedByValue[sortedByValue.length - 1]?.[1] || 0,
-      });
-    });
-
-    return results.sort((a, b) => b.total_gross_sales - a.total_gross_sales);
-  } catch (err) {
-    console.error("Error in getComparisonSummaryFromOrders:", err);
-    return [];
-  }
+        best_day: days[0]?.day ?? "",
+        best_day_sales: days[0]?.net_sales ?? 0,
+        worst_day: days[days.length - 1]?.day ?? "",
+        worst_day_sales: days[days.length - 1]?.net_sales ?? 0,
+      };
+    })
+    .sort((a, b) => b.total_net_sales - a.total_net_sales);
 }
 
 /**
- * Get hourly comparison by querying orders directly
+ * Sales by location, weekday and hour (heatmap). Weekday and hour are the
+ * location's local time; `day_of_week` is 0 = Sunday … 6 = Saturday.
  */
 export async function getHourlyComparisonFromOrders(
   clerkOrgId: string,
@@ -348,231 +265,92 @@ export async function getHourlyComparisonFromOrders(
   startDate: string,
   endDate: string
 ): Promise<HourlyComparisonData[]> {
-  const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  const ctx = await getReportContext(clerkOrgId);
+  if (!ctx) return [];
 
-  const supabase = createServerSupabaseClient();
+  const rows = await fetchSalesReport(
+    ctx,
+    locationIds,
+    startDate,
+    endDate,
+    "location_dow_hour"
+  );
 
-  try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        location_id,
-        locations!inner(name),
-        created_at,
-        subtotal,
-        total_amount
-      `
-      )
-      .eq("merchant_id", merchantId)
-      .in("location_id", locationIds)
-      .not("status", "in", '("draft","cancelled","void")')
-      .gte("created_at", `${startDate}T00:00:00`)
-      .lte("created_at", `${endDate}T23:59:59`);
-
-    if (error) {
-      console.error("Error getting orders for hourly:", error);
-      return [];
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    // Aggregate by location, date, and hour
-    const aggregated = new Map<string, HourlyComparisonData>();
-
-    data.forEach((order: any) => {
-      const date = order.created_at.split("T")[0];
-      const hour = new Date(order.created_at).getHours();
-      const key = `${order.location_id}-${date}-${hour}`;
-      const locationName = order.locations?.name || "Unknown";
-      const sales = Number(order.subtotal) || 0;
-
-      if (!aggregated.has(key)) {
-        aggregated.set(key, {
-          location_id: order.location_id,
-          location_name: locationName,
-          business_date: date,
-          hour_of_day: hour,
-          gross_sales: 0,
-          order_count: 0,
-          avg_ticket: 0,
-        });
-      }
-
-      const agg = aggregated.get(key)!;
-      agg.gross_sales += sales;
-      agg.order_count += 1;
-    });
-
-    // Calculate avg ticket
-    aggregated.forEach((agg) => {
-      agg.avg_ticket =
-        agg.order_count > 0 ? agg.gross_sales / agg.order_count : 0;
-    });
-
-    return Array.from(aggregated.values());
-  } catch (err) {
-    console.error("Error in getHourlyComparisonFromOrders:", err);
-    return [];
-  }
+  return rows
+    .filter((r) => r.location_id && r.hour !== undefined && r.dow !== undefined)
+    .map((r) => ({
+      location_id: r.location_id!,
+      location_name: ctx.locationNames.get(r.location_id!) ?? "Unknown",
+      business_date: "",
+      day_of_week: r.dow! % 7,
+      hour_of_day: r.hour!,
+      gross_sales: r.gross_sales,
+      order_count: r.order_count,
+      avg_ticket: r.avg_order_value,
+    }));
 }
 
 /**
- * Get location rankings by querying orders directly
- * Calculates current metrics, trend vs previous period, and comparison vs average
+ * Rank the selected locations for the period, with the change against the
+ * equal-length period just before and the gap to the average location.
  */
 export async function getLocationRankingsFromOrders(
   clerkOrgId: string,
   startDate: string,
   endDate: string,
   metric: string = "gross_sales",
-  limit: number = 10
+  limit: number = 10,
+  locationIds: string[] | null = null
 ): Promise<LocationRanking[]> {
-  const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  const ctx = await getReportContext(clerkOrgId);
+  if (!ctx) return [];
 
-  const supabase = createServerSupabaseClient();
+  // Previous period: same number of calendar days, ending the day before.
+  const start = parseReportDateKey(startDate);
+  const end = parseReportDateKey(endDate);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const spanDays = Math.round((end.getTime() - start.getTime()) / dayMs) + 1;
+  const prevEnd = new Date(start.getTime() - dayMs);
+  const prevStart = new Date(prevEnd.getTime() - (spanDays - 1) * dayMs);
+  const toKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  // 1. Calculate previous period
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const durationMs = end.getTime() - start.getTime();
+  const [current, previous] = await Promise.all([
+    fetchSalesReport(ctx, locationIds, startDate, endDate, "location"),
+    fetchSalesReport(ctx, locationIds, toKey(prevStart), toKey(prevEnd), "location"),
+  ]);
 
-  // Previous period ends the day before current start
-  const prevEnd = new Date(start.getTime() - 24 * 60 * 60 * 1000);
-  const prevStart = new Date(prevEnd.getTime() - durationMs);
+  const valueOf = (r: SalesReportRow) =>
+    metric === "net_sales"
+      ? r.net_sales
+      : metric === "order_count"
+        ? r.order_count
+        : r.gross_sales;
 
-  const prevStartDate = prevStart.toISOString().split("T")[0];
-  const prevEndDate = prevEnd.toISOString().split("T")[0];
+  const currentRows = current.filter((r) => r.location_id && r.order_count > 0);
+  if (currentRows.length === 0) return [];
 
-  try {
-    // 2. Fetch Current Period Data
-    const { data: currentData, error: currentError } = await supabase
-      .from("orders")
-      .select(
-        `
-        location_id,
-        locations!inner(name),
-        subtotal,
-        total_amount,
-        discount_amount
-      `
-      )
-      .eq("merchant_id", merchantId)
-      .not("status", "in", '("draft","cancelled","void")')
-      .gte("created_at", `${startDate}T00:00:00`)
-      .lte("created_at", `${endDate}T23:59:59`);
+  const prevByLocation = new Map(
+    previous.filter((r) => r.location_id).map((r) => [r.location_id!, valueOf(r)])
+  );
+  const total = currentRows.reduce((s, r) => s + valueOf(r), 0);
+  const average = total / currentRows.length;
 
-    if (currentError) {
-      console.error(
-        "Error getting orders for rankings (current):",
-        currentError
-      );
-      return [];
-    }
-
-    // 3. Fetch Previous Period Data
-    const { data: prevData, error: prevError } = await supabase
-      .from("orders")
-      .select("location_id, subtotal, total_amount, discount_amount")
-      .eq("merchant_id", merchantId)
-      .not("status", "in", '("draft","cancelled","void")')
-      .gte("created_at", `${prevStartDate}T00:00:00`)
-      .lte("created_at", `${prevEndDate}T23:59:59`);
-
-    if (prevError) {
-      console.error("Error getting orders for rankings (previous):", prevError);
-      return [];
-    }
-
-    if (!currentData || currentData.length === 0) {
-      return [];
-    }
-
-    // 4. Aggregate Current Period
-    const currentAgg = new Map<string, { value: number; name: string }>();
-    let totalValue = 0;
-
-    currentData.forEach((order: any) => {
-      let value = 0;
-      if (metric === "gross_sales") value = Number(order.subtotal) || 0;
-      else if (metric === "net_sales")
-        value =
-          (Number(order.subtotal) || 0) - (Number(order.discount_amount) || 0);
-      else if (metric === "order_count") value = 1;
-
-      const locId = order.location_id;
-      const name = order.locations?.name || "Unknown";
-
-      const current = currentAgg.get(locId) || { value: 0, name };
-      current.value += value;
-      currentAgg.set(locId, current);
-
-      totalValue += value;
-    });
-
-    // 5. Aggregate Previous Period
-    const prevAgg = new Map<string, number>();
-
-    prevData?.forEach((order: any) => {
-      let value = 0;
-      if (metric === "gross_sales") value = Number(order.subtotal) || 0;
-      else if (metric === "net_sales")
-        value =
-          (Number(order.subtotal) || 0) - (Number(order.discount_amount) || 0);
-      else if (metric === "order_count") value = 1;
-
-      const locId = order.location_id;
-      prevAgg.set(locId, (prevAgg.get(locId) || 0) + value);
-    });
-
-    // 6. Calculate Metrics
-    const locationCount = currentAgg.size;
-    const averageValue = locationCount > 0 ? totalValue / locationCount : 0;
-    const rankings: LocationRanking[] = [];
-
-    currentAgg.forEach((data, locationId) => {
-      const prevValue = prevAgg.get(locationId) || 0;
-
-      // Comparison vs Avg
-      let vsAvgPct = 0;
-      if (averageValue > 0) {
-        vsAvgPct = ((data.value - averageValue) / averageValue) * 100;
-      }
-
-      // Trend vs Previous
-      let trendPct = 0;
-      if (prevValue > 0) {
-        trendPct = ((data.value - prevValue) / prevValue) * 100;
-      } else if (data.value > 0) {
-        trendPct = 100; // New growth
-      }
-
-      rankings.push({
-        rank: 0, // Will assign after sort
-        location_id: locationId,
-        location_name: data.name,
-        metric_value: data.value,
-        metric_vs_avg_pct: vsAvgPct,
-        trend_pct: trendPct,
-      });
-    });
-
-    // 7. Sort and Assign Rank
-    rankings.sort((a, b) => b.metric_value - a.metric_value);
-
-    return rankings
-      .map((r, i) => ({
-        ...r,
-        rank: i + 1,
-      }))
-      .slice(0, limit);
-  } catch (err) {
-    console.error("Error in getLocationRankingsFromOrders:", err);
-    return [];
-  }
+  return currentRows
+    .map((r) => {
+      const value = valueOf(r);
+      const prevValue = prevByLocation.get(r.location_id!) || 0;
+      return {
+        rank: 0,
+        location_id: r.location_id!,
+        location_name: ctx.locationNames.get(r.location_id!) ?? "Unknown",
+        metric_value: value,
+        metric_vs_avg_pct: average > 0 ? ((value - average) / average) * 100 : 0,
+        trend_pct:
+          prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : value > 0 ? 100 : 0,
+      };
+    })
+    .sort((a, b) => b.metric_value - a.metric_value)
+    .map((r, i) => ({ ...r, rank: i + 1 }))
+    .slice(0, limit);
 }

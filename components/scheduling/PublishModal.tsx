@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,16 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { ChangeSummary, ShiftConflict } from "@/types/schedule";
 import {
   Send,
   AlertCircle,
-  Bell,
-  Mail,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -46,11 +42,6 @@ export function PublishModal({
   onPublished,
 }: PublishModalProps) {
   const router = useRouter();
-  const [notifications, setNotifications] = useState({
-    push: true,
-    email: true,
-  });
-
   const {
     checkShiftConflicts,
     publishSchedule,
@@ -59,7 +50,10 @@ export function PublishModal({
     schedulePeriods,
   } = useScheduleStore();
 
-  const [conflicts, setConflicts] = useState<ShiftConflict[]>([]);
+  const conflicts: ShiftConflict[] = useMemo(
+    () => (open ? checkShiftConflicts(scheduleId, scheduleType) : []),
+    [open, scheduleId, scheduleType, checkShiftConflicts],
+  );
 
   // Get current schedule for shift count
   const currentSchedule = useMemo(() => {
@@ -81,20 +75,10 @@ export function PublishModal({
     return compareSchedules(originalScheduleId, scheduleId);
   }, [originalScheduleId, scheduleId, compareSchedules, currentSchedule]);
 
-  useEffect(() => {
-    if (open) {
-      const foundConflicts = checkShiftConflicts(scheduleId, scheduleType);
-      setConflicts(foundConflicts);
-    } else {
-      setConflicts([]);
-    }
-  }, [open, scheduleId, scheduleType, checkShiftConflicts]);
-
   const handlePublish = () => {
     publishSchedule(scheduleId, scheduleType);
-    toast.success("Schedule Published", {
-      description:
-        "The schedule has been successfully published and employees notified.",
+    toast.success("Schedule marked as published", {
+      description: "This schedule is saved only in this browser. Employees have not been notified.",
     });
     onOpenChange(false);
     onPublished?.();
@@ -110,10 +94,10 @@ export function PublishModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="h-5 w-5 text-primary" />
-            Publish Schedule
+            Mark Schedule as Published
           </DialogTitle>
           <DialogDescription>
-            Review changes and notify employees about the updated schedule.
+            Review changes before marking this schedule as published in this browser.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,42 +179,9 @@ export function PublishModal({
             </div>
           )}
 
-          {/* Notification Settings */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Notify Employees</Label>
-            <div className="p-4 rounded-lg bg-muted/30 border space-y-3">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="push"
-                  checked={notifications.push}
-                  onCheckedChange={(checked) =>
-                    setNotifications({ ...notifications, push: !!checked })
-                  }
-                />
-                <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 text-primary" />
-                  <Label htmlFor="push" className="text-sm cursor-pointer">
-                    Push Notifications
-                  </Label>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="email"
-                  checked={notifications.email}
-                  onCheckedChange={(checked) =>
-                    setNotifications({ ...notifications, email: !!checked })
-                  }
-                />
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-primary" />
-                  <Label htmlFor="email" className="text-sm cursor-pointer">
-                    Email
-                  </Label>
-                </div>
-              </div>
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Schedules are currently stored only in this browser. This action does not share shifts or notify employees.
+          </p>
         </div>
 
         <DialogFooter className="gap-2">
@@ -243,12 +194,12 @@ export function PublishModal({
               className="bg-yellow-600 hover:bg-yellow-700 text-white gap-2"
             >
               <AlertCircle className="h-4 w-4" />
-              Publish Anyway
+              Mark as Published Anyway
             </Button>
           ) : (
             <Button onClick={handlePublish} className="gap-2">
               <Send className="h-4 w-4" />
-              Publish Schedule
+              Mark as Published
             </Button>
           )}
         </DialogFooter>

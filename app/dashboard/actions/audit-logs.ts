@@ -13,6 +13,7 @@ import {
 import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
+import { attachSettlementTerminals } from "@/lib/audit/attach-settlement-terminals";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -146,7 +147,12 @@ export async function GetAuditLogs(
     location: Array.isArray(log.location) ? log.location[0] : log.location,
   }));
 
-  return { data: logs, total: count || 0 };
+  // Batch events name their terminal only through the batch row; merchant.id
+  // was resolved under the caller's RLS above, so it bounds the lookup.
+  return {
+    data: await attachSettlementTerminals(logs, { merchantId: merchant.id }),
+    total: count || 0,
+  };
 }
 
 // ============================================================================

@@ -7,6 +7,11 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { StationMenuScope } from "@/lib/stations/station-menu-scope";
+import {
+  isStationKioskSettingsDirty,
+  normalizeStationKioskSettings,
+  type StationKioskSettings,
+} from "@/lib/stations/station-kiosk-settings";
 import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
@@ -77,6 +82,12 @@ export interface Station {
    * (20260919120000_station_menu_scope.sql); absent reads as `all`.
    */
   menu_scope?: StationMenuScope;
+  /**
+   * Self-service kiosk ordering settings (order types + seat selection).
+   * Optional: absent before 20260930200000_station_kiosk_settings.sql; read
+   * through normalizeStationKioskSettings, never raw.
+   */
+  kiosk_settings?: Record<string, unknown>;
 
   // Status
   is_active: boolean;
@@ -211,6 +222,7 @@ export interface UpdateStationInput {
   can_void_orders?: boolean;
   can_apply_discounts?: boolean;
   can_update_kitchen_status?: boolean;
+  kiosk_settings?: StationKioskSettings;
 }
 
 // ============================================================================
@@ -732,6 +744,30 @@ export async function updateStation(
       updateData.can_apply_discounts = input.can_apply_discounts;
     if (input.can_update_kitchen_status !== undefined)
       updateData.can_update_kitchen_status = input.can_update_kitchen_status;
+    if (input.kiosk_settings !== undefined) {
+      if (currentStation.station_type !== "self_service") {
+        return {
+          success: false,
+          error: "Kiosk settings only apply to self-service kiosk stations",
+          data: null,
+        };
+      }
+      if (
+        input.kiosk_settings.seat_mode === "fixed" &&
+        !input.kiosk_settings.fixed_seat_label?.trim()
+      ) {
+        return {
+          success: false,
+          error: "Enter the fixed seat for this kiosk",
+          data: null,
+        };
+      }
+      // Re-normalise server-side: never trust the client's shape.
+      updateData.kiosk_settings = normalizeStationKioskSettings(
+        input.kiosk_settings,
+      );
+      input = { ...input, kiosk_settings: updateData.kiosk_settings as StationKioskSettings };
+    }
 
     const { data, error } = await supabase
       .from("stations")
@@ -761,14 +797,18 @@ export async function updateStation(
         // Strict equality check might fail for null/undefined vs optional, but let's be safe
         // Also need to handle type mismatch if any (e.g. number vs string), but TypeScript helps.
         // We cast to any to compare values loosely or strictly.
-        if (
-          (currentStation as any)[inputKey] !== (input as any)[inputKey] &&
-          // Handle null vs undefined vs empty string potentially
-          !(
-            (currentStation as any)[inputKey] === null &&
-            (input as any)[inputKey] === null
-          )
-        ) {
+        const before = (currentStation as any)[inputKey];
+        const after = (input as any)[inputKey];
+        // kiosk_settings compares by value: jsonb comes back with its own key
+        // order, so a string compare would log unchanged settings as changed.
+        const changed =
+          inputKey === "kiosk_settings"
+            ? isStationKioskSettingsDirty(
+                normalizeStationKioskSettings(before),
+                after as StationKioskSettings,
+              )
+            : before !== after && !(before === null && after === null);
+        if (changed) {
           changedFields.push(inputKey);
           beforeLog[inputKey] = (currentStation as any)[inputKey];
           afterLog[inputKey] = (input as any)[inputKey];

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import {
+  getMerchantDevice,
   getMerchantDeviceActivity,
   getMerchantDeviceInventory,
 } from '../actions/device-registry'
@@ -18,6 +19,23 @@ export function useMerchantDeviceInventory() {
       return result.data ?? []
     },
     staleTime: 60_000,
+  })
+}
+
+/** A single device, for the support form opened against it. */
+export function useMerchantDevice(deviceId: string | null) {
+  return useQuery({
+    queryKey: [...MERCHANT_DEVICE_REGISTRY_QUERY_KEY, 'device', deviceId],
+    queryFn: async () => {
+      const result = await getMerchantDevice(deviceId as string)
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to load device')
+      }
+      return result.data
+    },
+    enabled: Boolean(deviceId),
+    staleTime: 60_000,
+    retry: false,
   })
 }
 
