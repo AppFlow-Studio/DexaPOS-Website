@@ -69,6 +69,8 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
+import { formatBillingCard } from '@/lib/subscription-billing/card-display'
+import { cn } from '@/lib/utils'
 import {
   describeTierPricing,
   monthlyTierCharge,
@@ -224,10 +226,7 @@ function cardLabel(profile: MerchantSubscriptionBillingProfileViewRecord | null)
   if (!profile) return 'No card'
 
   if (profile.billing_method === 'card') {
-    // Brand and last four are best-effort from the vault: the brand can be
-    // null or a processor token such as "credit-card".
-    const brand = CARD_BRAND_NAMES[(profile.card_brand ?? '').toLowerCase().replace(/[\s_-]/g, '')] ?? 'Card'
-    return profile.card_last_four ? `${brand} •• ${profile.card_last_four}` : brand
+    return formatBillingCard(profile).label
   }
 
   const bank = profile.bank_name || 'Bank account'
@@ -1357,17 +1356,73 @@ export function MerchantSubscriptionOverviewCard({
           </PanelSection>
         </div>
 
-        {inProgress.length > 0 ? (
-          <PanelSection label="In progress" caption="Requests waiting on DEXA. Nothing here needs you.">
-            <div className="space-y-2">
-              {inProgress.map((item) => (
-                <div
-                  key={item.key}
-                  className="flex min-w-0 flex-col gap-3 rounded-2xl bg-muted/45 p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium">{item.title}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">{item.meta}</div>
+          {activeSection === 'billing' ? (
+            <div className="min-w-0">
+      {transactionSummary.pending > 0 ? (
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <div className="font-medium">Outstanding balance: {formatMoney(transactionSummary.pending)}</div>
+              <div className="mt-1 text-sm text-amber-800">
+                Update the saved card so DEXA Billing can automatically retry eligible invoices.
+              </div>
+            </div>
+          </div>
+          <Button asChild size="sm" variant="outline" className="rounded-full border-amber-300 bg-white">
+            <Link href={billingSettingsHref}>Review payment method</Link>
+          </Button>
+        </div>
+      ) : null}
+      <PanelSection label="Merchant Payment Method" caption="The primary payment profile used for merchant-wide subscription billing.">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            This card pays the merchant tier only. Each location pays its own devices and add-ons using its own card.
+          </p>
+          <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Link href={billingSettingsHref}>Update payment method</Link>
+          </Button>
+        </div>
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading payment method...</div>
+        ) : (
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-muted p-2.5">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <div className="font-medium">{buildPaymentMethodLabel(primaryBillingProfile)}</div>
+                <div className="text-sm text-muted-foreground">
+                  {primaryBillingProfile?.billing_method === 'card'
+                    ? formatBillingCard(primaryBillingProfile).detail
+                    : primaryBillingProfile?.billing_method === 'ach'
+                      ? 'Bank account on file'
+                      : 'Payment method setup is handled by your Dexa team.'}
+                </div>
+                {primaryBillingProfile?.location_name ? (
+                  <div className="mt-1 text-xs text-muted-foreground">Billing anchor: {primaryBillingProfile.location_name}</div>
+                ) : null}
+              </div>
+            </div>
+            {primaryBillingProfile?.is_primary ? (
+              <Badge variant="secondary" className="rounded-full">Primary</Badge>
+            ) : null}
+          </div>
+        )}
+        {Object.keys(billingProfilesByLocationId).length > 0 ? (
+          <div className="mt-5 space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Location payment profiles
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {Object.values(billingProfilesByLocationId).map((profile) => (
+                <div key={profile.id} className="rounded-2xl bg-muted/35 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">{profile.location_name || 'Location profile'}</div>
+                    {profile.id === primaryBillingProfile?.id ? (
+                      <Badge variant="outline" className="rounded-full text-[0.6875rem]">Billing anchor</Badge>
+                    ) : null}
                   </div>
                   <RequestTracker finalStep={item.finalStep} />
                 </div>

@@ -113,6 +113,7 @@ import {
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
 import { getMerchantTierPresentation } from '@/lib/subscription-billing/merchant-tier-presentation'
+import { formatBillingCard } from '@/lib/subscription-billing/card-display'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 import { MerchantBillingSection } from '@/app/manage/merchants/[merchantId]/components/subscription/MerchantBillingSection'
 import { LocationBillingList } from '@/app/manage/merchants/[merchantId]/components/subscription/LocationBillingList'
@@ -489,9 +490,7 @@ function buildPaymentMethodLabel(profile: MerchantBillingProfileRecord | null): 
   if (!profile) return 'No billing profile'
 
   if (profile.billing_method === 'card') {
-    const brand = profile.card_brand || 'Card'
-    const suffix = profile.card_last_four ? `•••• ${profile.card_last_four}` : ''
-    return [brand, suffix].filter(Boolean).join(' ')
+    return formatBillingCard(profile).label
   }
 
   if (profile.billing_method === 'ach') {

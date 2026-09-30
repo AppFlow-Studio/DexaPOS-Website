@@ -14,6 +14,10 @@ import { resolveProcessorAccount } from '@/lib/payments/resolver'
 import { createSale, readSaleVaultProfile } from '@/lib/payments/valor/saleApi'
 import { getMerchantBillingCardSetup } from '@/app/manage/actions/merchant-billing'
 import {
+  healBillingProfileCardMeta,
+  resolveVaultCardMeta,
+} from '@/lib/subscription-billing/vault-card-meta'
+import {
   formatLongDate,
   formatShortDateRange,
   formatUsd,
@@ -889,11 +893,13 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   const locationNameById = new Map(
     normalizedLocations.map((location) => [location.id, location.name]),
   )
-  const normalizedBillingProfiles = (
+  // Cards saved before brand/last-four capture backfill themselves from Valor here.
+  const billingProfiles = await healBillingProfileCardMeta(
     (billingProfilesResult.data ?? []) as Array<
       MerchantSubscriptionBillingProfileViewRecord & { created_at: string }
-    >
-  ).map((profile) => ({
+    >,
+  )
+  const normalizedBillingProfiles = billingProfiles.map((profile) => ({
     ...profile,
     location_name: profile.location_id
       ? (locationNameById.get(profile.location_id) ?? null)
@@ -1471,6 +1477,16 @@ export async function PurchaseMerchantServiceAddOn(
       .maybeSingle()
     if (!existingCard?.id) {
       if (vault.customerProfileId) {
+        // Best-effort brand + last four for display: the sale response, else
+        // Valor's Get Payment Profile. Never blocks the save.
+        const cardMeta = await resolveVaultCardMeta(
+          { credentials },
+          {
+            vaultCustomerId: vault.customerProfileId,
+            paymentProfileId: vault.paymentProfileId,
+            responses: [sale.raw],
+          },
+        )
         await (serviceRole as any)
           .from('merchant_billing_profiles')
           .update({ is_primary: false, updated_at: new Date().toISOString() })
@@ -1483,6 +1499,8 @@ export async function PurchaseMerchantServiceAddOn(
           billing_email: params.billingEmail ?? null,
           billing_method: 'card',
           account_holder_name: params.cardholderName,
+          card_brand: cardMeta.brand,
+          card_last_four: cardMeta.lastFour,
           processor: 'valor',
           processor_account_id: processorAccount.id,
           customer_vault_id: vault.customerProfileId,

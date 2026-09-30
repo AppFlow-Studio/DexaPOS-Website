@@ -81,6 +81,7 @@ export interface UpsertBillableServiceParams {
   basePriceMonthly: number
   additionalUnitPrice?: number | null
   includedQuantity?: number
+  /** Ignored: the card surcharge is one platform-wide rate, not per service. */
   cardSurchargePct?: number
   unitLabel?: string
   isActive?: boolean
@@ -2815,7 +2816,6 @@ export async function upsertBillableService(
     p_base_price_monthly: params.basePriceMonthly,
     p_additional_unit_price: params.additionalUnitPrice ?? null,
     p_included_quantity: params.includedQuantity ?? 0,
-    p_card_surcharge_pct: params.cardSurchargePct ?? 4,
     p_unit_label: params.unitLabel ?? 'unit',
     p_is_active: params.isActive ?? true,
     p_metadata: params.metadata ?? {},

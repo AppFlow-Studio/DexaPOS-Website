@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { revalidatePath } from 'next/cache'
@@ -1450,16 +1451,27 @@ export async function adminToggleOnlineStore(
     }
 
     if (enabled && existingConfig.accepts_online_payments) {
-      const locationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
-      if (
-        !locationPaymentDevice?.provider_public_key ||
-        !locationPaymentDevice?.has_provider_secret ||
-        locationPaymentDevice.status !== 'active'
-      ) {
+      // Same resolver the storefront checkout uses, so the gate can't disagree
+      // with runtime: no live Valor account means card checkout fails closed.
+      const { data: valorAccount, error: valorAccountError } = await (
+        createServiceRoleClient() as any
+      )
+        .rpc('get_storefront_valor_account', {
+          p_location_id: locationId,
+          p_merchant_id: merchantId,
+        })
+        .maybeSingle()
+
+      if (valorAccountError) {
+        console.error('[adminToggleOnlineStore] Valor account lookup error:', valorAccountError)
+        return { success: false, error: valorAccountError.message }
+      }
+
+      if (!valorAccount?.has_credentials) {
         return {
           success: false,
           error:
-            'Configure the NMI tokenization key and private API key before enabling online card payments for this storefront.',
+            'This location has no live Valor account. Add its Valor account and set it live before enabling online card payments for this storefront.',
         }
       }
     }
