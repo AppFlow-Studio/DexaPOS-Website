@@ -5,66 +5,81 @@ Per-location toggle to switch guest-facing order numbering between:
 - **`per_station`** (default) — each register keeps its own daily counter, shown as `#S1-0042`.
 - **`location_wide`** — one shared daily counter across every register at the location, shown as `#0042`.
 
-Setting lives at `locations.pos_config.ordering.orderNumberScope` and reaches the POS tablet through the existing `get_effective_pos_config(station_id)` merge (defaults ← location ← station overrides). It is **location-level only** — not a per-station override.
+Setting lives at `locations.pos_config.ordering.orderNumberScope` and reaches the POS tablet through the existing `get_effective_pos_config(station_id)` merge (defaults ← location ← station overrides). It is **location-level only**, with no per-station override. The server reads it straight off the location row.
 
-> **Status (2026-09-29): the DB half must be rebuilt before it ships.** The original migration now lives in `reference-sql/` so it can't be applied by accident. Since it was written, `20260927121500_order_number_xact_lock` replaced `generate_order_number`, and the `idx_unique_order_number_per_merchant` fix replaced `create_order_v4`. Applying the old file as-is would undo both. Write a new, later-versioned migration that ports only the scope logic onto the current function bodies. The POS client half is not built yet.
+> **Status (2026-09-30):** DB half rebuilt as `supabase/migrations/20260930170000_order_number_scope_per_location.sql` on top of `20260927121500_order_number_xact_lock` and the `create_order_v4` index-name fix (Dexa-POS `bdf1ee9b`). The original `20260925120000` migration stays in `reference-sql/` for history only. POS half on Dexa-POS `shared-location-order-nb`. Not yet applied to staging.
 
 ---
 
-## Web dashboard (this repo) — DONE
+## Design decisions
+
+1. **Counters and uniqueness are per location.** Uniqueness moves from `(merchant_id, order_number)` to `(location_id, order_number)` (`orders_order_number_location_key`). Two locations of one merchant can both hold `ORD-<date>-0001`. The old `(merchant_id, order_number)` guards (`orders_order_number_merchant_key`, `idx_unique_order_number_per_merchant`) are dropped: keeping them while keying counters by location would make those locations collide.
+2. **The server owns the shared counter; the tablet never mints a location-wide number.** In `location_wide` mode the tablet keeps minting a provisional station number (`#S1-0043`). `create_order_v4` replaces it from the shared counter when the create syncs, which is well under a second online. Registers can't mint the same provisional number, because `station_number` is unique per location, and every final number comes from one sequence. So two registers ringing at the same moment get different numbers, and an offline tablet can't produce a second `#0001`.
+3. **A collision heals on the first try.** Numbers minted on the device never advance the server sequence. The old handler retried once from that lagging sequence, could land on another taken number, and failed the outbox op forever. Now the replacement comes from a counter moved past the location's highest number, and the tablet moves its own counter past the assigned number.
+
+## Server behaviour
+
+| Call | Result |
+|------|--------|
+| `generate_order_number(loc, station)`, `per_station` | `ORD-<date>-S{n}-NNNN` from `ord_seq_l<loc>_<date>_s<n>` |
+| `generate_order_number(loc, station)`, `location_wide` | station ignored → `ORD-<date>-NNNN` from `ord_seq_l<loc>_<date>` |
+| `generate_order_number(loc, NULL)` / `generate_order_number_internal` | `ORD-<date>-NNNN`, same station-less counter (online orders share it) |
+| `create_order_v4` with `…-S{n}-NNNN` in `location_wide` | replaced from the shared counter, `order_number_reassigned = true` |
+| `create_order_v4` with a station-less client number | kept |
+| `create_order_v4` number collision | renumbered via `_unused_order_number` (up to 3 attempts), `order_number_reassigned = true` |
+
+- The date comes from the location timezone. The lock is transaction-scoped and taken only when creating the day's sequence, both unchanged from `20260927121500`.
+- A new sequence starts above today's highest number at the location for its format. In `location_wide` mode the shared counter starts above every register's number.
+- **Mid-shift switch:** `trg_locations_order_number_scope_switched` fires when a location's scope changes to `location_wide`. It moves an existing shared counter past today's highest register number, so after `S1-0042` and `S2-0037` the next order is `0043`. Open orders keep their numbers.
+- The reply and the `order_created` audit row carry `order_number_scope`. The audit row also keeps `client_order_number` when the number was replaced, so a guest's receipt can be traced.
+- `seat_guests_v4` creates its order through `create_order_v4`, so it inherits all of this.
+- Legacy RPCs (`create_order_v2/v3`, `seat_guests_v3`) mint through `generate_order_number`, so they follow the scope too.
+
+## Web dashboard (this repo)
 
 | Layer | File | Change |
 |-------|------|--------|
-| Config model | `lib/pos/pos-config.ts` | `PosOrderNumberScope`, `PosOrderingConfig`, `ordering` on `PosConfig` + `DEFAULT_POS_CONFIG` (default `per_station`), `normalizeOrderNumberScope`, coercion in `normalizePosConfig`. |
+| Config model | `lib/pos/pos-config.ts` | `PosOrderNumberScope`, `ordering` on `PosConfig` + `DEFAULT_POS_CONFIG` (default `per_station`), `normalizeOrderNumberScope`. |
 | Tests | `lib/pos/__tests__/pos-config.test.ts` | Coercion, garbage→`per_station`, effective-merge keeps location value. |
-| UI | `app/dashboard/settings/pos/page.tsx` | "Order Numbering" radio card, bound to `locationConfig.ordering.orderNumberScope`; saved by the existing **Save Location Defaults** button. |
-| Persistence | `app/dashboard/actions/pos-settings.ts` | Unchanged — `saveLocationPosConfig` → `set_location_pos_config_v1` already merges + audits the whole config. |
-| DB (reference only, see Status) | `docs/features/order-number-scope/reference-sql/20260925120000_order_number_scope.sql` (+ rollback) | `default_pos_config_v1()` ships the key; `generate_order_number()` keys sequences by **location** and bootstraps the location-wide counter above today's max across all stations; `create_order_v4()` honors the scope and reassigns provisional station numbers. |
+| UI | `app/dashboard/settings/pos/page.tsx` | "Order Numbering" radio card, saved by **Save Location Defaults** → `set_location_pos_config_v1` (merges and audits the whole config). |
+| DB | `supabase/migrations/20260930170000_order_number_scope_per_location.sql` (+ `rollback/`) | Everything under *Server behaviour*. |
 
-Display surfaces (receipts, orders, payments, KDS mirror, CFD) render `display_number ?? '#'+order_number` and adapt automatically — no changes.
+Display surfaces (receipts, orders, payments, KDS mirror, CFD) render `display_number ?? '#'+order_number` and need no changes.
 
-### Server behavior (the online-authoritative half)
-- `generate_order_number(location, NULL)` → `ORD-<date>-NNNN` (display `#NNNN`), location-keyed sequence.
-- `generate_order_number(location, station)` → `ORD-<date>-S{n}-NNNN` (display `#S{n}-NNNN`).
-- `create_order_v4`: reads the location scope. In `location_wide` mode, a **station-partitioned client number** (`…-S{n}-NNNN`, i.e. a provisional offline mint) is reassigned to the shared location counter and `order_number_reassigned=true` is returned; a **station-less client number** (from the online path) is kept as-is. `process_online_order` already mints station-less, so online orders are location-wide for free.
+## POS tablet (Dexa-POS)
 
----
-
-## POS tablet (`../Dexa-POS`) — SEPARATE PR (not yet built)
-
-Numbering is minted on the tablet (offline-first); nothing is end-to-end until this ships. Strategy: **online-authoritative + offline fallback**.
-
-1. **Read scope** from the cached `get_effective_pos_config(station_id)` result (`ordering.orderNumberScope`; missing → `per_station`).
-2. **`lib/localOrderSequence.ts`** — when `location_wide`: use the `:global` (location-keyed, no-station) sequence key and emit `#NNNN` / `ORD-<date>-NNNN` (drop the `S{n}` prefix). Otherwise unchanged.
-3. **Allocation** — when `location_wide` **and online**, get the number from the server (`generate_order_number(location, NULL)`) and pass it to `create_order_v4` as `p_order_number` (no double-increment). When **offline**, mint a provisional station-partitioned number (`…-S{n}-…`) so the server can detect + reassign it on sync; on `order_number_reassigned=true`, update local `order_number`/`display_number` and re-push to CFD (`CFDProvider`) + reprint per existing rules.
-4. **Mid-shift switch** — apply the new scheme to **new** orders only; never renumber open orders. "Continue from max" is enforced server-side; when back online, `seedLocalSequence(...)` from the server high-water mark.
-5. **CFD (`../Dexa-POS-CFD`)** — no change; it renders whatever the tablet sends.
-
-> The block between `-- BEGIN_VERBATIM` / `-- END_VERBATIM` in `create_order_v4` is mirrored by the tablet's local order-creation logic. The mirror sets scope from cached config (not a DB read) and, offline, keeps the provisional number rather than reassigning.
-
----
+- `services/localFirst/opHandlers.ts`: `create_order` already adopted `order_number_reassigned`. `seat_guests` now does the same; before, a seated order kept its provisional number on the device. Adoption updates the SQLite row and the store. The CFD re-pushes because its payload fingerprint includes the display number.
+- `lib/localOrderSequence.ts`: `seedFromAssignedOrderNumber` moves the device counter past an assigned number, so a device that collided (cleared MMKV, two devices on one station) stops colliding after one renumber.
+- No change to minting. In `location_wide` mode the tablet does not need to read the scope, because the server replaces its provisional numbers. Old tablet builds behave the same way and are renumbered on sync.
+- No automatic reprint on renumber. A reprint (receipt or KDS ticket) renders the new number. An automatic second kitchen ticket for the same food was judged riskier than the stale number.
 
 ## Edge cases
 
-1. **Multi-tablet offline, location-wide** → provisional `S{n}` numbers, server reassigns on sync. Online avoids collisions.
-2. **Mid-shift flip** → new scheme immediately; counter bootstraps at `max(all stations today)+1`; open orders keep their number; the day is mixed-scheme, next day clean.
-3. **Multi-location merchant** → sequences now location-keyed, so `#0042` at Location A never collides with Location B under `(merchant_id, order_number)`. (Also fixes a latent collision when two locations shared a `station_number`.)
-4. **Receipt printed then reassigned** → only for offline orders in location-wide mode; online gets the real number at open. Tablet reprints on reassignment.
-5. **KDS/expo** → number loses station context, but `orders.station_id` is still set for separate display.
-6. **Voided/abandoned** → `nextval` reserves numbers → gaps. Acceptable; matches current behavior.
-7. **Old tablet build** → ignores the key → `per_station`; fully backward compatible.
+1. **Offline, location-wide** → provisional `#S{n}-NNNN`, replaced on sync. A ticket printed offline shows the provisional number (see open questions).
+2. **Mid-shift flip** → new orders only; the counter jumps above today's register numbers; the day is mixed-scheme, the next day clean.
+3. **Deploy day** → sequence names change, so each counter restarts once from today's max at the location. No number is reused. Deploy at close anyway.
+4. **Multi-location merchant** → each location counts from `0001`. Searches by number (dashboard, admin, kiosk) are list searches and show one result per location.
+5. **KDS/expo** → location-wide numbers have no station prefix; `orders.station_id` is still set.
+6. **Voided/abandoned** → `nextval` reserves numbers → gaps, as today. A mid-shift jump or a collision heal also skips numbers.
+7. **Old tablet build** → ignores the key; the server still applies the location's scope.
 
----
+## Open questions / follow-ups
+
+- **Receipt printed with a provisional number** (offline, location-wide): is a manual reprint enough, or should the tablet prompt staff when an order that already printed is renumbered?
+- **OrderOut direct delivery** matches webhooks on `orderout_delivery_dispatches.oo_order_number` (our `order_number`) with `.maybeSingle()` and no merchant or location scope (`orderout-delivery-webhook`, `orderout-orders-webhook` `handleDirectEcho`). Numbers have been unique only per merchant since June, so this is already ambiguous between merchants; per-location numbering adds same-merchant ambiguity. Scope those lookups by location, or match on ids first.
+- `cleanup_old_order_sequences` was never scheduled as a cron job when `docs/quality/load-testing/load-001-order-throughput.md` was written. Per-location keying creates more day sequences than before, so check `cron.job` on staging.
+
+## Rollout
+
+1. **Staging ledger:** `20260925120000` is recorded but its bodies were replaced and its file lives in `reference-sql/`. Run `supabase migration repair --status reverted 20260925120000`. Check whether `bdf1ee9b`'s fix is also in the ledger under a version with no file here:
+   `select version, name from supabase_migrations.schema_migrations where version >= '20260925' order by version;`
+2. **Staging:** `supabase db push`, then run `verify-staging.sql` and the tablet checks below.
+3. **Prod (by hand, at close):** apply `20260927121500` first. Build `orders_order_number_location_key` with `CREATE UNIQUE INDEX CONCURRENTLY` (see the migration header), then apply `20260930170000`. Do **not** apply `bdf1ee9b`'s file: this migration contains its fix, and applying it afterwards would remove the scope logic.
 
 ## Verification
 
-- **Unit:** `npm run test` → `lib/pos/__tests__/pos-config.test.ts` (9 tests). ✅
-- **Typecheck:** no new errors in touched files (project sets `ignoreBuildErrors`). ✅
-- **SQL on staging** (after `db push`, via `execute_sql`):
-  - `per_station`: `generate_order_number(loc, station1)` → `ORD-<date>-S1-0001` → `#S1-0001`.
-  - `location_wide` fresh day: `generate_order_number(loc, NULL)` twice → `…-0001`, `…-0002`.
-  - **Mid-shift:** seed `ORD-<date>-S1-0042` + `ORD-<date>-S2-0037` at a location, then create the location-wide sequence → first number `…-0043`.
-  - **Multi-location:** two locations of one merchant both `location_wide` → both hold `…-0001`, no `(merchant_id, order_number)` violation.
-  - `create_order_v4` with `p_order_number` = `ORD-<date>-S1-0007` under `location_wide` → returns a station-less number + `order_number_reassigned=true`.
-- **Web UI:** `/dashboard/settings/pos`, flip radio, Save Location Defaults → toast, audit `Updated Location POS Settings`, refetch shows new value.
-- **Rollout:** staging-first (`db push`, **not** MCP `apply_migration` — ledger drift), validate, promote to prod with out-of-band ledger reconciliation. Default `per_station` = zero change until opt-in.
+- **Unit (web):** `npm run test` → `lib/pos/__tests__/pos-config.test.ts`.
+- **Migration (local):** run against PGlite (Postgres 18) on a minimal schema seeded with today's staging bodies. All acceptance cases passed, plus rollback → re-apply. Concurrency is covered by the locking design, not by that run.
+- **Staging SQL:** `verify-staging.sql` (read-only structure checks, plus generator checks inside a rolled-back transaction).
+- **Tablet (Dexa-POS):** `__tests__/db/localWritesEndToEnd.test.ts` → "the server renumbers an order".
+- **On devices (staging):** two registers in `location_wide` → `#0001`, `#0002`; an offline order → provisional `#S1-…`, then the new number on the tablet, the CFD and a reprint after sync; flip mid-shift after `S1-0042`/`S2-0037` → `#0043`; web toggle saves and shows in the audit log.
