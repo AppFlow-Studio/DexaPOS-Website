@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import type { VoidItem, RefundItem } from "@/app/dashboard/actions/order-analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import {
@@ -110,7 +110,6 @@ export default function VoidsReportPage() {
     isRefundColVisible(c.id),
   ).length;
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
   const { data, isLoading, isError } = useVoidsReport(queryDateRange.from, queryDateRange.to);
 
@@ -199,7 +198,6 @@ export default function VoidsReportPage() {
       <ReportPageHeader
         title="Voids & Refunds"
         description="Cancelled items and refunded orders"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

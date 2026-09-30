@@ -7,7 +7,6 @@ import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ScrollableTabsBar } from '@/components/dashboard/ScrollableTabsBar'
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -100,16 +99,10 @@ export default function ReportsPage() {
       `}</style>
 
       <PageHeader
-        title="Reports"
+        title="Order Reports"
         subtitle="Download and analyze detailed reports for your business"
         backHref="/dashboard/orders"
         backLabel="Back to Orders"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

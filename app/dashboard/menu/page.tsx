@@ -7,7 +7,6 @@ import {
   PanelSection,
   StatRow,
   StatTile,
-  LocationIndicator
 } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -727,7 +726,6 @@ export default function MenuPage () {
             isFiltered={searchTerm.length > 0}
             onlineMenuId={onlineMenu?.primaryMenuId ?? null}
             showLocations={isAllLocations && !isSingleLocation}
-            stationCoverageLocationId={gatedLocationId}
           />
           {filteredMenus.length > 0 && (
             <div className='flex items-center gap-2 mt-4 text-sm text-muted-foreground'>

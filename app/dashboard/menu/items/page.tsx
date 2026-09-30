@@ -141,7 +141,6 @@ import {
   Panel,
   StatRow,
   StatTile,
-  LocationIndicator,
 } from "@/components/dashboard/shell";
 import {
   categoryScopeStyle,
@@ -2090,14 +2089,6 @@ export default function MenuItemsPage() {
             : isAllLocations
               ? "All items across your organization. Items live within categories."
               : `Viewing items for ${locationName} with location-specific pricing.`
-        }
-        indicator={
-          !isSingleLocation ? (
-            <LocationIndicator
-              isAllLocations={isAllLocations}
-              locationName={locationName}
-            />
-          ) : undefined
         }
         actions={
           <>

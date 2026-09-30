@@ -35,9 +35,8 @@ import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
 import { useClerkOrgId, useLocationStore } from '../../hooks/useLocationScoped';
 import { GetMenuItems } from '../../actions/menu-items';
 import type { LoyaltyProgram, Promotion } from '../../actions/loyalty-programs';
-import { useGatedLocation } from '@/stores/location-store';
+
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -48,7 +47,6 @@ export default function LoyaltySettingsPage() {
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = useClerkOrgId();
   const { selectedLocationId } = useLocationStore();
-  const selectedLocation = useGatedLocation();
 
   // Loyalty programs
   const {
@@ -261,12 +259,6 @@ export default function LoyaltySettingsPage() {
         <PageHeader
           title="Loyalty & rewards"
           subtitle="Manage loyalty programs and promotions."
-          indicator={
-            <LocationIndicator
-              isAllLocations={!selectedLocationId || selectedLocationId === 'all'}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
@@ -282,12 +274,6 @@ export default function LoyaltySettingsPage() {
       <PageHeader
         title="Loyalty & rewards"
         subtitle="Create programs and promotions that reward returning customers."
-        indicator={
-          <LocationIndicator
-            isAllLocations={!selectedLocationId || selectedLocationId === 'all'}
-            locationName={selectedLocation?.name}
-          />
-        }
       />
 
       {/* LOYALTY PROGRAMS SECTION */}

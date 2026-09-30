@@ -18,14 +18,12 @@ import {
 import {
   PageShell,
   PageHeader,
-  LocationIndicator,
   Panel,
   PanelSection,
 } from '@/components/dashboard/shell'
 import { cn } from '@/lib/utils'
 import {
   useGatedLocationId,
-  useGatedLocation,
   useIsSingleLocation,
 } from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
@@ -51,7 +49,6 @@ export default function OutOfStockPage() {
   const selectedLocationId = gatedLocationId ?? 'all'
   const isAllLocations = !gatedLocationId
   const isSingleLocation = useIsSingleLocation()
-  const selectedLocation = useGatedLocation()
   const { data: userInfo } = useUserInfo()
   const clerkOrgId: string | undefined = userInfo?.members?.[0]?.organizations?.id
 
@@ -169,12 +166,6 @@ export default function OutOfStockPage() {
     <PageHeader
       title="Out of stock"
       subtitle="Manage items, modifiers, and categories that are currently unavailable across the POS, online store, and connected delivery apps."
-      indicator={
-        <LocationIndicator
-          isAllLocations={isAllLocations}
-          locationName={selectedLocation?.name}
-        />
-      }
       actions={
         total > 0 ? (
           <Button

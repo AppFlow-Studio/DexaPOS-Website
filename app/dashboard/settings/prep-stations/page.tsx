@@ -25,11 +25,9 @@ import {
 import { Plus, AlertTriangle, MapPin, Loader2, Flame } from "lucide-react";
 import {
   useGatedLocationId,
-  useGatedLocation,
 } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -42,7 +40,6 @@ export default function PrepStationsPage() {
   const gatedLocationId = useGatedLocationId();
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
-  const selectedLocation = useGatedLocation();
   const clerkOrgId = useClerkOrgId();
 
   const {
@@ -110,12 +107,6 @@ export default function PrepStationsPage() {
         <PageHeader
           title="Prep stations"
           subtitle="Manage kitchen routing and KDS preparation areas."
-          indicator={
-            <LocationIndicator
-              isAllLocations={isAllLocations}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
@@ -133,7 +124,6 @@ export default function PrepStationsPage() {
         <PageHeader
           title="Prep stations"
           subtitle="Manage kitchen routing and KDS preparation areas."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
 
         <Panel padded>
@@ -156,12 +146,6 @@ export default function PrepStationsPage() {
         <PageHeader
           title="Prep stations"
           subtitle="Manage kitchen routing and KDS preparation areas."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
           actions={<Skeleton className="h-9 w-40 rounded-full" />}
         />
         <div className="space-y-3">
@@ -179,12 +163,6 @@ export default function PrepStationsPage() {
         <PageHeader
           title="Prep stations"
           subtitle="Manage kitchen routing and KDS preparation areas."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Panel padded>
           <div className="flex min-h-64 flex-col items-center justify-center text-center">
@@ -217,12 +195,6 @@ export default function PrepStationsPage() {
       <PageHeader
         title="Prep stations"
         subtitle="Route menu items and categories to the correct KDS preparation area."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <Button
             className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"

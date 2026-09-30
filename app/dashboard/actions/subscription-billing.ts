@@ -149,9 +149,20 @@ export interface MerchantTierPlanViewRecord {
   display_name: string
   min_locations: number | null
   max_locations: number | null
+  /**
+   * Flat monthly price. Since the 2026-09-10 pricing change this is **0** for
+   * every merchant tier — the charge is the per-location overage below, not a
+   * flat fee. Read `monthlyTierCharge()` rather than this field alone.
+   */
   monthly_price_cents: number
   description: string | null
   display_order: number
+  /** Locations included before the per-location price applies. */
+  included_stations: number
+  /** Price per active location beyond `included_stations`. */
+  per_extra_station_price: number
+  /** Surcharge applied when the merchant pays by card. */
+  card_surcharge_pct: number
 }
 
 export interface MerchantPendingTierRequestViewRecord {
@@ -206,6 +217,9 @@ function normalizeMerchantTierPlans(
     monthly_price_cents: number | null
     description: string | null
     display_order: number | null
+    included_stations: number | null
+    per_extra_station_price: number | null
+    card_surcharge_pct: number | null
       }>
     | null
     | undefined,
@@ -221,6 +235,9 @@ function normalizeMerchantTierPlans(
     monthly_price_cents: toNumber(plan.monthly_price_cents),
     description: plan.description,
     display_order: toNumber(plan.display_order),
+    included_stations: toNumber(plan.included_stations),
+    per_extra_station_price: toNumber(plan.per_extra_station_price),
+    card_surcharge_pct: toNumber(plan.card_surcharge_pct),
   }))
 }
 
@@ -442,6 +459,13 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     string,
     MerchantSubscriptionBillingProfileViewRecord
   >
+  /**
+   * When the merchant tier is next billed. Read from the tier row of
+   * `merchant_subscriptions`, which invoice generation advances — not from
+   * `merchantPlanStatus.current_period_end`, which only HQ writes and so
+   * goes stale after the first cycle.
+   */
+  tierNextBillingDate: string | null
 }> {
   const { merchantId, merchantName, serviceRole } =
     await resolveMerchantForCurrentOrg()
@@ -463,7 +487,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     serviceRole
       .from('subscription_plans')
       .select(
-        'id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order',
+        'id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order, included_stations, per_extra_station_price, card_surcharge_pct',
       )
       .eq('plan_scope', 'merchant_tier')
       .eq('is_active', true)
@@ -532,7 +556,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
     serviceRole.from('merchant_subscriptions')
-      .select('billing_profile_id')
+      .select('billing_profile_id, next_billing_date')
       .eq('merchant_id', merchantId)
       .contains('metadata', { billing_scope: 'merchant_tier' })
       .maybeSingle(),
@@ -801,6 +825,9 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       monthly_price_cents: number | null
       description: string | null
       display_order: number | null
+      included_stations: number | null
+      per_extra_station_price: number | null
+      card_surcharge_pct: number | null
     }>,
   )
 
@@ -1034,6 +1061,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
         )
         .map((profile) => [profile.location_id as string, profile]),
     ),
+    tierNextBillingDate: tierBillingResult.data?.next_billing_date ?? null,
   }
 }
 
@@ -1642,7 +1670,7 @@ export async function getMerchantTierPlansForCurrentMerchant(): Promise<
   const { data, error } = await serviceRole
     .from('subscription_plans')
     .select(
-      'id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order',
+      'id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order, included_stations, per_extra_station_price, card_surcharge_pct',
     )
     .eq('plan_scope', 'merchant_tier')
     .eq('is_active', true)
@@ -1664,6 +1692,9 @@ export async function getMerchantTierPlansForCurrentMerchant(): Promise<
       monthly_price_cents: number | null
       description: string | null
       display_order: number | null
+      included_stations: number | null
+      per_extra_station_price: number | null
+      card_surcharge_pct: number | null
     }>,
   )
 }

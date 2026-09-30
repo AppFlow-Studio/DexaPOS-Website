@@ -209,7 +209,6 @@ export default function SalesByItemsPage() {
       <ReportPageHeader
         title="Sales by Items"
         description="Menu item performance breakdown"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

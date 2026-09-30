@@ -89,6 +89,48 @@ export async function getMerchantDeviceInventory(): Promise<ActionResult<AdminDe
   }
 }
 
+/**
+ * One device, scoped to the caller's merchant. Used by the support form when a
+ * report is opened against a specific device — the device id arrives from a
+ * query string, so ownership is re-checked here rather than trusted.
+ */
+export async function getMerchantDevice(
+  deviceId: string
+): Promise<ActionResult<AdminDeviceInventoryRow>> {
+  try {
+    if (!deviceId) {
+      return { success: false, data: null, error: 'Device id is required' }
+    }
+
+    const { supabase, merchantId } = await requireMerchantDeviceContext()
+
+    const { data, error } = await supabase
+      .from('admin_device_inventory')
+      .select('*')
+      .eq('id', deviceId)
+      .eq('merchant_id', merchantId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[getMerchantDevice] Error:', error)
+      return { success: false, data: null, error: error.message }
+    }
+
+    if (!data) {
+      return { success: false, data: null, error: 'Device not found' }
+    }
+
+    return { success: true, data: data as AdminDeviceInventoryRow, error: null }
+  } catch (error) {
+    console.error('[getMerchantDevice] Exception:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
 export async function getMerchantDeviceActivity(
   deviceId: string
 ): Promise<ActionResult<DeviceActivityItem[]>> {

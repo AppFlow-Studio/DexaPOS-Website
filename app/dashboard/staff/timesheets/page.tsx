@@ -7,7 +7,6 @@ import { CircleAlert, Clock3, Search, Store, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -370,7 +369,6 @@ export default function TimesheetsPage() {
         subtitle="Hours worked by each team member, by week or month."
         backHref="/dashboard/staff"
         backLabel="Back to Staff"
-        indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
         actions={<ExportMenu disabled={!data || isStale} onExport={onExport} />}
       />
 

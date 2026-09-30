@@ -8,7 +8,6 @@ import { InviteUserWizard } from "@/components/dashboard/staff/InviteUserWizard"
 import { PendingInvitesTable } from "@/components/dashboard/staff/PendingInvitesTable";
 import { StaffDataTable } from "@/components/dashboard/staff/StaffDataTable";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -17,17 +16,12 @@ import {
   StatTile,
 } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
-import {
-  useIsAllLocations,
-  useSelectedLocation,
-} from "@/stores/location-store";
+
 import { usePendingInvites } from "../hooks/useInvites";
 import { useOrders } from "../hooks/useOrder";
 import { useUnifiedStaff } from "../hooks/useStaff";
 
 export default function MerchantStaffPage() {
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const { data: staffMembers, isLoading, refetch } = useUnifiedStaff();
   const recentOrdersFilters = useMemo(() => {
     const sevenDaysAgo = new Date();
@@ -59,12 +53,6 @@ export default function MerchantStaffPage() {
         title="Staff & Access"
         subtitle="Manage dashboard users and POS staff with location-specific access."
         stackActionsBelowIndicatorOnMobile
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <>
             <Button
