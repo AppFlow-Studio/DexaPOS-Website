@@ -18,6 +18,11 @@ import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failur
 import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
+import {
+  findInlineSettledInvoice,
+  type SettledInvoiceCandidate,
+} from '../_shared/valor-first-payment.ts'
+import { normalizeValorInvoiceNumber } from '../_shared/valor.ts'
 
 const VALOR_WEBHOOK_SECRET = Deno.env.get('VALOR_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -346,6 +351,106 @@ Deno.serve(async (req) => {
         return json({ error: 'recurring_invoice_lookup_failed' }, 500)
       }
       invoice = pendingInvoice as RecurringInvoice | null
+    }
+
+    // An activation charge is settled inline: billing-charge-subscription marks
+    // the invoice paid on Valor's S00, which carries no transaction id. Valor
+    // then reports that same first payment here, so no due invoice is left to
+    // find. Attach the transaction to the invoice Valor names rather than
+    // failing the delivery.
+    if (!invoice && isSuccess && transactionId) {
+      const valorInvoiceNo = firstText(
+        [data, payloadRecord],
+        ['invoice_no', 'invoiceno', 'invoice_number'],
+      )
+      const { data: settledInvoices, error: settledInvoicesError } = valorInvoiceNo
+        ? await supabase!
+            .from('subscription_invoices')
+            .select('id, invoice_number, paid_at, processor_transaction_id, processor_response')
+            .eq('subscription_id', subscription.id)
+            .eq('status', 'paid')
+            .is('processor_transaction_id', null)
+            .order('paid_at', { ascending: false })
+            .limit(5)
+        : { data: null, error: null }
+      if (settledInvoicesError) {
+        await supabase!
+          .from('valor_recurring_webhook_events')
+          .update({
+            status: 'failed',
+            error_message: settledInvoicesError.message,
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', claimedEvent.id)
+        return json({ error: 'recurring_invoice_lookup_failed' }, 500)
+      }
+
+      const settledInvoice = findInlineSettledInvoice(
+        (settledInvoices ?? []) as Array<
+          SettledInvoiceCandidate & { processor_response: unknown }
+        >,
+        valorInvoiceNo,
+        Date.now(),
+        normalizeValorInvoiceNumber,
+      )
+      if (settledInvoice) {
+        const attachedAt = new Date().toISOString()
+        const { error: attachError } = await supabase!
+          .from('subscription_invoices')
+          .update({
+            processor_transaction_id: transactionId,
+            // Keep the S00 that settled the invoice alongside the transaction.
+            processor_response: {
+              ...payloadRecord,
+              add_subscription_response: settledInvoice.processor_response ?? null,
+            },
+            updated_at: attachedAt,
+          })
+          .eq('id', settledInvoice.id)
+          .is('processor_transaction_id', null)
+        if (attachError) {
+          await supabase!
+            .from('valor_recurring_webhook_events')
+            .update({
+              status: 'failed',
+              error_message: attachError.message,
+              processed_at: attachedAt,
+            })
+            .eq('id', claimedEvent.id)
+          return json({ error: 'recurring_invoice_update_failed' }, 500)
+        }
+
+        await supabase!.rpc('log_subscription_billing_event', {
+          p_action: 'invoice_transaction_attached',
+          p_merchant_id: subscription.merchant_id,
+          p_location_id: subscription.location_id,
+          p_resource_type: 'subscription_invoice',
+          p_resource_name: settledInvoice.invoice_number,
+          p_resource_id: settledInvoice.id,
+          p_changes: { processor_transaction_id: transactionId },
+          p_metadata: {
+            source: 'valor-webhook',
+            processor: 'valor',
+            processor_subscription_id: subscriptionId,
+            processor_transaction_id: transactionId,
+          },
+        })
+        await supabase!
+          .from('valor_recurring_webhook_events')
+          .update({
+            merchant_subscription_id: subscription.id,
+            subscription_invoice_id: settledInvoice.id,
+            status: 'processed',
+            processed_at: attachedAt,
+          })
+          .eq('id', claimedEvent.id)
+        await logEvent('processed', true, 200, {
+          epi,
+          detail: 'recurring_first_payment_attached',
+          raw: payload,
+        })
+        return json({ ok: true, recurring: true, attached: true }, 200)
+      }
     }
 
     // The monthly invoice job and Valor can run within the same minute. If
