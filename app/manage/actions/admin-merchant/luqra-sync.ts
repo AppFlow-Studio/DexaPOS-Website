@@ -1016,8 +1016,16 @@ export interface CachedTxnRow {
     terminal_id: string | null
     pos_entry_mode: string | null
     card_type: string | null
+    account_first6: string | null
     account_last4: string | null
     amount_dollars: number
+    debit_credit_indicator: string | null
+    transaction_code: string | null
+    transaction_code_description: string | null
+    reject_reason: string | null
+    /** When our sync first / last saw this row in Luqra. */
+    first_seen_at: string | null
+    last_seen_at: string | null
     reconciled_payment_id: string | null
     reconciled_order_id: string | null
     reconciled_at: string | null
@@ -1042,7 +1050,9 @@ export async function getCachedLuqraTransactions(
                 `
         id, location_id, mid, batch_id, authorization_number,
         original_transaction_date, transaction_date,
-        terminal_id, pos_entry_mode, card_type, account_last4, amount_dollars,
+        terminal_id, pos_entry_mode, card_type, account_first6, account_last4, amount_dollars,
+        debit_credit_indicator, transaction_code, transaction_code_description, reject_reason,
+        first_seen_at, last_seen_at,
         reconciled_payment_id, reconciled_order_id, reconciled_at,
         location:locations(id, name),
         order:orders!luqra_transactions_reconciled_order_id_fkey(order_number)
@@ -1068,7 +1078,9 @@ export async function getCachedLuqraTransactions(
                     `
             id, location_id, mid, batch_id, authorization_number,
             original_transaction_date, transaction_date,
-            terminal_id, pos_entry_mode, card_type, account_last4, amount_dollars,
+            terminal_id, pos_entry_mode, card_type, account_first6, account_last4, amount_dollars,
+        debit_credit_indicator, transaction_code, transaction_code_description, reject_reason,
+        first_seen_at, last_seen_at,
             reconciled_payment_id, reconciled_order_id, reconciled_at,
             location:locations(id, name)
           `,
@@ -1126,8 +1138,15 @@ function mapCachedRow(r: Record<string, unknown>): CachedTxnRow {
         terminal_id: (r.terminal_id as string) ?? null,
         pos_entry_mode: (r.pos_entry_mode as string) ?? null,
         card_type: (r.card_type as string) ?? null,
+        account_first6: (r.account_first6 as string) ?? null,
         account_last4: (r.account_last4 as string) ?? null,
         amount_dollars: Number(r.amount_dollars ?? 0),
+        debit_credit_indicator: (r.debit_credit_indicator as string) ?? null,
+        transaction_code: (r.transaction_code as string) ?? null,
+        transaction_code_description: (r.transaction_code_description as string) ?? null,
+        reject_reason: (r.reject_reason as string) ?? null,
+        first_seen_at: (r.first_seen_at as string) ?? null,
+        last_seen_at: (r.last_seen_at as string) ?? null,
         reconciled_payment_id: (r.reconciled_payment_id as string) ?? null,
         reconciled_order_id: (r.reconciled_order_id as string) ?? null,
         reconciled_at: (r.reconciled_at as string) ?? null,

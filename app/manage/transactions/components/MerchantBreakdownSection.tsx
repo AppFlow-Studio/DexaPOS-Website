@@ -152,9 +152,11 @@ function Sparkline({ points }: { points: Array<{ date: string; revenue: number }
 
 interface MerchantBreakdownSectionProps {
   filters: PlatformMerchantBreakdownFilters
+  /** Hold the request back (the host's primary list goes first). Reads as loading meanwhile. */
+  enabled?: boolean
 }
 
-export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionProps) {
+export function MerchantBreakdownSection({ filters, enabled = true }: MerchantBreakdownSectionProps) {
   const bodyId = useId()
   const [open, setOpen] = useState(false)
   const [sortBy, setSortBy] = useState<MerchantBreakdownSortKey>('total_revenue')
@@ -166,12 +168,13 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
 
   const {
     data: breakdown,
-    isLoading,
+    // `isPending` (no data yet), not `isLoading`: it also covers a held-back query.
+    isPending: isLoading,
     isFetching,
     isError,
     error,
     refetch,
-  } = usePlatformMerchantBreakdown(filters)
+  } = usePlatformMerchantBreakdown(filters, enabled)
 
   // Rank before slicing (§5.7): page 1 always holds the top of the sort.
   const sortedRows = useMemo(() => {

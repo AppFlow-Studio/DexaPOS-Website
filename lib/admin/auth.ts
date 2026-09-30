@@ -56,16 +56,16 @@ export async function requireAdminAuth(
 
   const supabase = createServerSupabaseClient()
 
-  const { data: roleData, error: roleError } = await supabase
-    .rpc('get_my_hq_role')
-    .single()
+  // One round-trip for both lookups (see assertHQPermission); the checks
+  // below still run role first, then permission.
+  const [{ data: roleData, error: roleError }, { data: permissions }] = await Promise.all([
+    supabase.rpc('get_my_hq_role').single(),
+    supabase.rpc('get_my_hq_permissions'),
+  ])
 
   if (roleError || !roleData) {
     deny('no_hq_role')
   }
-
-  const { data: permissions } = await supabase
-    .rpc('get_my_hq_permissions')
 
   const permissionList = (permissions as HQPermission[]) || []
 
@@ -110,15 +110,17 @@ export async function assertHQPermission(
 
   const supabase = createServerSupabaseClient()
 
-  const { data: hasPermission } = await supabase
-    .rpc('hq_has_permission', { p_permission_code: permission })
+  // Every HQ server action runs this, and each RPC is a network round-trip:
+  // send the three together so the check costs one round-trip, not three.
+  const [{ data: hasPermission }, { data: roleData }, { data: permissions }] = await Promise.all([
+    supabase.rpc('hq_has_permission', { p_permission_code: permission }),
+    supabase.rpc('get_my_hq_role').single(),
+    supabase.rpc('get_my_hq_permissions'),
+  ])
 
   if (!hasPermission) {
     throw new Error(`Unauthorized: Missing permission ${permission}`)
   }
-
-  const { data: roleData } = await supabase.rpc('get_my_hq_role').single()
-  const { data: permissions } = await supabase.rpc('get_my_hq_permissions')
 
   const permissionList = (permissions as HQPermission[]) || []
 
@@ -143,14 +145,17 @@ export async function assertSuperAdmin(): Promise<ServerAdminAuth> {
   }
 
   const supabase = createServerSupabaseClient()
-  const { data: roleData } = await supabase.rpc('get_my_hq_role').single()
+  // One round-trip for both lookups (see assertHQPermission).
+  const [{ data: roleData }, { data: permissions }] = await Promise.all([
+    supabase.rpc('get_my_hq_role').single(),
+    supabase.rpc('get_my_hq_permissions'),
+  ])
   const role = roleData as HQRole | null
 
   if (!role || role.role_code !== 'hq.super_admin') {
     throw new Error('Unauthorized: Super admin access required')
   }
 
-  const { data: permissions } = await supabase.rpc('get_my_hq_permissions')
   const permissionList = (permissions as HQPermission[]) || []
 
   return {

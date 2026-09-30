@@ -97,16 +97,6 @@ function ConnectionBadge({ state }: { state: ConnectedTerminalRow['connection_st
     )
 }
 
-/** One labelled field inside a mobile terminal card (§5.3). */
-function CardField({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="truncate font-medium tabular-nums">{value}</p>
-        </div>
-    )
-}
-
 const PANEL_LABEL = 'Unique terminals (by serial)'
 const PANEL_CAPTION =
     'One row per physical Castles / Valor terminal. Used to track connected devices and reconcile settlements. Retired devices with settlement history stay listed so their batches remain reconcilable.'
@@ -174,19 +164,20 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                     </div>
                 }
             >
-                <div className="mt-4">
-                    {/* §5.3: nine columns only fit the content column from `xl`;
-                        below that the same page of rows renders as cards. */}
-                    <Table variant="data" containerClassName="hidden xl:block">
+                {/* @container: the table/card switch keys off this panel's width,
+                    so an open app sidebar is accounted for. §5.3: a table from
+                    @3xl (laptops), cards below. Type folds into the Terminal cell;
+                    Last Batch joins from @5xl. */}
+                <div className="@container mt-4">
+                    <Table variant="data" containerClassName="hidden @3xl:block">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Serial</TableHead>
                                 <TableHead>Terminal</TableHead>
-                                <TableHead>Type</TableHead>
                                 <TableHead>Station</TableHead>
                                 <TableHead>Connection</TableHead>
                                 <TableHead>Last Txn</TableHead>
-                                <TableHead>Last Batch</TableHead>
+                                <TableHead className="hidden @5xl:table-cell">Last Batch</TableHead>
                                 <TableHead>Auto-Settle</TableHead>
                                 <TableHead className="w-[40px]"><span className="sr-only">Open</span></TableHead>
                             </TableRow>
@@ -265,14 +256,11 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <div className="text-xs text-muted-foreground">{row.location_name || '—'}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {terminalTypeLabel(row.terminal_type)} · {row.location_name || '—'}
+                                                </div>
                                             </div>
                                         </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
-                                            {terminalTypeLabel(row.terminal_type)}
-                                        </Badge>
                                     </TableCell>
                                     <TableCell>
                                         <span className="text-sm">{row.station_name || <span className="text-muted-foreground">Unassigned</span>}</span>
@@ -304,7 +292,7 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                                     <TableCell>
                                         <span className="text-sm text-muted-foreground">{timeAgo(row.last_transaction_at)}</span>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell className="hidden @5xl:table-cell">
                                         <span className="text-sm text-muted-foreground">{timeAgo(row.last_batch_at)}</span>
                                     </TableCell>
                                     <TableCell>
@@ -328,9 +316,10 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                         </TableBody>
                     </Table>
 
-                    {/* Mirrors the table's `hidden xl:block`. Values are plain text
-                        on the muted card, not pills (§3.5). */}
-                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                    {/* Mirrors the table's `hidden @3xl:block`. Phone cards keep
+                        name, serial, connection, station and last transaction;
+                        settle and batch detail live on the terminal's own page. */}
+                    <div className="flex min-w-0 flex-col gap-2 @3xl:hidden">
                         {pageRows.map((row) => {
                             const href = detailHref(row.serial_number)
                             const retired = !row.is_active
@@ -349,20 +338,12 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                                             {href && <ChevronRight className="h-4 w-4" />}
                                         </div>
                                     </div>
-                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                        <CardField label="Type" value={terminalTypeLabel(row.terminal_type)} />
-                                        <CardField label="Station" value={row.station_name || 'Unassigned'} />
-                                        <CardField label="Location" value={row.location_name || '—'} />
-                                        <CardField
-                                            label="Auto-settle"
-                                            value={row.auto_settle ? settleTimeLabel(row.settle_time) : 'Off'}
-                                        />
-                                        <CardField label="Last txn" value={timeAgo(row.last_transaction_at)} />
-                                        <CardField label="Last batch" value={timeAgo(row.last_batch_at)} />
-                                    </div>
+                                    <p className="mt-2 truncate text-xs text-muted-foreground">
+                                        {row.station_name || 'Unassigned'} · Last txn {timeAgo(row.last_transaction_at)}
+                                    </p>
                                 </>
                             )
-                            const cardClass = `min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left ${retired ? 'text-muted-foreground' : ''}`
+                            const cardClass = `min-w-0 rounded-2xl border-0 bg-muted/45 px-4 py-3 text-left ${retired ? 'text-muted-foreground' : ''}`
                             return href ? (
                                 <button
                                     key={row.terminal_uuid}

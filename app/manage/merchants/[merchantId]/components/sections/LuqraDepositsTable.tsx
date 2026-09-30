@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { ArrowLeft, ChevronRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -25,7 +23,12 @@ import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { useCachedLuqraDeposits } from '@/lib/queries/use-luqra'
 import type { CachedDepositRow } from '@/app/manage/actions/admin-merchant/luqra-sync'
+import { cn } from '@/lib/utils'
 import { LuqraTransactionsTable } from './LuqraTransactionsTable'
+import { DetailToggle, LuqraDetailCard } from './LuqraDetailCard'
+import { LuqraCacheEmpty } from './LuqraCacheEmpty'
+
+const DETAIL_ID = 'luqra-deposit-detail'
 
 function formatMoney(n: number) {
     return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -33,7 +36,10 @@ function formatMoney(n: number) {
 
 function formatDate(iso?: string | null) {
     if (!iso) return '—'
-    return new Date(iso).toLocaleDateString()
+    // DATE column ("2026-04-15"): build it locally, not as UTC midnight.
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+    const date = day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])) : new Date(iso)
+    return date.toLocaleDateString()
 }
 
 function toIsoDate(d?: Date): string | null {
@@ -60,7 +66,7 @@ export function LuqraDepositsTable({
 }) {
     const [locationId, setLocationId] = useState<string>('all')
     const [range, setRange] = useState<DateRange | undefined>(defaultRange())
-    const [drilldown, setDrilldown] = useState<CachedDepositRow | null>(null)
+    const [selectedId, setSelectedId] = useState<string | null>(null)
 
     const dateFrom = toIsoDate(range?.from)
     const dateTo = toIsoDate(range?.to)
@@ -77,6 +83,21 @@ export function LuqraDepositsTable({
     )
     const { pageRows, pagination, setPage } = useClientPagination(rows, 10)
 
+    // Derived from the current rows, so a filter that drops the deposit closes it.
+    const selected = useMemo(
+        () => rows.find((r) => r.id === selectedId) ?? null,
+        [rows, selectedId]
+    )
+    const toggle = (id: string) => setSelectedId((prev) => (prev === id ? null : id))
+
+    const emptyState = (
+        <LuqraCacheEmpty
+            hasRange={!!(dateFrom || dateTo)}
+            onShowAllDates={() => setRange(undefined)}
+            emptyText={EMPTY_TEXT}
+        />
+    )
+
     const totals = useMemo(() => {
         return rows.reduce(
             (acc, r) => ({
@@ -89,44 +110,6 @@ export function LuqraDepositsTable({
             { count: 0, net: 0, fees: 0, cb: 0, adj: 0 }
         )
     }, [rows])
-
-    if (drilldown) {
-        return (
-            <div className="space-y-4">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-1.5 rounded-full text-muted-foreground"
-                    onClick={() => setDrilldown(null)}
-                >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    Back to deposits
-                </Button>
-                <div className="rounded-2xl bg-muted/60 px-4 py-3 text-sm">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                        <span className="font-medium">Deposit</span>
-                        <span className="font-mono text-xs">{drilldown.reference_number ?? drilldown.id}</span>
-                        <span className="text-muted-foreground">{formatDate(drilldown.deposit_date)}</span>
-                        <span className="text-muted-foreground">{drilldown.location_name ?? drilldown.mid}</span>
-                        <span className="tabular-nums sm:ml-auto">
-                            Net {formatMoney(drilldown.net_deposit)}
-                        </span>
-                        <span className="tabular-nums text-muted-foreground">
-                            Fees {formatMoney(drilldown.daily_fees)}
-                        </span>
-                        <span className="tabular-nums text-muted-foreground">
-                            CB {formatMoney(drilldown.chargeback_amount)}
-                        </span>
-                    </div>
-                </div>
-                <LuqraTransactionsTable
-                    merchantId={merchantId}
-                    locations={locations}
-                    fixedDepositId={drilldown.id}
-                />
-            </div>
-        )
-    }
 
     return (
         <div className="space-y-4">
@@ -193,7 +176,7 @@ export function LuqraDepositsTable({
                         ) : rows.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
-                                    {EMPTY_TEXT}
+                                    {emptyState}
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -201,7 +184,8 @@ export function LuqraDepositsTable({
                                 <TableRow
                                     key={r.id}
                                     className="cursor-pointer"
-                                    onClick={() => setDrilldown(r)}
+                                    data-state={selectedId === r.id ? 'selected' : undefined}
+                                    onClick={() => toggle(r.id)}
                                 >
                                     <TableCell className="whitespace-nowrap tabular-nums">
                                         {formatDate(r.deposit_date)}
@@ -231,8 +215,13 @@ export function LuqraDepositsTable({
                                     <TableCell className="text-right tabular-nums">
                                         {r.batch_count} / {r.txn_count}
                                     </TableCell>
-                                    <TableCell>
-                                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <TableCell className="py-1">
+                                        <DetailToggle
+                                            open={selectedId === r.id}
+                                            controls={DETAIL_ID}
+                                            label={`Transactions in deposit ${r.reference_number ?? formatDate(r.deposit_date)}`}
+                                            onToggle={() => toggle(r.id)}
+                                        />
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -251,28 +240,33 @@ export function LuqraDepositsTable({
                         ))
                     ) : rows.length === 0 ? (
                         <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 text-center text-sm text-muted-foreground">
-                            {EMPTY_TEXT}
+                            {emptyState}
                         </div>
                     ) : (
                         pageRows.map((r) => (
                             <button
                                 key={r.id}
                                 type="button"
-                                onClick={() => setDrilldown(r)}
-                                className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left transition-colors hover:bg-muted/70"
+                                onClick={() => toggle(r.id)}
+                                aria-expanded={selectedId === r.id}
+                                aria-controls={selectedId === r.id ? DETAIL_ID : undefined}
+                                className={cn(
+                                    'min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                    selectedId === r.id && 'bg-muted ring-1 ring-border'
+                                )}
                             >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="truncate font-mono text-sm font-medium">
+                                <span className="flex items-start justify-between gap-3">
+                                    <span className="min-w-0">
+                                        <span className="block truncate font-mono text-sm font-medium">
                                             {r.reference_number ?? '—'}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground tabular-nums">
+                                        </span>
+                                        <span className="block text-xs text-muted-foreground tabular-nums">
                                             {formatDate(r.deposit_date)}
-                                        </p>
-                                    </div>
-                                    <p className="shrink-0 font-medium tabular-nums">{formatMoney(r.net_deposit)}</p>
-                                </div>
-                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                        </span>
+                                    </span>
+                                    <span className="shrink-0 font-medium tabular-nums">{formatMoney(r.net_deposit)}</span>
+                                </span>
+                                <span className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                                     <CardField label="Location" value={r.location_name ?? r.mid} />
                                     <CardField label="DDA" value={r.dda_number ?? '—'} />
                                     <CardField label="Batch total" value={formatMoney(r.batch_total)} />
@@ -280,7 +274,7 @@ export function LuqraDepositsTable({
                                     <CardField label="CB" value={formatMoney(r.chargeback_amount)} />
                                     <CardField label="Adj" value={formatMoney(r.adjustment_amount)} />
                                     <CardField label="Batches / Txns" value={`${r.batch_count} / ${r.txn_count}`} />
-                                </div>
+                                </span>
                             </button>
                         ))
                     )}
@@ -288,16 +282,46 @@ export function LuqraDepositsTable({
             </div>
 
             <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="deposits" />
+
+            {selected && (
+                <LuqraDetailCard
+                    id={DETAIL_ID}
+                    title="Deposit"
+                    reference={selected.reference_number ?? selected.id}
+                    onClose={() => setSelectedId(null)}
+                    facts={
+                        <>
+                            <span className="text-muted-foreground">{formatDate(selected.deposit_date)}</span>
+                            <span className="text-muted-foreground">{selected.location_name ?? selected.mid}</span>
+                            <span className="tabular-nums">Net {formatMoney(selected.net_deposit)}</span>
+                            <span className="tabular-nums text-muted-foreground">
+                                Fees {formatMoney(selected.daily_fees)}
+                            </span>
+                            <span className="tabular-nums text-muted-foreground">
+                                CB {formatMoney(selected.chargeback_amount)}
+                            </span>
+                        </>
+                    }
+                >
+                    <LuqraTransactionsTable
+                        key={selected.id}
+                        merchantId={merchantId}
+                        locations={locations}
+                        fixedDepositId={selected.id}
+                    />
+                </LuqraDetailCard>
+            )}
         </div>
     )
 }
 
+/** Spans only: these sit inside a <button>, which allows phrasing content alone. */
 function CardField({ label, value }: { label: string; value: string }) {
     return (
-        <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="truncate font-medium tabular-nums">{value}</p>
-        </div>
+        <span className="block min-w-0">
+            <span className="block text-xs text-muted-foreground">{label}</span>
+            <span className="block truncate font-medium tabular-nums">{value}</span>
+        </span>
     )
 }
 

@@ -273,3 +273,41 @@ pending/failed unless asked); the Payments tab was the processor lens (fees, net
 - [x] Vitest `app/manage/transactions`: 12/12
 - [x] Live read-only queries (service role, the exact select + filters): unsettled 1,082 / unmatched 1,248 / both 1,082; every row card, filtered correctly, 10 per page; enrichment 10/10; the first attempt caught `LIKE` on the enum
 - [ ] Browser — not run (Chrome DevTools MCP down; the dev server was also stopped to free disk)
+
+### Round 5b — phone trims and the summary popover (same day)
+
+- [x] Connectivity strip (TSYS · Processor · Refresh) hidden below `sm`. The page subtitle already was (`PageHeader` default).
+- [x] "How these are calculated" popover: `w-[calc(100vw-2rem)]` + `collisionPadding={16}` centres it on phones (`sm:w-80` above); `max-h-[min(28rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain` scrolls it at every width.
+- [x] Summary on phones: Total transactions and Total revenue share the first row (`max-sm:-order-1`; StatRow's dividers start at `sm`, so the reorder can't misplace one).
+- [x] Merchant breakdown and Transactions trend panels hidden below `sm`.
+- [x] Ledger cards (below `xl`): two lines only — merchant · total, then date (day only, "Sep 29", below `sm`) · method (Settlement: date · Net $x) with status (Settlement: Settled/Pending · TSYS match) on the right. Order # removed from the card face (kept in the link's `aria-label`); the field grid is gone.
+- [x] Verification: 0 tsc errors under `app/manage/transactions/` (project total 838: +18 in untouched `supabase/functions/codepay-*`, `_shared/*`, `scripts/codepay-cloud-probe.ts`, `app/dashboard/menu/page.tsx` — parallel work, not this change); ESLint 1 pre-existing warning; Vitest 12/12. Browser not run.
+
+---
+
+# Round 6 — `/manage/transactions` load time (2026-09-30)
+
+**Reported:** "the page is taking too much time to be rendered."
+
+## Evidence (temporary `fetch` trace on the server Supabase clients, since removed)
+
+- ~340 ms per Supabase round-trip from the dev machine once warm (1.6 s cold); 400–450 ms median under load.
+- One load = ~45 round-trips running nearly serially (server actions from one browser queue; max 2–3 in flight) ≈ 21 s of data, plus 8–15 s of cold Turbopack compile/hydration (the dev cache had just been cleared — also behind Clerk's "renderer did not mount within 10s").
+- **28 of the 45 were auth**: `assertHQPermission` ran `hq_has_permission` → `get_my_hq_role` → `get_my_hq_permissions` one after another, then `admin_merchant_access`, on each of 7 actions.
+- The ledger was queued behind the 30-day trend (4–6 s); `getConnectivityStatus` ran 4 independent reads serially (up to 9.7 s).
+
+## Fixes
+
+- [x] `lib/admin/auth.ts`: `assertHQPermission` sends its 3 RPCs together (3 → 1 round-trip); `assertSuperAdmin` and `requireAdminAuth` 2 → 1. Checks and deny order unchanged. Test: `lib/admin/__tests__/assert-hq-permission.test.ts` (fails unless all lookups are in flight before any answers; denials still throw). Applies to all 454 `assertHQPermission` callers.
+- [x] `getConnectivityStatus`: the 4 reads in one `Promise.all` (4 → 1).
+- [x] Load order: `secondaryReady` (ledger settled) gates the trend (`usePlatformSalesTrend(enabled)`), merchant breakdown and connectivity (`enabled` props, skeleton via `isPending`), and the three tab bodies (`TabBodySkeleton`).
+
+## Result
+
+Re-measured: auth RPCs now start in groups of 3; connectivity 9.7 s → 4.0 s; the ledger resolves before the trend. User: "now it is faaaar better."
+
+## Still open
+
+- **Sales trend correctness:** `getPlatformSalesTrend` pulls 60 days of raw order rows unpaged and sums them in JS — capped at 1,000 rows by PostgREST, so a busy month under-counts. Needs a DB-side daily aggregate.
+- `getAssignedMerchantScope` is still a serial round-trip after auth for non-super-admins; `getPlatformMerchants` runs twice on load (Settlements tab + another consumer).
+- Structural: reads over server actions serialise per browser. Moving read-heavy pages to route handlers / RSC would let them run in parallel.

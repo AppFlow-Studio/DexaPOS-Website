@@ -82,8 +82,6 @@ import {
 } from './components/payment-format'
 import { TransactionsPageSkeleton } from './components/TransactionsPageSkeleton'
 import {
-    CardField,
-    CardFields,
     CardGridEmpty,
     LoadError,
     RecordCard,
@@ -301,6 +299,17 @@ function settlementFacts(tx: PlatformTransaction) {
     }
 }
 
+/** A tab body held back until the ledger loads: its toolbar and list, as shapes (§4.9). */
+function TabBodySkeleton() {
+    return (
+        <div className="space-y-3" aria-busy="true">
+            <span className="sr-only">Loading…</span>
+            <Skeleton className="h-9 w-full max-w-md rounded-full" />
+            <Skeleton className="h-64 w-full rounded-2xl" />
+        </div>
+    )
+}
+
 function orDash(value: string | null) {
     return value ?? <span className="text-muted-foreground">—</span>
 }
@@ -338,6 +347,11 @@ function getEntryModeLabel(tx: PlatformTransaction): string {
 
 function formatTxDate(value?: string): string {
     return value ? format(new Date(value), 'MMM d, h:mm a') : '—'
+}
+
+/** "Sep 29": a phone card's line has no room for the time. */
+function formatTxDay(value?: string): string {
+    return value ? format(new Date(value), 'MMM d') : '—'
 }
 
 const CARD_FAMILY_METHODS = ['card', 'card_spinapi', 'card_dvpaylite'] as const
@@ -636,18 +650,26 @@ function TransactionsPageInner() {
         refetch: refetchTransactionSummary,
     } = usePlatformTransactionSummary(filters)
     const {
-        data: salesTrend,
-        isLoading: trendLoading,
-        isFetching: trendFetching,
-        refetch: refetchSalesTrend,
-    } = usePlatformSalesTrend()
-    const {
         data: transactionsData,
         isLoading: transactionsLoading,
         isFetching: transactionsFetching,
         error: transactionsError,
         refetch: refetchTransactions,
     } = usePlatformTransactions(PAGE_SIZE, (page - 1) * PAGE_SIZE, filters)
+
+    // Server actions from one browser run one at a time, so everything on this
+    // page queues. The secondary panels (trend, merchant breakdown, processor
+    // status, the tabs) wait for the ledger's page to settle instead of
+    // queueing ahead of it; each shows its skeleton meanwhile.
+    const secondaryReady = transactionsData !== undefined || Boolean(transactionsError)
+
+    const {
+        data: salesTrend,
+        // `isPending` (no data yet) also covers the held-back query.
+        isPending: trendLoading,
+        isFetching: trendFetching,
+        refetch: refetchSalesTrend,
+    } = usePlatformSalesTrend(secondaryReady)
 
     const transactions = transactionsData?.data || []
     const totalTransactions = transactionsData?.total || 0
@@ -1121,8 +1143,11 @@ function TransactionsPageInner() {
                 }
             />
 
-            {/* Processor status: neutral unless a sync has failed. */}
-            <ConnectivityStrip merchantIds={filters.merchantIds ?? null} />
+            {/* Processor status: neutral unless a sync has failed. Hidden on
+                phones, where it cost two wrapped rows before the first figure. */}
+            <div className="max-sm:hidden">
+                <ConnectivityStrip merchantIds={filters.merchantIds ?? null} enabled={secondaryReady} />
+            </div>
 
             {/* Summary — the figures double as filters on the ledger below. */}
             <Panel>
@@ -1137,7 +1162,14 @@ function TransactionsPageInner() {
                                     How these are calculated
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-4">
+                            {/* Phones: full width less 1rem a side, which the 16px
+                                collision padding centres. Every width: capped to the
+                                room on screen, then it scrolls (six long definitions). */}
+                            <PopoverContent
+                                align="end"
+                                collisionPadding={16}
+                                className="max-h-[min(28rem,var(--radix-popover-content-available-height))] w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl p-4 sm:w-80"
+                            >
                                 <dl className="space-y-3 text-sm">
                                     {SUMMARY_DEFINITIONS.map((definition) => (
                                         <div key={definition.id}>
@@ -1162,6 +1194,13 @@ function TransactionsPageInner() {
                                 isLoading={isSummaryLoading}
                                 onClick={summaryUnavailable ? undefined : () => handleSummaryCardClick(tile.id)}
                                 isActive={summaryActive[tile.id]}
+                                // Phones pair the two headline totals on the first row.
+                                // StatRow's rules start at `sm`, so reordering below it is safe.
+                                className={
+                                    tile.id === 'total_transactions' || tile.id === 'total_revenue'
+                                        ? 'max-sm:-order-1'
+                                        : undefined
+                                }
                             />
                         ))}
                     </StatRow>
@@ -1210,7 +1249,8 @@ function TransactionsPageInner() {
                 </PanelSection>
             </Panel>
 
-            <Panel>
+            {/* Hidden on phones: an 11-column comparison has no useful phone form. */}
+            <Panel className="max-sm:hidden">
                 <PanelSection
                     label={
                         <span className="inline-flex items-center gap-1">
@@ -1222,11 +1262,12 @@ function TransactionsPageInner() {
                     // The caption names the date range — scope, not description (§13.4).
                     showCaptionOnMobile
                 >
-                    <MerchantBreakdownSection filters={merchantBreakdownFilters} />
+                    <MerchantBreakdownSection filters={merchantBreakdownFilters} enabled={secondaryReady} />
                 </PanelSection>
             </Panel>
 
-            <Panel>
+            {/* Hidden on phones: a 30-day chart that ignores the filters adds scroll, not answers. */}
+            <Panel className="max-sm:hidden">
                 <PanelSection
                     label={
                         <span className="inline-flex items-center gap-1">
@@ -1632,39 +1673,29 @@ function TransactionsPageInner() {
                                                                         {formatCurrency(tx.total_amount)}
                                                                     </p>
                                                                 </div>
-                                                                <p className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">
-                                                                    <span className="font-mono">
-                                                                        {tx.order_number ? highlightText(tx.order_number, searchQuery) : '—'}
-                                                                    </span>
-                                                                    {' · '}
-                                                                    {formatTxDate(tx.created_at)}
-                                                                </p>
-                                                                {ledgerView === 'settlement' ? (
-                                                                    <CardFields>
-                                                                        <CardField label="Status" value={PAYMENT_STATUS_LABELS[tx.status] ?? tx.status} />
-                                                                        <CardField label="Net deposit" value={orDash(settlementFacts(tx).netDeposit)} />
-                                                                        <CardField label="Settled" value={orDash(settlementFacts(tx).settled)} />
-                                                                        <CardField label="TSYS match" value={orDash(settlementFacts(tx).tsysMatch)} />
-                                                                        <CardField label="Batch" value={orDash(settlementFacts(tx).batch)} mono />
-                                                                        <CardField label="Net fee" value={orDash(settlementFacts(tx).netFee)} />
-                                                                    </CardFields>
-                                                                ) : (
-                                                                    <CardFields>
-                                                                        <CardField label="Status" value={PAYMENT_STATUS_LABELS[tx.status] ?? tx.status} />
-                                                                        <CardField
-                                                                            label="Method"
-                                                                            value={
-                                                                                tx.card_last_four
-                                                                                    ? `${getMethodLabel(tx.payment_method)} ****${tx.card_last_four}`
-                                                                                    : getMethodLabel(tx.payment_method)
-                                                                            }
-                                                                        />
-                                                                        <CardField label="Customer" value={highlightText(getCustomerLabel(tx.customer_name), searchQuery)} />
-                                                                        <CardField label="Tip" value={formatOptionalCurrency(tx.tip_amount)} />
-                                                                        {tx.location_name && <CardField label="Location" value={tx.location_name} />}
-                                                                        {tx.staff_name && <CardField label="Staff" value={tx.staff_name} />}
-                                                                    </CardFields>
-                                                                )}
+                                                                {/* Two lines only (§5.3): who · how much, then
+                                                                    when · how, with where it stands on the right.
+                                                                    The page holds everything else. */}
+                                                                <div className="mt-1 flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                                                                    <p className="min-w-0 truncate tabular-nums">
+                                                                        {/* Day only on phones; the time returns from `sm`. */}
+                                                                        <span className="sm:hidden">{formatTxDay(tx.created_at)}</span>
+                                                                        <span className="max-sm:hidden">{formatTxDate(tx.created_at)}</span>
+                                                                        {' · '}
+                                                                        {ledgerView === 'settlement' && settlementFacts(tx).netDeposit
+                                                                            ? `Net ${settlementFacts(tx).netDeposit}`
+                                                                            : tx.card_last_four
+                                                                                ? `${getMethodLabel(tx.payment_method)} ••${tx.card_last_four}`
+                                                                                : getMethodLabel(tx.payment_method)}
+                                                                    </p>
+                                                                    <p className="shrink-0 text-right">
+                                                                        {ledgerView === 'settlement'
+                                                                            ? settlementFacts(tx).settled
+                                                                                ? `${settlementFacts(tx).settled} · ${settlementFacts(tx).tsysMatch}`
+                                                                                : getMethodLabel(tx.payment_method)
+                                                                            : PAYMENT_STATUS_LABELS[tx.status] ?? tx.status}
+                                                                    </p>
+                                                                </div>
                                                             </div>
                                                             <div className="pointer-events-auto -mr-1 -mt-1 shrink-0">
                                                                 {renderRowActions(tx)}
@@ -1721,7 +1752,7 @@ function TransactionsPageInner() {
                             }
                             caption="Compare settlement batches against linked order payments and flag mismatches"
                         >
-                            <BatchReconciliationSection />
+                            {secondaryReady ? <BatchReconciliationSection /> : <TabBodySkeleton />}
                         </PanelSection>
                     </Panel>
                 </TabsContent>
@@ -1736,7 +1767,7 @@ function TransactionsPageInner() {
                             }
                             caption="Review disputes, deadlines, and defense status across merchants"
                         >
-                            <ChargebacksSection />
+                            {secondaryReady ? <ChargebacksSection /> : <TabBodySkeleton />}
                         </PanelSection>
                     </Panel>
                 </TabsContent>
@@ -1751,7 +1782,7 @@ function TransactionsPageInner() {
                             }
                             caption="Admin access to sensitive payment data: list, detail, export, and card-last-four search"
                         >
-                            <AuditLogSection />
+                            {secondaryReady ? <AuditLogSection /> : <TabBodySkeleton />}
                         </PanelSection>
                     </Panel>
                 </TabsContent>

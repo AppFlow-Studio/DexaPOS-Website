@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -34,8 +35,6 @@ import {
   MapPin,
   RefreshCw,
   Download,
-  ChevronDown,
-  ChevronUp,
   Info,
   AlertTriangle,
   AlertCircle,
@@ -54,6 +53,12 @@ import { DateRange } from "react-day-picker";
 import { MerchantInfoModel } from "@/types/db-modles";
 import { PaginationBar } from "@/components/dashboard/PaginationBar";
 import type { PaginationMeta } from "@/types/pagination";
+import {
+  RecordLinkCard,
+  RowLink,
+} from "@/app/manage/transactions/components/ledger-primitives";
+import { merchantAuditLogHref } from "../audit/routes";
+import { formatKey } from "../audit/[logId]/audit-detail-parts";
 
 // The borderless cell pill (§5.2, §4.6b) for every category and severity: the
 // word carries the meaning; the merchant-detail page raises no alarms (§14.3).
@@ -63,14 +68,6 @@ const SEVERITY_ICONS = {
   info: <Info className="h-3 w-3" />,
   warning: <AlertTriangle className="h-3 w-3" />,
   critical: <AlertCircle className="h-3 w-3" />,
-};
-
-const formatKey = (key: string) => {
-  return key
-    .replace(/([A-Z])/g, " $1") // Add space before capital letters
-    .replace(/^./, (str) => str.toUpperCase()) // Capitalize first letter
-    .replace(/_/g, " ") // Replace underscores with spaces
-    .trim();
 };
 
 const escapeCsvValue = (value: unknown): string => {
@@ -88,275 +85,6 @@ const downloadCsv = (filename: string, content: string): void => {
   URL.revokeObjectURL(url)
 }
 
-const RenderObject = ({
-  data,
-  className,
-}: {
-  data: any;
-  className?: string;
-}) => {
-  if (!data || typeof data !== "object") return null;
-
-  return (
-    <div
-      className={cn(
-        "grid gap-4 grid-cols-1",
-        Object.keys(data).length > 1 && "sm:grid-cols-2",
-        className,
-      )}
-    >
-      {Object.entries(data).map(([key, value]) => {
-        if (value === null || value === undefined) return null;
-        return (
-          <div key={key} className="flex flex-col gap-1.5 min-w-0">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-              {formatKey(key)}
-            </span>
-            <div className="break-all rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-foreground/90">
-              {typeof value === "object" ? (
-                <div className="mt-1 pl-2">
-                  <RenderObject data={value} className="grid-cols-1 gap-y-2" />
-                </div>
-              ) : (
-                String(value)
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-/**
- * Turn a raw user agent into something a reviewer can read at a glance —
- * "Chrome 152 on Windows" rather than 120 characters of tokens. Deliberately
- * approximate: this is an at-a-glance label, and the raw string stays available
- * on hover via `title`, so a wrong guess costs nothing.
- */
-const describeUserAgent = (ua: string): string | null => {
-  const os =
-    /Windows NT 10/.test(ua) ? "Windows" :
-    /Windows/.test(ua) ? "Windows" :
-    /iPhone|iPad/.test(ua) ? "iOS" :
-    /Android/.test(ua) ? "Android" :
-    /Mac OS X/.test(ua) ? "macOS" :
-    /Linux/.test(ua) ? "Linux" : null;
-
-  // Order matters: Edge and Opera both carry "Chrome" in their UA string, and
-  // Chrome carries "Safari", so the more specific brands are tested first.
-  const browser =
-    /Edg\/(\d+)/.exec(ua) ? `Edge ${/Edg\/(\d+)/.exec(ua)![1]}` :
-    /OPR\/(\d+)/.exec(ua) ? `Opera ${/OPR\/(\d+)/.exec(ua)![1]}` :
-    /Firefox\/(\d+)/.exec(ua) ? `Firefox ${/Firefox\/(\d+)/.exec(ua)![1]}` :
-    /Chrome\/(\d+)/.exec(ua) ? `Chrome ${/Chrome\/(\d+)/.exec(ua)![1]}` :
-    /Version\/(\d+).*Safari/.exec(ua) ? `Safari ${/Version\/(\d+)/.exec(ua)![1]}` :
-    null;
-
-  if (!browser && !os) return null;
-  if (!browser) return os;
-  return os ? `${browser} on ${os}` : browser;
-};
-
-/** Loopback and private ranges mean "this server" / "internal network". */
-const describeIpAddress = (ip: string): string | null => {
-  if (ip === "::1" || ip === "127.0.0.1") return "Local machine";
-  if (/^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip)) {
-    return "Internal network";
-  }
-  return null;
-};
-
-/**
- * Metadata rendered for people rather than machines: a plain-language label,
- * with the raw value kept underneath (and in `title`) so nothing is lost for
- * anyone who needs the exact string.
- */
-const FRIENDLY_METADATA: Record<string, (v: string) => string | null> = {
-  ip_address: describeIpAddress,
-  user_agent: describeUserAgent,
-};
-
-const RenderMetadata = ({ data }: { data: Record<string, unknown> }) => (
-  <div className="grid gap-4 sm:grid-cols-2">
-    {Object.entries(data).map(([key, value]) => {
-      if (value === null || value === undefined) return null;
-      if (typeof value === "object") {
-        return (
-          <div key={key} className="flex min-w-0 flex-col gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {formatKey(key)}
-            </span>
-            <RenderObject data={value} className="grid-cols-1 gap-y-2" />
-          </div>
-        );
-      }
-
-      const raw = String(value);
-      const friendly = FRIENDLY_METADATA[key]?.(raw) ?? null;
-
-      return (
-        <div key={key} className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            {formatKey(key)}
-          </span>
-          {friendly ? (
-            <div className="min-w-0">
-              <p className="text-sm text-foreground">{friendly}</p>
-              <p
-                className="mt-0.5 font-mono text-xs break-words text-muted-foreground"
-                title={raw}
-              >
-                {raw}
-              </p>
-            </div>
-          ) : (
-            <span className="font-mono text-sm break-words text-foreground">
-              {raw}
-            </span>
-          )}
-        </div>
-      );
-    })}
-  </div>
-);
-
-/** Renders one scalar audit value, or a nested object via RenderObject. */
-const DiffValue = ({ value, muted }: { value: unknown; muted?: boolean }) => {
-  if (value === null || value === undefined || value === "") {
-    return <span className="text-sm italic text-muted-foreground">empty</span>;
-  }
-  if (typeof value === "object") {
-    return <RenderObject data={value} className="grid-cols-1 gap-y-2" />;
-  }
-  return (
-    <span
-      className={cn(
-        // `break-words`, not `break-all`: a user agent string should wrap at
-        // spaces rather than mid-token and run off the panel.
-        "font-mono text-sm break-words",
-        muted ? "text-muted-foreground line-through" : "text-foreground",
-      )}
-    >
-      {String(value)}
-    </span>
-  );
-};
-
-/**
- * A before -> after diff, one row per field.
- *
- * `buildAuditChanges` on the write side already drops unchanged fields and
- * keeps the two sides' keys aligned, so every row here is a real change. The
- * key union still guards the cases it cannot: `sanitizeAuditRecord` can strip a
- * key from one side only, and rows written before that diffing existed carry
- * full snapshots.
- */
-const RenderDiff = ({
-  before,
-  after,
-}: {
-  before?: Record<string, unknown>;
-  after?: Record<string, unknown>;
-}) => {
-  const keys = Array.from(
-    new Set([...Object.keys(before || {}), ...Object.keys(after || {})]),
-  );
-  if (keys.length === 0) return null;
-
-  return (
-    <div>
-      {keys.map((key) => {
-        const from = before?.[key];
-        const to = after?.[key];
-        const changed = JSON.stringify(from) !== JSON.stringify(to);
-        const hasBefore = before && key in before;
-
-        return (
-          <div key={key} className="grid gap-1 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)] sm:gap-4">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:pt-0.5">
-              {formatKey(key)}
-            </span>
-            {/* Stacks below `sm` so a long value never forces a horizontal
-                scroll on a phone; inline with an arrow from `sm` up. */}
-            <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
-              {changed && hasBefore && (
-                <>
-                  <DiffValue value={from} muted />
-                  <span aria-hidden className="text-muted-foreground">→</span>
-                </>
-              )}
-              <DiffValue value={to !== undefined ? to : from} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-/**
- * The expanded detail for one audit entry. Shared by the desktop table row and
- * the mobile card so the two views cannot drift apart.
- */
-const AuditLogDetail = ({ log }: { log: any }) => (
-<div className="space-y-6 p-6">
-  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-    <span className="font-bold uppercase tracking-wider">Action Details</span>
-    <span aria-hidden>·</span>
-    <span className="capitalize text-foreground">
-      {log.action_category.replace("_", " ")}
-    </span>
-    {log.resource_type && (
-      <>
-        <span aria-hidden>·</span>
-        <span className="capitalize text-foreground">
-          {log.resource_type}
-        </span>
-      </>
-    )}
-  </div>
-
-  <div className="space-y-2">
-    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-      Data Changes
-    </h4>
-    <div className="rounded-2xl border-0 bg-background/80 px-4 py-1">
-      {log.changes ? (
-        (log.changes as any).after ||
-        (log.changes as any).before ? (
-          <RenderDiff
-            before={(log.changes as any).before}
-            after={(log.changes as any).after}
-          />
-        ) : (
-          <div className="py-3">
-            <RenderObject data={log.changes} />
-          </div>
-        )
-      ) : (
-        <div className="py-6 text-sm text-muted-foreground">
-          This action didn&apos;t change any data.
-        </div>
-      )}
-    </div>
-  </div>
-
-  {log.metadata &&
-    Object.keys(log.metadata).length > 0 && (
-      <div className="space-y-2">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Metadata
-        </h4>
-        <div className="rounded-2xl border-0 bg-background/80 p-4">
-          <RenderMetadata
-            data={log.metadata as Record<string, unknown>}
-          />
-        </div>
-      </div>
-    )}
-</div>
-);
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   menu: <FileText className="h-3.5 w-3.5" />,
   staff: <User className="h-3.5 w-3.5" />,
@@ -373,38 +101,101 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 };
 
 
+type AuditTabFilters = {
+  search: string;
+  location_id: string;
+  action_category: AuditCategory | "";
+  severity: AuditSeverity | "";
+  actor_user_id: string;
+};
+
+const DEFAULT_FILTERS: AuditTabFilters = {
+  search: "",
+  location_id: "all",
+  action_category: "",
+  severity: "",
+  actor_user_id: "",
+};
+
+const defaultDateRange = (): DateRange => ({
+  from: subDays(new Date(), 7),
+  to: new Date(),
+});
+
+/**
+ * Each entry opens on its own page, so the tab unmounts on the way there.
+ * Filters, range and page are kept per merchant for the browser tab's session
+ * so "Back to audit log" lands where the reviewer left off.
+ */
+type SavedAuditTabState = {
+  filters: AuditTabFilters;
+  from?: string;
+  to?: string;
+  page: number;
+};
+
+const savedStateKey = (merchantId: string) => `hq-merchant-audit:${merchantId}`;
+
+function readSavedState(merchantId: string | undefined): SavedAuditTabState | null {
+  if (!merchantId) return null;
+  try {
+    const raw = sessionStorage.getItem(savedStateKey(merchantId));
+    return raw ? (JSON.parse(raw) as SavedAuditTabState) : null;
+  } catch {
+    return null;
+  }
+}
+
 interface AuditLogsTabProps {
     merchantInfo: MerchantInfoModel;
 }
 
 export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
+  const router = useRouter();
   // Admin view assumes all locations for now
-  const locations: {id: string, name: string}[] = []; 
-  const isAllLocations = true; 
+  const locations: {id: string, name: string}[] = [];
+  const isAllLocations = true;
   const selectedLocationId = null;
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 7),
-    to: new Date(),
-  });
+  const [saved] = useState(() => readSavedState(merchantInfo?.id));
 
-  const [filters, setFilters] = useState({
-    search: "",
-    location_id: "all",
-    action_category: "" as AuditCategory | "",
-    severity: "" as AuditSeverity | "",
-    actor_user_id: "",
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() =>
+    saved
+      ? saved.from
+        ? { from: new Date(saved.from), to: saved.to ? new Date(saved.to) : undefined }
+        : undefined
+      : defaultDateRange(),
+  );
 
-  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<AuditTabFilters>(
+    () => ({ ...DEFAULT_FILTERS, ...saved?.filters }),
+  );
+
+  const [page, setPage] = useState(saved?.page ?? 1);
   // §5.7: a data table shows at most 10 rows per page.
   const pageSize = 10;
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  // A new date range is a new result set — start it from the first page.
-  useEffect(() => {
-    setPage(1);
-  }, [dateRange]);
   const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    if (!merchantInfo?.id) return;
+    const state: SavedAuditTabState = {
+      filters,
+      from: dateRange?.from?.toISOString(),
+      to: dateRange?.to?.toISOString(),
+      page,
+    };
+    try {
+      sessionStorage.setItem(savedStateKey(merchantInfo.id), JSON.stringify(state));
+    } catch {
+      // Storage blocked (private mode): the tab still works, it just forgets.
+    }
+  }, [merchantInfo?.id, filters, dateRange, page]);
+
+  // A new date range is a new result set — start it from the first page.
+  const changeDateRange = (range: DateRange | undefined) => {
+    setDateRange(range);
+    setPage(1);
+  };
 
   const { data, isLoading, refetch, isFetching } = useAuditLogs(
     {
@@ -428,17 +219,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
   };
 
   const clearFilters = () => {
-    setFilters({
-      search: "",
-      location_id: "all",
-      action_category: "",
-      severity: "",
-      actor_user_id: "",
-    });
-    setDateRange({
-      from: subDays(new Date(), 7),
-      to: new Date(),
-    });
+    setFilters(DEFAULT_FILTERS);
+    setDateRange(defaultDateRange());
     setPage(1);
   };
 
@@ -522,7 +304,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     );
   }
 
-  const columnCount = isAllLocations ? 7 : 6;
+  const columnCount = isAllLocations ? 6 : 5;
 
   return (
     // This tab renders inside the merchant detail page, which already owns the
@@ -633,7 +415,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                     mode="range"
                     defaultMonth={dateRange?.from}
                     selected={dateRange}
-                    onSelect={setDateRange}
+                    onSelect={changeDateRange}
                     numberOfMonths={1}
                     className="p-0"
                     classNames={{
@@ -646,7 +428,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                       variant="outline"
                       className="flex-1"
                       onClick={() =>
-                        setDateRange({
+                        changeDateRange({
                           from: subDays(new Date(), 7),
                           to: new Date(),
                         })
@@ -659,7 +441,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                       variant="outline"
                       className="flex-1"
                       onClick={() =>
-                        setDateRange({
+                        changeDateRange({
                           from: subDays(new Date(), 30),
                           to: new Date(),
                         })
@@ -858,9 +640,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 <TableHead>Actor</TableHead>
                 {isAllLocations && <TableHead>Location</TableHead>}
                 <TableHead>Severity</TableHead>
-                <TableHead className="w-12.5">
-                  <span className="sr-only">Expand</span>
-                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -887,9 +666,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                     <TableCell>
                       <Skeleton className="h-6 w-16 rounded-full" />
                     </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-4" />
-                    </TableCell>
                   </TableRow>
                 ))
               ) : logs.length === 0 ? (
@@ -902,16 +678,16 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   </TableCell>
                 </TableRow>
               ) : (
-                logs.map((log) => (
-                  <React.Fragment key={log.id}>
+                logs.map((log) => {
+                  // Each entry opens on its own page. The row is clickable
+                  // for the mouse; the action is the real link for keyboard,
+                  // middle-click and open-in-new-tab.
+                  const href = merchantAuditLogHref(merchantInfo.id, log.id);
+                  return (
                     <TableRow
-                      className={cn(
-                        "cursor-pointer",
-                        expandedRow === log.id && "bg-muted/40",
-                      )}
-                      onClick={() =>
-                        setExpandedRow(expandedRow === log.id ? null : log.id)
-                      }
+                      key={log.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(href)}
                     >
                       <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
                         <div className="flex flex-col">
@@ -925,9 +701,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="text-sm font-medium">
+                          <RowLink href={href} className="text-sm font-medium">
                             {log.action}
-                          </span>
+                          </RowLink>
                           {log.resource_name && (
                             <span className="text-xs text-muted-foreground">
                               {log.resource_type}: {log.resource_name}
@@ -969,32 +745,15 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                           <span className="capitalize">{log.severity}</span>
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        {expandedRow === log.id ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </TableCell>
                     </TableRow>
-                    {/* `!`: the data TableBody's `[&_tr:hover]` outranks row classes. */}
-                    {expandedRow === log.id && (
-                      <TableRow className="hover:!bg-card/70">
-                        {/* `whitespace-normal`: TableCell's nowrap would stop long
-                            values (user agents) wrapping and widen the table. */}
-                        <TableCell colSpan={columnCount} className="whitespace-normal p-0">
-                          <AuditLogDetail log={log} />
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </React.Fragment>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
 
           {/* Mirrors the table's `hidden lg:block` (§5.3). Phone cards are a
-              flat summary: no resource line and no expandable detail. */}
+              lean summary — what, who, when; the rest is on the entry's page. */}
           <div className="grid min-w-0 grid-cols-1 gap-3 lg:hidden">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
@@ -1015,42 +774,15 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
               </div>
             ) : (
               logs.map((log) => (
-                <div key={log.id} className="min-w-0 rounded-2xl bg-muted/45 p-4">
-                  <p className="truncate font-medium">{log.action}</p>
-                  {/* Plain text, not pills, on the muted card (§3.5). */}
-                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">When</p>
-                      <p className="truncate font-medium tabular-nums">
-                        {format(new Date(log.created_at), "MMM d, HH:mm")}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">Actor</p>
-                      <p className="truncate font-medium">{log.actor_name}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">Category</p>
-                      <p className="truncate font-medium capitalize">
-                        {log.action_category.replace("_", " ")}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">Severity</p>
-                      <p className="truncate font-medium capitalize">{log.severity}</p>
-                    </div>
-                    {/* Full row width so the name shows whole instead of
-                        truncating in a half-width column. */}
-                    {isAllLocations && (
-                      <div className="col-span-2 min-w-0">
-                        <p className="text-xs text-muted-foreground">Location</p>
-                        <p className="font-medium break-words">
-                          {log.location?.name || "Global"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <RecordLinkCard
+                  key={log.id}
+                  href={merchantAuditLogHref(merchantInfo.id, log.id)}
+                  title={log.action}
+                  subtitle={[log.actor_name, formatKey(log.action_category)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  status={format(new Date(log.created_at), "MMM d, HH:mm")}
+                />
               ))
             )}
           </div>

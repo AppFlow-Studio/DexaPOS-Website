@@ -45,6 +45,7 @@ import {
     createLocationSchema
 } from '@/types/merchant_locations'
 import { useQueryClient } from '@tanstack/react-query'
+import { adminKeys } from '@/lib/queries/admin-keys'
 
 interface AdminCreateLocationWizardProps {
     merchantId: string
@@ -414,7 +415,10 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 description: `"${formData.name}" has been added to ${merchantName}.`
             })
 
-            queryClient.invalidateQueries({ queryKey: ['admin-merchant'] })
+            // The merchant page reads its location list from the cached
+            // merchant detail (10 min staleTime) — it must be refetched, or the
+            // new location is missing and `openLocation` finds nothing to open.
+            await queryClient.invalidateQueries({ queryKey: adminKeys.merchants() })
             queryClient.invalidateQueries({ queryKey: ['merchant'] })
             queryClient.invalidateQueries({ queryKey: ['locations'] })
 

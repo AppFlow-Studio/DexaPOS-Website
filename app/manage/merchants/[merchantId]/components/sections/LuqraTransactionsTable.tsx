@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 import Link from 'next/link'
 import { CheckCircle2, ChevronRight, CircleAlert, Download, RefreshCcwDot } from 'lucide-react'
@@ -32,6 +32,9 @@ import {
 import type { CachedTxnRow } from '@/app/manage/actions/admin-merchant/luqra-sync'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import type { PaginationMeta } from '@/types/pagination'
+import { cn } from '@/lib/utils'
+import { DetailToggle } from './LuqraDetailCard'
+import { LuqraCacheEmpty } from './LuqraCacheEmpty'
 
 const POS_ENTRY: Record<string, string> = {
     '1': 'Swipe',
@@ -54,8 +57,19 @@ function formatMoney(n: number) {
 
 function formatDate(iso?: string | null) {
     if (!iso) return '—'
-    return new Date(iso).toLocaleDateString()
+    // Luqra dates are DATE columns ("2026-04-15"); `new Date()` reads those as
+    // UTC midnight, which is the previous day west of UTC. Build them locally.
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+    const date = day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])) : new Date(iso)
+    return date.toLocaleDateString()
 }
+
+function formatDateTime(iso?: string | null) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+const DEBIT_CREDIT: Record<string, string> = { D: 'Debit', C: 'Credit' }
 
 function toIsoDate(d?: Date): string | null {
     if (!d) return null
@@ -86,6 +100,9 @@ export function LuqraTransactionsTable({
     const [range, setRange] = useState<DateRange | undefined>(defaultRange())
     const [maxRowsInput, setMaxRowsInput] = useState<string>('')
     const [page, setPage] = useState(1)
+    // A row's extra fields are few, so they open inline beneath it.
+    const [expandedId, setExpandedId] = useState<string | null>(null)
+    const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id))
     const count = 50
 
     const dateFrom = toIsoDate(range?.from)
@@ -139,6 +156,17 @@ export function LuqraTransactionsTable({
     }
 
     const isDrilldown = !!(fixedDepositId || fixedBatchId)
+
+    const emptyState = (
+        <LuqraCacheEmpty
+            hasRange={!isDrilldown && !!(dateFrom || dateTo)}
+            onShowAllDates={() => {
+                setRange(undefined)
+                setPage(1)
+            }}
+            emptyText={EMPTY_TEXT}
+        />
+    )
 
     const pagination: PaginationMeta = {
         page,
@@ -245,13 +273,14 @@ export function LuqraTransactionsTable({
                             <TableHead>Auth</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                             <TableHead>Reconciled</TableHead>
+                            <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             Array.from({ length: 6 }).map((_, idx) => (
                                 <TableRow key={`luqra-loading-${idx}`}>
-                                    {Array.from({ length: 9 }).map((__, cellIdx) => (
+                                    {Array.from({ length: 10 }).map((__, cellIdx) => (
                                         <TableCell key={`luqra-loading-${idx}-${cellIdx}`}>
                                             <Skeleton className="h-4 w-full" />
                                         </TableCell>
@@ -260,13 +289,18 @@ export function LuqraTransactionsTable({
                             ))
                         ) : rows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                                    {EMPTY_TEXT}
+                                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                                    {emptyState}
                                 </TableCell>
                             </TableRow>
                         ) : (
                             rows.map((r) => (
-                                <TableRow key={r.id}>
+                                <Fragment key={r.id}>
+                                <TableRow
+                                    className="cursor-pointer"
+                                    data-state={expandedId === r.id ? 'selected' : undefined}
+                                    onClick={() => toggleRow(r.id)}
+                                >
                                     <TableCell className="whitespace-nowrap tabular-nums">
                                         {formatDate(r.original_transaction_date)}
                                     </TableCell>
@@ -304,6 +338,7 @@ export function LuqraTransactionsTable({
                                                 href={`/manage/transactions?orderId=${r.reconciled_order_id}`}
                                                 className="inline-flex items-center gap-1"
                                                 title="Open linked order_payment"
+                                                onClick={(e) => e.stopPropagation()}
                                             >
                                                 <Badge
                                                     variant="secondary"
@@ -324,7 +359,27 @@ export function LuqraTransactionsTable({
                                             </Badge>
                                         )}
                                     </TableCell>
+                                    <TableCell className="py-1">
+                                        <DetailToggle
+                                            open={expandedId === r.id}
+                                            controls={`luqra-txn-${r.id}`}
+                                            label={`Details for authorization ${r.authorization_number}`}
+                                            onToggle={() => toggleRow(r.id)}
+                                        />
+                                    </TableCell>
                                 </TableRow>
+                                {expandedId === r.id && (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell
+                                            id={`luqra-txn-${r.id}`}
+                                            colSpan={10}
+                                            className="whitespace-normal bg-muted/30 px-4 py-3"
+                                        >
+                                            <TxnDetails row={r} />
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                </Fragment>
                             ))
                         )}
                     </TableBody>
@@ -341,7 +396,7 @@ export function LuqraTransactionsTable({
                         ))
                     ) : rows.length === 0 ? (
                         <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 text-center text-sm text-muted-foreground">
-                            {EMPTY_TEXT}
+                            {emptyState}
                         </div>
                     ) : (
                         rows.map((r) => (
@@ -375,6 +430,24 @@ export function LuqraTransactionsTable({
                                         )}
                                     </div>
                                 </div>
+                                {expandedId === r.id && (
+                                    <div id={`luqra-txn-card-${r.id}`} className="mt-3 border-t pt-3">
+                                        <TxnDetails row={r} />
+                                    </div>
+                                )}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="-mb-1 -ml-2 mt-2 h-8 gap-1 rounded-full px-2 text-xs text-muted-foreground"
+                                    aria-expanded={expandedId === r.id}
+                                    aria-controls={expandedId === r.id ? `luqra-txn-card-${r.id}` : undefined}
+                                    onClick={() => toggleRow(r.id)}
+                                >
+                                    <ChevronRight
+                                        className={cn('h-3.5 w-3.5 transition-transform', expandedId === r.id && 'rotate-90')}
+                                    />
+                                    {expandedId === r.id ? 'Fewer details' : 'More details'}
+                                </Button>
                             </div>
                         ))
                     )}
@@ -397,6 +470,63 @@ export function LuqraTransactionsTable({
 }
 
 const EMPTY_TEXT = 'No transactions in the local cache for this filter. Sync from Luqra to fetch them.'
+
+/** The fields the row itself has no room for. Shared by the table and the phone cards. */
+function TxnDetails({ row: r }: { row: CachedTxnRow }) {
+    const cardNumber =
+        r.account_first6 || r.account_last4
+            ? `${r.account_first6 ?? '••••••'}••••••${r.account_last4 ?? '••••'}`
+            : '—'
+    const type = r.transaction_code_description
+        ? `${r.transaction_code_description}${r.transaction_code ? ` (${r.transaction_code})` : ''}`
+        : r.transaction_code ?? '—'
+    const matched = !!(r.reconciled_payment_id && r.reconciled_order_id)
+
+    return (
+        <dl className="grid min-w-0 grid-cols-2 gap-x-6 gap-y-3 text-sm md:grid-cols-3 xl:grid-cols-4">
+            <DetailField label="MID" value={r.mid} mono />
+            <DetailField label="Card number" value={cardNumber} mono />
+            <DetailField label="Type" value={type} />
+            <DetailField
+                label="Debit / credit"
+                value={(r.debit_credit_indicator && DEBIT_CREDIT[r.debit_credit_indicator]) || r.debit_credit_indicator || '—'}
+            />
+            <DetailField label="Transaction date" value={formatDate(r.original_transaction_date)} />
+            <DetailField label="Posted" value={formatDate(r.transaction_date)} />
+            <DetailField
+                label="Reconciled"
+                value={matched ? formatDateTime(r.reconciled_at) : 'Not matched to a POS payment'}
+            />
+            {matched && <DetailField label="Payment ID" value={r.reconciled_payment_id!} mono />}
+            {r.reject_reason && <DetailField label="Reject reason" value={r.reject_reason} />}
+            <DetailField
+                label="Synced"
+                value={`First ${formatDateTime(r.first_seen_at)} · last ${formatDateTime(r.last_seen_at)}`}
+                wide
+            />
+        </dl>
+    )
+}
+
+function DetailField({
+    label,
+    value,
+    mono = false,
+    wide = false,
+}: {
+    label: string
+    value: string
+    mono?: boolean
+    /** Spans two columns: for longer values like the sync timestamps. */
+    wide?: boolean
+}) {
+    return (
+        <div className={cn('min-w-0', wide && 'col-span-2')}>
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className={cn('break-words font-medium tabular-nums', mono && 'font-mono text-xs leading-5')}>{value}</dd>
+        </div>
+    )
+}
 
 function CardField({ label, value }: { label: string; value: string }) {
     return (

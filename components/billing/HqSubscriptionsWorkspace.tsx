@@ -686,8 +686,11 @@ export function HqSubscriptionsWorkspace({
     })
   }
 
+  // Step navigation is local UI state, so it never waits on `isPending`: React
+  // entangles every in-flight async action (and Next runs each server action
+  // as one), so the quote/station-count refetches alone would lock the wizard.
   const changeStep = (step: number) => {
-    if (isPending || step < 0 || step >= SUBSCRIPTION_STEPS.length) return
+    if (step < 0 || step >= SUBSCRIPTION_STEPS.length) return
     setCurrentStep(step)
     requestAnimationFrame(() => {
       stepHeadingRef.current?.focus({ preventScroll: true })
@@ -1828,7 +1831,7 @@ export function HqSubscriptionsWorkspace({
                 <li key={step.id} className="min-w-0">
                   <button
                     type="button"
-                    disabled={index > currentStep || isPending}
+                    disabled={index > currentStep}
                     onClick={() => {
                       if (index <= currentStep) changeStep(index)
                     }}
@@ -2356,7 +2359,7 @@ export function HqSubscriptionsWorkspace({
               content scrolling beneath it by surface, not a line. */}
           <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 bg-background px-1 py-3">
             {currentStep > 0 ? (
-              <Button variant="outline" onClick={() => changeStep(currentStep - 1)} disabled={isPending}>
+              <Button variant="outline" onClick={() => changeStep(currentStep - 1)}>
                 <ChevronLeft className="mr-1 h-4 w-4" />
                 Back
               </Button>
@@ -2364,7 +2367,7 @@ export function HqSubscriptionsWorkspace({
               <span />
             )}
             {activeStep.id !== 'review' ? (
-              <Button onClick={() => changeStep(currentStep + 1)} disabled={isPending}>
+              <Button onClick={() => changeStep(currentStep + 1)}>
                 Continue
                 <ChevronRight className="ml-1 h-4 w-4" />
               </Button>

@@ -34,6 +34,7 @@ import {
     useSyncLuqra,
 } from '@/lib/queries/use-luqra'
 import type { CachedCbRow } from '@/app/manage/actions/admin-merchant/luqra-sync'
+import { LuqraCacheEmpty } from './LuqraCacheEmpty'
 import { KpiStrip, type KpiCell } from './KpiStrip'
 import { EmptySection } from './EmptySection'
 
@@ -158,6 +159,14 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
     const rows = useMemo(() => result?.rows ?? [], [result])
     const totals = result?.totals
     const { pageRows, pagination, setPage } = useClientPagination(rows, 10)
+
+    const emptyState = (
+        <LuqraCacheEmpty
+            hasRange={!!(dateFrom || dateTo)}
+            onShowAllDates={() => setRange(undefined)}
+            emptyText={EMPTY_TEXT}
+        />
+    )
 
     const handleSync = async () => {
         const hasRange = !!(dateFrom || dateTo)
@@ -357,7 +366,7 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                                     ) : rows.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                                                {EMPTY_TEXT}
+                                                {emptyState}
                                             </TableCell>
                                         </TableRow>
                                     ) : (
@@ -445,7 +454,7 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                                     ))
                                 ) : rows.length === 0 ? (
                                     <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 text-center text-sm text-muted-foreground">
-                                        {EMPTY_TEXT}
+                                        {emptyState}
                                     </div>
                                 ) : (
                                     pageRows.map((r) => {

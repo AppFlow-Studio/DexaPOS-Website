@@ -24,15 +24,24 @@ function relativeTime(iso: string | null): string {
  * an alarm, so it gets no green. The one coloured mark is the glyph beside a
  * failed TSYS sync, and the words "Sync failed" say it too (§14.3 HQ-2).
  */
-export function ConnectivityStrip({ merchantIds }: { merchantIds?: string[] | null }) {
-    const { data, isLoading, isFetching, refetch } = useQuery({
+export function ConnectivityStrip({
+    merchantIds,
+    enabled = true,
+}: {
+    merchantIds?: string[] | null
+    /** Hold the request back (the host's primary list goes first). The skeleton shows meanwhile. */
+    enabled?: boolean
+}) {
+    const { data, isPending, isFetching, refetch } = useQuery({
         queryKey: ['platform-connectivity', (merchantIds ?? []).join(',')],
         queryFn: () => getConnectivityStatus(merchantIds ?? null),
         staleTime: 30_000,
         refetchOnMount: 'always',
+        enabled,
     })
 
-    if (isLoading) {
+    // `isPending` (no data yet), not `isLoading`: it also covers a held-back query.
+    if (isPending) {
         return (
             <div className="flex flex-wrap items-center gap-2">
                 <Skeleton className="h-7 w-56 rounded-full" />

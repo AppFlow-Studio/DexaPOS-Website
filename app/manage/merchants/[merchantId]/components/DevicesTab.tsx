@@ -105,13 +105,21 @@ const getStationTypeIcon = (type: StationType): LucideIcon => {
     }
 }
 
-/** One labelled field inside a mobile device card. */
-function DeviceCardField({ label, value }: { label: string; value: string | number }) {
+const formatHeartbeat = (iso: string | null | undefined): string =>
+    iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : 'Never'
+
+/**
+ * The status line under a phone device card: the Wifi glyph and the word carry
+ * the state (§3.5), with one short detail after it.
+ */
+function DeviceCardStatus({ online, detail }: { online: boolean; detail: string }) {
+    const Icon = online ? Wifi : WifiOff
     return (
-        <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="truncate font-medium tabular-nums">{value}</p>
-        </div>
+        <p className="mt-2 flex min-w-0 items-center gap-1.5 text-sm">
+            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="shrink-0 font-medium">{online ? 'Online' : 'Offline'}</span>
+            <span className="truncate text-muted-foreground">· {detail}</span>
+        </p>
     )
 }
 
@@ -543,10 +551,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                     </div>
 
                     {/* @container: the table/card switch below keys off THIS panel's
-                        width, not the viewport. The panel sits beside the merchant nav,
-                        so at a 1280px viewport it is only ~700px -- a viewport `lg:`
-                        switch showed the 7-column table there and clipped Status,
-                        Device Info, Last Heartbeat and the actions off to the right. */}
+                        width, not the viewport, so an open app sidebar is accounted
+                        for. Laptops (panel >= 42rem) get tables, phones get cards. */}
                     <div className="@container mt-6">
                         {isLoading ? (
                             <div className="space-y-2" aria-busy="true">
@@ -577,20 +583,20 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                             </Empty>
                                         ) : (
                                             <>
-                                            {/* §5.3: a card grid until the panel fits all 7
-                                                columns (@5xl, 64rem), never a scrolling table.
-                                                Unbounded: the page is capped at 10 rows by
-                                                pagination, so an inner scroll well only slid
-                                                rows under a sticky header. */}
-                                            <Table variant="data" bounded={false} containerClassName="hidden @5xl:block">
+                                            {/* §5.3: a table once the panel is laptop-wide
+                                                (@2xl, 42rem), cards below it. Type folds into the
+                                                Station cell so five columns fit at that width;
+                                                Device joins from @4xl. Unbounded: the page is
+                                                capped at 10 rows by pagination, so an inner
+                                                scroll well only slid rows under a sticky header. */}
+                                            <Table variant="data" bounded={false} containerClassName="hidden @2xl:block">
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead>Station</TableHead>
-                                                        <TableHead>Type</TableHead>
                                                         <TableHead>Location</TableHead>
+                                                        <TableHead className="hidden @4xl:table-cell">Device</TableHead>
                                                         <TableHead>Status</TableHead>
-                                                        <TableHead>Device Info</TableHead>
-                                                        <TableHead>Last Heartbeat</TableHead>
+                                                        <TableHead>Last Seen</TableHead>
                                                         <TableHead className="w-[50px]"><span className="sr-only">Actions</span></TableHead>
                                                     </TableRow>
                                                 </TableHeader>
@@ -601,31 +607,35 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                         <TableRow key={station.id}>
                                                             <TableCell>
                                                                 <div className="flex items-center gap-3">
-                                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                                                                        <StationIcon className="h-5 w-5" />
+                                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                                                        <StationIcon className="h-4 w-4" />
                                                                     </div>
-                                                                    <div>
+                                                                    <div className="min-w-0">
                                                                         <div className="font-medium">{station.station_name}</div>
-                                                                        {station.station_code && (
-                                                                            <div className="text-sm text-muted-foreground">
-                                                                                Code: {station.station_code}
-                                                                            </div>
-                                                                        )}
+                                                                        <div className="text-xs text-muted-foreground">
+                                                                            {getStationTypeLabel(station.station_type)}
+                                                                            {station.station_number ? ` #${station.station_number}` : ''}
+                                                                            {station.station_code ? ` · ${station.station_code}` : ''}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
-                                                                    {getStationTypeLabel(station.station_type)}
-                                                                </Badge>
-                                                                {station.station_number && (
-                                                                    <span className="ml-2 text-sm text-muted-foreground tabular-nums">
-                                                                        #{station.station_number}
-                                                                    </span>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell>
                                                                 <span className="text-sm">{station.location_name}</span>
+                                                            </TableCell>
+                                                            <TableCell className="hidden @4xl:table-cell">
+                                                                {station.device_name || station.hardware_model ? (
+                                                                    <div className="text-sm">
+                                                                        <div>{station.device_name || '—'}</div>
+                                                                        {station.hardware_model && (
+                                                                            <div className="text-xs text-muted-foreground">
+                                                                                {station.hardware_model}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">—</span>
+                                                                )}
                                                             </TableCell>
                                                             <TableCell>
                                                                 <div className="flex flex-col gap-1">
@@ -640,25 +650,9 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell>
-                                                                {station.device_name || station.hardware_model ? (
-                                                                    <div className="text-sm">
-                                                                        <div>{station.device_name || '—'}</div>
-                                                                        <div className="text-muted-foreground">
-                                                                            {station.hardware_model || '—'}
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground">—</span>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {station.last_heartbeat_at ? (
-                                                                    <span className="text-sm text-muted-foreground">
-                                                                        {formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground">Never</span>
-                                                                )}
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    {formatHeartbeat(station.last_heartbeat_at)}
+                                                                </span>
                                                             </TableCell>
                                                             <TableCell>
                                                                 {canManageDevices ? (
@@ -673,61 +667,40 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 </TableBody>
                                             </Table>
 
-                                            {/* Mirrors the table's `hidden @5xl:block`. Same
-                                                page of rows, stacked: identity and status lead,
-                                                the rest drops into a two-column field grid.
-                                                Values are plain text on the muted card (§3.5). */}
-                                            <div className="grid min-w-0 grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:hidden">
-                                                {stationPageRows.map((station) => {
-                                                    const StationIcon = getStationTypeIcon(station.station_type)
-                                                    return (
+                                            {/* Mirrors the table's `hidden @2xl:block`. Phone
+                                                cards carry only what an operator scans for: name,
+                                                type, location, and whether it is online. Device
+                                                hardware and codes stay on the laptop table. */}
+                                            <div className="flex min-w-0 flex-col gap-2 @2xl:hidden">
+                                                {stationPageRows.map((station) => (
                                                     <div
                                                         key={station.id}
-                                                        className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                                                        className="min-w-0 rounded-2xl bg-muted/45 px-4 py-3"
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex min-w-0 items-center gap-3">
-                                                                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
-                                                                    <StationIcon className="h-5 w-5" />
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <p className="truncate font-semibold">{station.station_name}</p>
-                                                                    {station.station_code && (
-                                                                        <p className="truncate text-xs text-muted-foreground">
-                                                                            Code: {station.station_code}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
+                                                            <div className="min-w-0">
+                                                                <p className="truncate font-semibold">{station.station_name}</p>
+                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                    {getStationTypeLabel(station.station_type)}
+                                                                    {station.station_number ? ` #${station.station_number}` : ''}
+                                                                    {' · '}
+                                                                    {station.location_name}
+                                                                </p>
                                                             </div>
                                                             {canManageDevices && renderStationActions(station)}
                                                         </div>
-
-                                                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                                            <DeviceCardField
-                                                                label="Status"
-                                                                value={`${station.is_online ? 'Online' : 'Offline'}${station.is_active ? '' : ' · Deactivated'}`}
-                                                            />
-                                                            <DeviceCardField
-                                                                label="Type"
-                                                                value={`${getStationTypeLabel(station.station_type)}${station.station_number ? ` #${station.station_number}` : ''}`}
-                                                            />
-                                                            <DeviceCardField label="Location" value={station.location_name} />
-                                                            <DeviceCardField
-                                                                label="Device"
-                                                                value={station.device_name || station.hardware_model || '—'}
-                                                            />
-                                                            <DeviceCardField
-                                                                label="Last heartbeat"
-                                                                value={
-                                                                    station.last_heartbeat_at
-                                                                        ? formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })
-                                                                        : 'Never'
-                                                                }
-                                                            />
-                                                        </div>
+                                                        <DeviceCardStatus
+                                                            online={station.is_online}
+                                                            detail={
+                                                                !station.is_active
+                                                                    ? 'Deactivated'
+                                                                    : station.last_heartbeat_at
+                                                                      ? `Seen ${formatHeartbeat(station.last_heartbeat_at)}`
+                                                                      : 'Never seen'
+                                                            }
+                                                        />
                                                     </div>
-                                                    )
-                                                })}
+                                                ))}
                                             </div>
 
                                             <PaginationBar pagination={stationPagination} onPageChange={setStationPage} itemLabel="stations" />
@@ -757,13 +730,13 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                             </Empty>
                                         ) : (
                                             <>
-                                            {/* 6 columns fit from @4xl (56rem). Unbounded for
-                                                the same reason as the stations table. */}
-                                            <Table variant="data" bounded={false} containerClassName="hidden @4xl:block">
+                                            {/* Same @2xl switch as the stations table. Type
+                                                folds into the Terminal cell so five columns
+                                                fit. Unbounded for the same reason. */}
+                                            <Table variant="data" bounded={false} containerClassName="hidden @2xl:block">
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead>Terminal</TableHead>
-                                                        <TableHead>Type</TableHead>
                                                         <TableHead>Serial Number</TableHead>
                                                         <TableHead>Assigned Station</TableHead>
                                                         <TableHead>Status</TableHead>
@@ -775,24 +748,19 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                         <TableRow key={terminal.id}>
                                                             <TableCell>
                                                                 <div className="flex items-center gap-3">
-                                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                                                                        <CreditCard className="h-5 w-5" />
+                                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                                                        <CreditCard className="h-4 w-4" />
                                                                     </div>
-                                                                    <div>
+                                                                    <div className="min-w-0">
                                                                         <div className="font-medium">{terminal.terminal_name}</div>
-                                                                        <div className="text-sm text-muted-foreground">
-                                                                            {terminal.location_name}
+                                                                        <div className="text-xs text-muted-foreground">
+                                                                            {getTerminalTypeLabel(terminal.terminal_type)} · {terminal.location_name}
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
-                                                                    {getTerminalTypeLabel(terminal.terminal_type)}
-                                                                </Badge>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <code className="text-sm bg-muted px-2 py-1 rounded">
+                                                                <code className="rounded bg-muted px-2 py-1 text-xs">
                                                                     {terminal.serial_number || '—'}
                                                                 </code>
                                                             </TableCell>
@@ -828,34 +796,30 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 </TableBody>
                                             </Table>
 
-                                            {/* Mirrors the table's `hidden @4xl:block`. */}
-                                            <div className="grid min-w-0 grid-cols-1 gap-3 @xl:grid-cols-2 @4xl:hidden">
+                                            {/* Mirrors the table's `hidden @2xl:block`. Phone
+                                                cards keep name, type, serial, and status with the
+                                                station it is paired to; location is the filter. */}
+                                            <div className="flex min-w-0 flex-col gap-2 @2xl:hidden">
                                                 {terminalPageRows.map((terminal) => (
                                                     <div
                                                         key={terminal.id}
-                                                        className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                                                        className="min-w-0 rounded-2xl bg-muted/45 px-4 py-3"
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex min-w-0 items-center gap-3">
-                                                                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
-                                                                    <CreditCard className="h-5 w-5" />
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <p className="truncate font-semibold">{terminal.terminal_name}</p>
-                                                                    <p className="truncate text-xs text-muted-foreground">
-                                                                        {getTerminalTypeLabel(terminal.terminal_type)}
-                                                                    </p>
-                                                                </div>
+                                                            <div className="min-w-0">
+                                                                <p className="truncate font-semibold">{terminal.terminal_name}</p>
+                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                    {getTerminalTypeLabel(terminal.terminal_type)}
+                                                                    {' · '}
+                                                                    <span className="font-mono">{terminal.serial_number || 'No serial'}</span>
+                                                                </p>
                                                             </div>
                                                             {canManageDevices && renderTerminalActions(terminal)}
                                                         </div>
-
-                                                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                                            <DeviceCardField label="Status" value={terminal.is_connected ? 'Online' : 'Offline'} />
-                                                            <DeviceCardField label="Serial" value={terminal.serial_number || '—'} />
-                                                            <DeviceCardField label="Location" value={terminal.location_name} />
-                                                            <DeviceCardField label="Station" value={terminal.station_name || 'Unassigned'} />
-                                                        </div>
+                                                        <DeviceCardStatus
+                                                            online={terminal.is_connected}
+                                                            detail={terminal.station_name || 'Unassigned'}
+                                                        />
                                                     </div>
                                                 ))}
                                             </div>

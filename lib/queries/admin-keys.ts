@@ -115,6 +115,9 @@ export const adminKeys = {
   merchantOrderDetails: (merchantId: string, orderId: string) =>
     [...adminKeys.merchants(), merchantId, 'order-details', orderId] as const,
 
+  merchantAuditLog: (merchantId: string, logId: string) =>
+    [...adminKeys.merchants(), merchantId, 'audit-log', logId] as const,
+
   merchantOrderStats: (
     merchantId: string,
     dateRange?: { from: string; to: string },

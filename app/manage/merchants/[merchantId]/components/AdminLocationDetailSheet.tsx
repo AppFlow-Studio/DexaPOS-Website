@@ -100,6 +100,10 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   return { value, label: `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}` }
 })
 
+// Capped at 16rem and never taller than the space left inside the dialog's
+// tab body (the select's collisionBoundary).
+const TIME_LIST_CLASS = 'max-h-[min(16rem,var(--radix-select-content-available-height))]'
+
 // Overnight close times: 12:00 AM – 6:00 AM (next day), 30-min steps
 const OVERNIGHT_CLOSE_OPTIONS = Array.from({ length: 13 }, (_, i) => {
   const totalMinutes = i * 30
@@ -110,6 +114,49 @@ const OVERNIGHT_CLOSE_OPTIONS = Array.from({ length: 13 }, (_, i) => {
   const label = `${hour12}:${m.toString().padStart(2, '0')} AM (next day)`
   return { value, label }
 })
+
+/**
+ * `locations.business_hours` also holds the storefront shape
+ * `{ from, to, enabled, is24Hours }`. Read either shape (the merchant
+ * dashboard's HoursTab does the same) so the time selects are never blank.
+ */
+function readBusinessHours(raw: Location['business_hours']): BusinessHours {
+  const hours: BusinessHours = { ...DEFAULT_BUSINESS_HOURS }
+  if (!raw) return hours
+  DAYS.forEach(({ key }) => {
+    const day = raw[key] as (Partial<DayHours> & { from?: string; to?: string; enabled?: boolean }) | undefined
+    if (!day) return
+    const open = (day.open || day.from || '09:00').slice(0, 5)
+    const close = (day.close || day.to || '17:00').slice(0, 5)
+    hours[key] = {
+      open,
+      close,
+      is_closed: day.is_closed ?? day.enabled === false,
+      is_overnight: day.is_overnight ?? false,
+    }
+  })
+  return hours
+}
+
+/** Write both shapes back, matching the merchant dashboard's HoursTab. */
+function toStoredBusinessHours(hours: BusinessHours) {
+  const stored: Record<string, unknown> = {}
+  DAYS.forEach(({ key }) => {
+    const day = hours[key]
+    if (!day) return
+    stored[key] = {
+      from: day.open,
+      to: day.close,
+      enabled: !day.is_closed,
+      is24Hours: false,
+      open: day.open,
+      close: day.close,
+      is_closed: day.is_closed,
+      is_overnight: day.is_overnight ?? false,
+    }
+  })
+  return stored as BusinessHours
+}
 
 export function AdminLocationDetailSheet({
   merchantId,
@@ -145,6 +192,9 @@ export function AdminLocationDetailSheet({
     tax_registration_status: 'pending',
   })
   const [hours, setHours] = React.useState<BusinessHours>(DEFAULT_BUSINESS_HOURS)
+  // The tab body is the collision boundary for the time selects, so their
+  // lists size to (and flip within) the dialog instead of the viewport.
+  const [tabBody, setTabBody] = React.useState<HTMLDivElement | null>(null)
 
   React.useEffect(() => {
     setCurrentLocation(location)
@@ -176,7 +226,7 @@ export function AdminLocationDetailSheet({
           : '',
       tax_registration_status: currentLocation.tax_registration_status || 'pending',
     })
-    setHours({ ...DEFAULT_BUSINESS_HOURS, ...(currentLocation.business_hours || {}) })
+    setHours(readBusinessHours(currentLocation.business_hours))
   }, [currentLocation])
 
   const invalidateLocation = React.useCallback(
@@ -250,7 +300,7 @@ export function AdminLocationDetailSheet({
     setIsSavingHours(true)
     try {
       const result = await adminUpdateLocation(merchantId, currentLocation.id, {
-        business_hours: hours,
+        business_hours: toStoredBusinessHours(hours),
       })
       if (!result.success || !result.data) {
         toast.error(result.error || 'Failed to update business hours')
@@ -392,7 +442,7 @@ export function AdminLocationDetailSheet({
             </div>
           </div>
 
-          <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5">
+          <div ref={setTabBody} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5">
             <TabsContent value="details" className="mt-0">
               <DialogSection label="Location Details" caption="Edit the full location profile from HQ">
                 <div className="space-y-4">
@@ -533,12 +583,12 @@ export function AdminLocationDetailSheet({
                           <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center', day.is_closed && 'pointer-events-none opacity-40')}>
                             <Select value={day.open} onValueChange={(value) => handleHourChange(key, { open: value })} disabled={day.is_closed}>
                               <SelectTrigger className="w-full tabular-nums sm:w-40" aria-label={`${label} opens`}><SelectValue /></SelectTrigger>
-                              <SelectContent>{TIME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                              <SelectContent collisionBoundary={tabBody} collisionPadding={8} className={TIME_LIST_CLASS}>{TIME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
                             <span className="text-sm text-muted-foreground text-center">to</span>
                             <Select value={day.close} onValueChange={(value) => handleHourChange(key, { close: value })} disabled={day.is_closed}>
                               <SelectTrigger className="w-full tabular-nums sm:w-44" aria-label={`${label} closes`}><SelectValue /></SelectTrigger>
-                              <SelectContent>{closeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                              <SelectContent collisionBoundary={tabBody} collisionPadding={8} className={TIME_LIST_CLASS}>{closeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
                             <div className="flex items-center gap-1.5">
                               <Switch

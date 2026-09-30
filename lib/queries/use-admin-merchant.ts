@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { adminKeys } from './admin-keys'
+import { getAdminMerchantAuditLog } from '@/app/manage/actions/admin-merchant/audit-logs'
 
 // Analytics actions
 import {
@@ -85,7 +86,17 @@ export function useAdminMerchantDetails(merchantId: string) {
     queryFn: () => getMerchantDetails(merchantId),
     enabled: !!merchantId,
     // Longer stale time since merchant details don't change often
-    staleTime: 10 * 60 * 1000, 
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+export function useAdminMerchantAuditLog(merchantId: string, logId: string) {
+  return useQuery({
+    queryKey: adminKeys.merchantAuditLog(merchantId, logId),
+    queryFn: () => getAdminMerchantAuditLog(merchantId, logId),
+    enabled: !!merchantId && !!logId,
+    // Audit rows are immutable (trg_immutable_audit_logs), so one fetch holds.
+    staleTime: Infinity,
   })
 }
 

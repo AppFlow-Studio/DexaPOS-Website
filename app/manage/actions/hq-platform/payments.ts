@@ -236,8 +236,6 @@ export async function getConnectivityStatus(merchantIds?: string[] | null): Prom
         if (scopedMerchantIds && scopedMerchantIds.length > 0) {
             runQ = runQ.in('merchant_id', scopedMerchantIds)
         }
-        const { data: lastRun } = await runQ
-
         let runs24Q = supabase
             .from('luqra_sync_runs')
             .select('id', { count: 'exact', head: true })
@@ -245,8 +243,6 @@ export async function getConnectivityStatus(merchantIds?: string[] | null): Prom
         if (scopedMerchantIds && scopedMerchantIds.length > 0) {
             runs24Q = runs24Q.in('merchant_id', scopedMerchantIds)
         }
-        const { count: runsLast24h } = await runs24Q
-
         let midQ = supabase
             .from('locations')
             .select('id', { count: 'exact', head: true })
@@ -254,8 +250,6 @@ export async function getConnectivityStatus(merchantIds?: string[] | null): Prom
         if (scopedMerchantIds && scopedMerchantIds.length > 0) {
             midQ = midQ.in('merchant_id', scopedMerchantIds)
         }
-        const { count: midsConfigured } = await midQ
-
         // Processor: distinct terminals seen in last 24 h.
         let termQ = supabase
             .from('order_payments')
@@ -265,7 +259,9 @@ export async function getConnectivityStatus(merchantIds?: string[] | null): Prom
         if (scopedMerchantIds && scopedMerchantIds.length > 0) {
             termQ = termQ.in('orders.merchant_id', scopedMerchantIds)
         }
-        const { data: termRows } = await termQ
+        // The four reads are independent: one round-trip of latency, not four.
+        const [{ data: lastRun }, { count: runsLast24h }, { count: midsConfigured }, { data: termRows }] =
+            await Promise.all([runQ, runs24Q, midQ, termQ])
         const termSet = new Set<string>()
         const typeCounts = new Map<string, Set<string>>()
         for (const r of termRows ?? []) {

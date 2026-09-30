@@ -94,12 +94,14 @@ export function usePlatformKPIs() {
   })
 }
 
-export function usePlatformSalesTrend() {
+/** `enabled`: a page may hold this back so its primary list's server action isn't queued behind it. */
+export function usePlatformSalesTrend(enabled: boolean = true) {
   return useQuery({
     queryKey: platformKeys.salesTrend(),
     queryFn: () => getPlatformSalesTrend(),
     staleTime: 30_000,
     refetchOnMount: 'always',
+    enabled,
   })
 }
 
@@ -143,10 +145,11 @@ export function usePlatformTransactionSummary(filters?: PlatformTransactionFilte
   })
 }
 
-export function usePlatformMerchantBreakdown(filters?: PlatformMerchantBreakdownFilters) {
+export function usePlatformMerchantBreakdown(filters?: PlatformMerchantBreakdownFilters, enabled: boolean = true) {
   return useQuery({
     queryKey: platformKeys.merchantBreakdown(filters),
     queryFn: () => getPlatformMerchantBreakdown(filters),
+    enabled,
   })
 }
 

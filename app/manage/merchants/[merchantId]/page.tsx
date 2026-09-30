@@ -4,13 +4,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
-import {
-    PageShell,
-    TAB_PILL_ACTIVE,
-    TAB_PILL_BUTTON,
-    TAB_PILL_INACTIVE,
-    TAB_RAIL,
-} from '@/components/dashboard/shell'
+import { PageShell, TAB_PILL_ACTIVE } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import {
     AlertTriangle,
@@ -168,7 +162,18 @@ export default function MerchantDetailsPage() {
         lastInGroup.current[activeGroup] = activeTab
         const remembered = lastInGroup.current[group]
         const target = sections.find((s) => s.value === remembered) ?? sections.find((s) => s.group === group)
-        if (target) setActiveTab(target.value)
+        if (target) openTab(target.value)
+    }
+
+    // Mirror the open section into `?tab=` so leaving for a sub-page (an audit
+    // entry, an order) and pressing Back returns to it instead of Overview.
+    // `replaceState`, not a router push: switching sections is not a history
+    // step, and Next keeps `useSearchParams` in sync with it.
+    const openTab = (tab: SectionKey) => {
+        setActiveTab(tab)
+        const params = new URLSearchParams(window.location.search)
+        params.set('tab', tab)
+        window.history.replaceState(null, '', `?${params.toString()}`)
     }
 
     // Section row: keep the active pill centred (§13.2, D-24). Scroll the rail
@@ -275,15 +280,19 @@ export default function MerchantDetailsPage() {
                 onOpenChange={setCloverImportOpen}
             />
 
-            {/* Two-row section bar: groups on top, the active group's sections
-                below. It replaced a 200px side nav so section content gets the
-                full width. Each section owns its own panels, so there is no
-                outer panel here (§3.1). Pinned flush to the top of
-                #main-content (§13.2): sticky insets by the container's padding
-                (p-4 sm:p-6), so the negative top and side margins cancel it and
-                no content shows above or beside the bar. */}
-            <div className="sticky -top-4 z-20 -mx-4 space-y-2 bg-background px-4 py-2 sm:-top-6 sm:-mx-6 sm:px-6">
-                <nav aria-label="Merchant section groups" className={TAB_RAIL}>
+            {/* Section bar: the groups, then the active group's sections.
+                One row from md up (a divider separates the two levels), two
+                stacked rows on phones. It replaced a 200px side nav so section
+                content gets the full width. Each section owns its own panels,
+                so there is no outer panel here (§3.1). Pinned flush to the top
+                of #main-content (§13.2): sticky insets by the container's
+                padding (p-4 sm:p-6), so the negative top and side margins
+                cancel it and no content shows above or beside the bar. */}
+            <div className="sticky -top-4 z-20 -mx-4 flex flex-col gap-2 bg-background px-4 py-2 sm:-top-6 sm:-mx-6 sm:px-6 md:flex-row md:items-center md:gap-3">
+                {/* Groups are bare words — no rail, no pill — so the only
+                    raised pill on the bar is the active section. The active
+                    group is marked by full-strength text alone. */}
+                <nav aria-label="Merchant section groups" className="flex shrink-0 items-center gap-1">
                     {GROUPS.map((group) => {
                         const active = group === activeGroup
                         return (
@@ -292,18 +301,34 @@ export default function MerchantDetailsPage() {
                                 type="button"
                                 aria-current={active ? 'true' : undefined}
                                 onClick={() => selectGroup(group)}
-                                className={cn(TAB_PILL_BUTTON, active ? TAB_PILL_ACTIVE : TAB_PILL_INACTIVE)}
+                                className={cn(
+                                    'shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8125rem] transition-colors',
+                                    active
+                                        ? 'font-semibold text-foreground'
+                                        : 'font-normal text-muted-foreground hover:text-foreground'
+                                )}
                             >
-                                {group}
+                                {/* The invisible semibold copy reserves the
+                                    bold width, so switching group does not
+                                    nudge its neighbours sideways. */}
+                                <span className="inline-grid justify-items-center">
+                                    <span className="col-start-1 row-start-1">{group}</span>
+                                    <span aria-hidden className="invisible col-start-1 row-start-1 font-semibold">
+                                        {group}
+                                    </span>
+                                </span>
                             </button>
                         )
                     })}
                 </nav>
 
-                {/* Ghost pills, not a second rail, so this row reads as
-                    subordinate to the groups. Scrolls on phones with the
-                    active pill kept in view (§13.2). */}
-                <div ref={railRef} className="no-scrollbar relative -mx-1 overflow-x-auto px-1 py-0.5">
+                <div aria-hidden className="hidden h-5 w-px shrink-0 bg-border md:block" />
+
+                {/* Ghost pills, not a second rail, so the sections read as
+                    subordinate to the groups. Scrolls when the group has more
+                    sections than fit, with the active pill kept in view
+                    (§13.2). */}
+                <div ref={railRef} className="no-scrollbar relative -mx-1 min-w-0 overflow-x-auto px-1 py-0.5 md:flex-1">
                     <nav aria-label="Merchant sections" className="flex w-max flex-nowrap gap-1">
                         {groupSections.map(({ value, icon: Icon, label, shortLabel }) => {
                             const active = activeTab === value
@@ -313,7 +338,7 @@ export default function MerchantDetailsPage() {
                                     type="button"
                                     aria-current={active ? 'page' : undefined}
                                     data-state={active ? 'active' : 'inactive'}
-                                    onClick={() => setActiveTab(value)}
+                                    onClick={() => openTab(value)}
                                     className={cn(
                                         'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8125rem] transition-colors',
                                         // Neutral active state (§4.5) — never brand text or fill.
