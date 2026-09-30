@@ -8,14 +8,9 @@ export interface LocationIdentity {
   phone: string | null;
 }
 
-export type TemplateType =
-  | "sale"
-  | "kitchen"
-  | "void_refund"
-  | "no_sale"
-  | "end_of_day"
-  | "cash_drawer"
-  | "online_order";
+import type { TemplateType } from "@/lib/receipts/template-type";
+
+export type { TemplateType };
 
 export interface ReceiptTemplate {
   id: string;
@@ -35,6 +30,10 @@ export interface ReceiptTemplate {
   show_tip_line: boolean;
   show_server_name: boolean;
   show_order_type: boolean;
+
+  // Card payments (sale receipt only)
+  print_signature_line: boolean;
+  signature_line_disclaimer: string | null;
 
   // Extras
   show_barcode: boolean;
@@ -61,6 +60,8 @@ export interface ReceiptTemplateFormData {
   show_tip_line: boolean;
   show_server_name: boolean;
   show_order_type: boolean;
+  print_signature_line: boolean;
+  signature_line_disclaimer: string;
   show_barcode: boolean;
   show_qr_code: boolean;
   large_item_text: boolean;
@@ -81,6 +82,8 @@ export interface UpsertReceiptTemplateInput {
   show_tip_line?: boolean;
   show_server_name?: boolean;
   show_order_type?: boolean;
+  print_signature_line?: boolean;
+  signature_line_disclaimer?: string | null;
   show_barcode?: boolean;
   show_qr_code?: boolean;
   large_item_text?: boolean;

@@ -20,6 +20,7 @@ import {
 } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
+  useInitializeDefaultTemplates,
   useReceiptTemplates,
   useUpsertReceiptTemplate,
 } from "./hooks/useReceiptTemplates";
@@ -52,6 +53,10 @@ function formDataFromTemplate(
     show_tip_line: saved.show_tip_line ?? defaults.show_tip_line,
     show_server_name: saved.show_server_name ?? defaults.show_server_name,
     show_order_type: saved.show_order_type ?? defaults.show_order_type,
+    print_signature_line:
+      saved.print_signature_line ?? defaults.print_signature_line,
+    signature_line_disclaimer:
+      saved.signature_line_disclaimer ?? defaults.signature_line_disclaimer,
     show_barcode: saved.show_barcode ?? defaults.show_barcode,
     show_qr_code: saved.show_qr_code ?? defaults.show_qr_code,
     large_item_text: saved.large_item_text ?? defaults.large_item_text,
@@ -82,6 +87,7 @@ export default function ReceiptTemplatesPage() {
 
   // Mutations
   const upsertMutation = useUpsertReceiptTemplate();
+  const initializeMutation = useInitializeDefaultTemplates();
 
   // State
   const [customizingTabs, setCustomizingTabs] = useState<Set<TemplateType>>(
@@ -151,6 +157,8 @@ export default function ReceiptTemplatesPage() {
         show_tip_line: formState.show_tip_line,
         show_server_name: formState.show_server_name,
         show_order_type: formState.show_order_type,
+        print_signature_line: formState.print_signature_line,
+        signature_line_disclaimer: formState.signature_line_disclaimer || null,
         show_barcode: formState.show_barcode,
         show_qr_code: formState.show_qr_code,
         large_item_text: formState.large_item_text,
@@ -168,30 +176,14 @@ export default function ReceiptTemplatesPage() {
     if (!clerkOrgId || !selectedLocationId || selectedLocationId === "all")
       return;
 
-    const defaults = DEFAULT_TEMPLATE_VALUES[activeTab];
-    await upsertMutation.mutateAsync({
+    // Insert-only on the server: if the template was saved elsewhere since
+    // this page loaded (another tab, the POS), it is kept, not overwritten.
+    await initializeMutation.mutateAsync({
       clerkOrgId,
-      input: {
-        location_id: selectedLocationId,
-        template_type: activeTab,
-        show_logo: defaults.show_logo,
-        header_text: defaults.header_text || null,
-        footer_text: defaults.footer_text || null,
-        show_item_modifiers: defaults.show_item_modifiers,
-        show_tax_breakdown: defaults.show_tax_breakdown,
-        show_tip_line: defaults.show_tip_line,
-        show_server_name: defaults.show_server_name,
-        show_order_type: defaults.show_order_type,
-        show_barcode: defaults.show_barcode,
-        show_qr_code: defaults.show_qr_code,
-        large_item_text: defaults.large_item_text,
-        show_mods_large: defaults.show_mods_large,
-        group_by_station: defaults.group_by_station,
-        show_allergy_alert: defaults.show_allergy_alert,
-        show_ready_by_time: defaults.show_ready_by_time,
-      },
+      locationId: selectedLocationId,
+      templateTypes: [activeTab],
     });
-  }, [clerkOrgId, selectedLocationId, activeTab, upsertMutation]);
+  }, [clerkOrgId, selectedLocationId, activeTab, initializeMutation]);
 
   const handleCustomize = useCallback(() => {
     setCustomizingTabs((prev) => new Set(prev).add(activeTab));
@@ -316,9 +308,9 @@ export default function ReceiptTemplatesPage() {
               <Button
                 className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                 onClick={handleUseDefault}
-                disabled={upsertMutation.isPending}
+                disabled={initializeMutation.isPending}
               >
-                {upsertMutation.isPending ? (
+                {initializeMutation.isPending ? (
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                 ) : (
                   <Check className="mr-1.5 h-4 w-4" />

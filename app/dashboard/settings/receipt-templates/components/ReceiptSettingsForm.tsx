@@ -1,6 +1,7 @@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { DEFAULT_SIGNATURE_DISCLAIMER } from "@/lib/receipts/signature-block";
 import { TEMPLATE_FIELD_VISIBILITY } from "../constants";
 import type { TemplateType, ReceiptTemplateFormData } from "../types";
 
@@ -41,9 +42,12 @@ export function ReceiptSettingsForm({
 }: ReceiptSettingsFormProps) {
   const visibility = TEMPLATE_FIELD_VISIBILITY[templateType];
 
-  // Whether branding section has text fields (header/footer shown for types that have show_logo)
   const showBrandingSection =
-    visibility.show_logo;
+    visibility.show_logo || visibility.header_footer_text;
+
+  // The POS prints the store name, address and phone above the sale receipt's
+  // header text on its own, so the sale tab steers people away from retyping them.
+  const isSale = templateType === "sale";
 
   const showContentSection =
     visibility.show_item_modifiers ||
@@ -74,34 +78,50 @@ export function ReceiptSettingsForm({
             Branding
           </h3>
 
-          <ToggleField
-            label="Show Logo"
-            description="Display your business logo at the top"
-            checked={formState.show_logo}
-            onCheckedChange={(v) => onChange({ show_logo: v })}
-          />
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Header Text</Label>
-            <Textarea
-              placeholder="Custom header text (e.g. address, phone)..."
-              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
-              rows={2}
-              value={formState.header_text}
-              onChange={(e) => onChange({ header_text: e.target.value })}
+          {visibility.show_logo && (
+            <ToggleField
+              label="Show Logo"
+              description="Display your business logo at the top"
+              checked={formState.show_logo}
+              onCheckedChange={(v) => onChange({ show_logo: v })}
             />
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Footer Text</Label>
-            <Textarea
-              placeholder="Custom footer text (e.g. return policy, thank you message)..."
-              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
-              rows={2}
-              value={formState.footer_text}
-              onChange={(e) => onChange({ footer_text: e.target.value })}
-            />
-          </div>
+          {visibility.header_footer_text && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Header Text</Label>
+                <Textarea
+                  placeholder={
+                    isSale
+                      ? "Custom header text (e.g. hours, a seasonal message)..."
+                      : "Custom header text (e.g. address, phone)..."
+                  }
+                  className="resize-none border-0 bg-muted/60 text-sm shadow-none"
+                  rows={2}
+                  value={formState.header_text}
+                  onChange={(e) => onChange({ header_text: e.target.value })}
+                />
+                {isSale && (
+                  <p className="text-xs text-muted-foreground">
+                    Prints under your store name, address and phone. Those
+                    print automatically, so don&apos;t repeat them here.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Footer Text</Label>
+                <Textarea
+                  placeholder="Custom footer text (e.g. return policy, thank you message)..."
+                  className="resize-none border-0 bg-muted/60 text-sm shadow-none"
+                  rows={2}
+                  value={formState.footer_text}
+                  onChange={(e) => onChange({ footer_text: e.target.value })}
+                />
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -133,7 +153,7 @@ export function ReceiptSettingsForm({
           {visibility.show_tip_line && (
             <ToggleField
               label="Show Tip Line"
-              description="Include a tip line for customer signatures"
+              description="Tip and Total w/ Tip write-in lines"
               checked={formState.show_tip_line}
               onCheckedChange={(v) => onChange({ show_tip_line: v })}
             />
@@ -156,6 +176,50 @@ export function ReceiptSettingsForm({
               onCheckedChange={(v) => onChange({ show_order_type: v })}
             />
           )}
+        </div>
+      )}
+
+      {/* Card payments Section */}
+      {visibility.print_signature_line && (
+        <div className="space-y-4">
+          <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+            Card payments
+          </h3>
+
+          <ToggleField
+            label="Print cardholder signature line"
+            description="Prints on the merchant's copy for card payments. Does not print on cash sales or customer copies."
+            checked={formState.print_signature_line}
+            onCheckedChange={(v) => onChange({ print_signature_line: v })}
+          />
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="signature-line-disclaimer"
+              className="text-sm font-medium"
+            >
+              Signature disclaimer (optional)
+            </Label>
+            <Textarea
+              id="signature-line-disclaimer"
+              placeholder={DEFAULT_SIGNATURE_DISCLAIMER}
+              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
+              rows={2}
+              disabled={!formState.print_signature_line}
+              value={formState.signature_line_disclaimer}
+              onChange={(e) =>
+                onChange({ signature_line_disclaimer: e.target.value })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank to use the default shown.
+            </p>
+          </div>
+
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            While this is on, card sales always print a merchant copy, even if
+            merchant copies are off on the POS.
+          </p>
         </div>
       )}
 

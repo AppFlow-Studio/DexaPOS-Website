@@ -1,10 +1,9 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useMenuWithCategories } from "../../hooks/useMenu";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -95,8 +94,6 @@ import { useMenuSchedulesScoped } from "../../hooks/useMenuSchedules";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import { useOrderOutStatus } from "../../online-ordering/hooks/useOrderOutStatus";
 import {
-  useOrderOutMenuSync,
-  useMenuPayloadDiff,
   useOrderOutSyncAlerts,
 } from "../../hooks/useOrderOutMenuSync";
 import {
@@ -113,15 +110,6 @@ import {
   type MenuChannelVisibility,
 } from "@/lib/menu/menu-channel-visibility";
 import { PageShell } from "@/components/dashboard/shell";
-import { cn } from "@/lib/utils";
-
-/**
- * Pill-rail tab trigger. Written out literally here rather than imported from
- * `tokens.ts` — Tailwind does not scan `.ts` files, so a class sourced only
- * from there would reach the DOM with no rule behind it (C7).
- */
-const TAB_PILL =
-  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border";
 
 export default function MenuDetailPage() {
   const params = useParams();
@@ -261,34 +249,7 @@ export default function MenuDetailPage() {
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  // Tab rail scrolls horizontally on narrow screens; keep the active pill in
-  // view so selecting a tab near either edge brings it fully on-screen.
-  const [activeTab, setActiveTab] = useState("overview");
-  const tabRailRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    // Run after browser scroll restoration and Radix's active-state update.
-    // This prevents a refreshed rail from retaining an old horizontal offset
-    // that leaves the restored active tab outside the viewport.
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const rail = tabRailRef.current;
-        const active = rail?.querySelector<HTMLElement>('[data-state="active"]');
-        if (!rail || !active) return;
-        const target =
-          active.offsetLeft - (rail.clientWidth - active.offsetWidth) / 2;
-        rail.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame) window.cancelAnimationFrame(secondFrame);
-    };
-  }, [activeTab]);
-
-  // Bulk selection state (categories tab only)
+  // Bulk selection state for the categories and items section.
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [bulkMenuPriceOpen, setBulkMenuPriceOpen] = useState(false);
@@ -328,23 +289,8 @@ export default function MenuDetailPage() {
     orderOutLocationId
   );
   const hasOrderOutRestaurant = !!orderOutStatus?.data?.hasRestaurant;
-  // Show the tab whenever a concrete location resolves (gated) so users get
-  // guidance even before they've connected OrderOut. Single-location accounts
-  // resolve to their one location; multi-location on 'all' stays hidden.
-  const showOrderOutTab = !!orderOutLocationId;
-
-  useEffect(() => {
-    const savedTab = window.sessionStorage.getItem(`menu:${menuId}:active-tab`);
-    const canRestore =
-      savedTab &&
-      ["overview", "categories", "schedules", "settings", "orderout"].includes(savedTab) &&
-      (savedTab !== "orderout" || showOrderOutTab);
-    if (canRestore && savedTab) {
-      // Session storage is external state; hydrate the last explicit tab choice.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveTab(savedTab);
-    }
-  }, [menuId, showOrderOutTab]);
+  // A concrete location is required for the OrderOut section.
+  const showOrderOutSection = !!orderOutLocationId;
 
   // Surface out-of-band delivery-app sync failures (86 propagates async now).
   useOrderOutSyncAlerts(clerkOrgId, orderOutLocationId);
@@ -352,27 +298,6 @@ export default function MenuDetailPage() {
   // Batch 86 — one round-trip + one OrderOut resync for all selected items.
   const snoozeItemsBatch = useSnoozeItemsBatch();
   const restoreItemsBatch = useRestoreItemsBatch();
-
-  // Sync status for OrderOut tab indicator
-  const { data: syncStatusResult } = useOrderOutMenuSync(
-    clerkOrgId,
-    orderOutLocationId,
-    menuId
-  );
-  const { data: diffResult } = useMenuPayloadDiff(
-    clerkOrgId,
-    orderOutLocationId,
-    menuId
-  );
-  const syncData = syncStatusResult?.data;
-  const diffData = diffResult?.data ?? null;
-  const orderOutTabDot = (() => {
-    if (!hasOrderOutRestaurant || !syncData?.lastSync) return null;
-    if (syncData.lastSync.status === "failed") return "red";
-    if (diffData?.hasChanges) return "amber";
-    if (syncData.lastSync.status === "success") return "green";
-    return null;
-  })();
 
   // Initialize settings when menu loads (categories collapsed by default)
   useEffect(() => {
@@ -1315,69 +1240,18 @@ export default function MenuDetailPage() {
         onPreview={() => setIsPreviewOpen(true)}
       />
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(tab) => {
-          setActiveTab(tab);
-          window.sessionStorage.setItem(`menu:${menuId}:active-tab`, tab);
-        }}
-        className="space-y-4"
-      >
-        {/* Pill rail, not underline tabs. Classes are literal, not {TOKEN} — see C7. */}
-        <div
-          ref={tabRailRef}
-          className="scrollbar-none w-full min-w-0 overflow-x-auto scroll-smooth"
-        >
-        <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
-          <TabsTrigger value="overview" className={TAB_PILL}>Overview</TabsTrigger>
-          <TabsTrigger value="categories" className={cn(TAB_PILL, "gap-1.5")}>
-            Categories &amp; Items
-            {enrichedCategories.length > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                {enrichedCategories.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="schedules" className={cn(TAB_PILL, "gap-1.5")}>
-            Schedules
-            {menuSchedules.length > 0 && (
-              <Badge
-                variant="secondary"
-                className="h-5 w-5 p-0 text-xs flex items-center justify-center"
-              >
-                {menuSchedules.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="settings" className={TAB_PILL}>Settings</TabsTrigger>
-          {showOrderOutTab && (
-            <TabsTrigger value="orderout" className={cn(TAB_PILL, "gap-1.5")}>
-              OrderOut
-              {orderOutTabDot && (
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    orderOutTabDot === "green"
-                      ? "bg-green-500"
-                      : orderOutTabDot === "amber"
-                        ? "bg-amber-500"
-                        : "bg-red-500"
-                  }`}
-                />
-              )}
-            </TabsTrigger>
-          )}
-        </TabsList>
-        </div>
-
-        <TabsContent value="overview" className="space-y-4">
+      <div className="space-y-10">
+        <section aria-labelledby="menu-overview" className="space-y-4">
+          <h2 id="menu-overview" className="text-xl font-semibold tracking-tight">Overview</h2>
           <MenuOverviewTab
             categoriesCount={enrichedCategories.length}
             totalItems={totalItems}
             menuSchedules={menuSchedules}
           />
-        </TabsContent>
+        </section>
 
-        <TabsContent value="categories" className="flex flex-col gap-4">
+        <section aria-labelledby="menu-categories" className="flex flex-col gap-4 border-t border-border/70 pt-8">
+          <h2 id="menu-categories" className="text-xl font-semibold tracking-tight">Categories &amp; Items</h2>
           {/* Selection bar stays in the page flow with the category content. */}
           {isSelectionMode && (
             <div className="order-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-primary/5 px-4 py-2.5">
@@ -1528,9 +1402,10 @@ export default function MenuDetailPage() {
               isSelectionMode ? exitSelectionMode() : setIsSelectionMode(true)
             }
           />
-        </TabsContent>
+        </section>
 
-        <TabsContent value="schedules" className="space-y-4">
+        <section aria-labelledby="menu-schedules" className="space-y-4 border-t border-border/70 pt-8">
+          <h2 id="menu-schedules" className="text-xl font-semibold tracking-tight">Schedules</h2>
           <MenuSchedulesTab
             menuSchedules={menuSchedules}
             isLoading={isLoading || isLoadingScopedSchedules}
@@ -1541,9 +1416,10 @@ export default function MenuDetailPage() {
             onRemoveSchedule={handleRemoveSchedule}
             onEditSchedule={handleEditSchedule}
           />
-        </TabsContent>
+        </section>
 
-        <TabsContent value="settings" className="space-y-4">
+        <section aria-labelledby="menu-settings" className="space-y-4 border-t border-border/70 pt-8">
+          <h2 id="menu-settings" className="text-xl font-semibold tracking-tight">Settings</h2>
           <MenuSettingsTab
             menu={menu}
             categoriesCount={enrichedCategories.length}
@@ -1573,10 +1449,11 @@ export default function MenuDetailPage() {
             }}
             onDeleteMenu={() => setIsDeleteDialogOpen(true)}
           />
-        </TabsContent>
+        </section>
 
-        {showOrderOutTab && (
-          <TabsContent value="orderout" className="space-y-4">
+        {showOrderOutSection && (
+          <section aria-labelledby="menu-orderout" className="space-y-4 border-t border-border/70 pt-8">
+            <h2 id="menu-orderout" className="text-xl font-semibold tracking-tight">OrderOut</h2>
             <MenuOrderOutTab
               menuId={menuId}
               locationId={orderOutLocationId}
@@ -1584,9 +1461,9 @@ export default function MenuDetailPage() {
               menuName={menu.name}
               isConfigured={hasOrderOutRestaurant}
             />
-          </TabsContent>
+          </section>
         )}
-      </Tabs>
+      </div>
 
       {/* Delete Menu Confirmation */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

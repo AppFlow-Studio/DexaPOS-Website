@@ -23,18 +23,30 @@ export const TEMPLATE_TYPES: {
   { id: "online_order", label: "Online Order Ticket", icon: Globe },
 ];
 
-type FieldKey = keyof Omit<ReceiptTemplateFormData, "header_text" | "footer_text">;
+// `header_footer_text` is not a stored field: it says whether the template
+// offers the Header Text / Footer Text boxes at all.
+type FieldKey =
+  | keyof Omit<
+      ReceiptTemplateFormData,
+      "header_text" | "footer_text" | "signature_line_disclaimer"
+    >
+  | "header_footer_text";
 
 export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, boolean>> = {
+  // Sale receipt: only what the POS prints. It never prints a logo, barcode
+  // or QR code on a sale receipt and always prints the tax line, so those
+  // toggles are not offered here.
   sale: {
-    show_logo: true,
+    header_footer_text: true,
+    show_logo: false,
     show_item_modifiers: true,
-    show_tax_breakdown: true,
+    show_tax_breakdown: false,
     show_tip_line: true,
     show_server_name: true,
     show_order_type: true,
-    show_barcode: true,
-    show_qr_code: true,
+    print_signature_line: true,
+    show_barcode: false,
+    show_qr_code: false,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -42,12 +54,14 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
     show_ready_by_time: false,
   },
   kitchen: {
+    header_footer_text: false,
     show_logo: false,
     show_item_modifiers: true,
     show_tax_breakdown: false,
     show_tip_line: false,
     show_server_name: true,
     show_order_type: true,
+    print_signature_line: false,
     show_barcode: false,
     show_qr_code: false,
     large_item_text: true,
@@ -57,12 +71,14 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
     show_ready_by_time: true,
   },
   void_refund: {
+    header_footer_text: true,
     show_logo: true,
     show_item_modifiers: true,
     show_tax_breakdown: true,
     show_tip_line: false,
     show_server_name: true,
     show_order_type: true,
+    print_signature_line: false,
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -72,12 +88,14 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
     show_ready_by_time: false,
   },
   no_sale: {
+    header_footer_text: true,
     show_logo: true,
     show_item_modifiers: false,
     show_tax_breakdown: false,
     show_tip_line: false,
     show_server_name: true,
     show_order_type: false,
+    print_signature_line: false,
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -87,12 +105,14 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
     show_ready_by_time: false,
   },
   end_of_day: {
+    header_footer_text: true,
     show_logo: true,
     show_item_modifiers: false,
     show_tax_breakdown: true,
     show_tip_line: false,
     show_server_name: false,
     show_order_type: false,
+    print_signature_line: false,
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -102,12 +122,14 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
     show_ready_by_time: false,
   },
   cash_drawer: {
+    header_footer_text: true,
     show_logo: true,
     show_item_modifiers: false,
     show_tax_breakdown: false,
     show_tip_line: false,
     show_server_name: false,
     show_order_type: false,
+    print_signature_line: false,
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -117,12 +139,14 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
     show_ready_by_time: false,
   },
   online_order: {
+    header_footer_text: true,
     show_logo: true,
     show_item_modifiers: true,
     show_tax_breakdown: true,
     show_tip_line: false,
     show_server_name: false,
     show_order_type: true,
+    print_signature_line: false,
     show_barcode: true,
     show_qr_code: true,
     large_item_text: false,
@@ -135,7 +159,7 @@ export const TEMPLATE_FIELD_VISIBILITY: Record<TemplateType, Record<FieldKey, bo
 
 export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormData> = {
   sale: {
-    show_logo: true,
+    show_logo: false,
     header_text: "",
     footer_text: "Thank you for your purchase!",
     show_item_modifiers: true,
@@ -143,7 +167,9 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: true,
     show_server_name: true,
     show_order_type: true,
-    show_barcode: true,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
+    show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
     show_mods_large: false,
@@ -160,6 +186,8 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: false,
     show_server_name: true,
     show_order_type: true,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
     show_barcode: false,
     show_qr_code: false,
     large_item_text: true,
@@ -177,6 +205,8 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: false,
     show_server_name: true,
     show_order_type: true,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -194,6 +224,8 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: false,
     show_server_name: true,
     show_order_type: false,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -211,6 +243,8 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: false,
     show_server_name: false,
     show_order_type: false,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -228,6 +262,8 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: false,
     show_server_name: false,
     show_order_type: false,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,
@@ -245,6 +281,8 @@ export const DEFAULT_TEMPLATE_VALUES: Record<TemplateType, ReceiptTemplateFormDa
     show_tip_line: false,
     show_server_name: false,
     show_order_type: true,
+    print_signature_line: false,
+    signature_line_disclaimer: "",
     show_barcode: true,
     show_qr_code: true,
     large_item_text: false,
