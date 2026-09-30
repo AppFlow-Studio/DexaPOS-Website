@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
@@ -33,8 +34,9 @@ import { usePlatformAuditLogs } from '@/lib/queries/use-platform-analytics'
 import type { PlatformAuditLogFilters, PlatformAuditLogRow } from '@/app/manage/actions/hq-platform/analytics'
 import { MerchantSearchSelect } from '@/components/admin/MerchantSearchSelect'
 import { buildAuditSentence, formatChangesForDisplay } from '@/lib/audit/sentence-templates'
-import type { AuditLogWithLocation } from '@/types/audit-log'
-import { PII_ACCESS_TYPES, PII_ACCESS_TYPE_LABELS } from '@/types/audit-log'
+import { describeSettlementActivity } from '@/lib/audit/settlement-activity'
+import type { AuditCategory, AuditLogWithLocation } from '@/types/audit-log'
+import { CATEGORY_LABELS, PII_ACCESS_TYPES, PII_ACCESS_TYPE_LABELS } from '@/types/audit-log'
 
 const PAGE_SIZE = 50
 
@@ -136,6 +138,11 @@ function formatActionLabel(value?: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
 }
 
+function categoryLabel(value?: string): string {
+  if (!value) return '—'
+  return CATEGORY_LABELS[value as AuditCategory] ?? formatActionLabel(value)
+}
+
 function normalizeStatus(value?: string): 'success' | 'failed' | 'unknown' {
   if (!value) return 'success'
   const n = value.toLowerCase()
@@ -188,12 +195,15 @@ function escapeCsv(value: unknown): string {
 
 function buildCsv(rows: PlatformAuditLogRow[]): string {
   const headers = ['Timestamp', 'Actor Name', 'Actor Email', 'Actor Role', 'Action', 'Category',
+    'Batch Terminal', 'Terminal Serial',
     'Resource Type', 'Resource Name', 'Resource ID', 'Merchant', 'Location', 'Org Type',
     'Severity', 'Status', 'Error Message', 'Changes', 'Metadata']
   const lines = rows.map((row) => {
     const status = normalizeStatus(row.status)
+    const settlement = describeSettlementActivity(rowToFakeLog(row))
     return [row.created_at, row.actor_name, row.actor_email, row.actor_role, row.action,
-      row.action_category, row.resource_type, row.resource_name, row.resource_id,
+      row.action_category, settlement?.terminalLabel ?? '', settlement?.terminalSerial ?? '',
+      row.resource_type, row.resource_name, row.resource_id,
       row.merchant_name || row.merchant_id, row.location_name || row.location_id,
       inferOrgType(row), row.severity, status, row.error_message,
       row.changes ? JSON.stringify(row.changes) : '',
@@ -273,6 +283,7 @@ function ChangeDiffViewer({ row }: { row: PlatformAuditLogRow }) {
 function ExpandedDetail({ row, anomalyReason }: { row: PlatformAuditLogRow; anomalyReason?: string }) {
   const fakeLog = rowToFakeLog(row)
   const { sentence, highlight } = buildAuditSentence(fakeLog)
+  const settlement = describeSettlementActivity(fakeLog)
 
   function copyResourceId() {
     if (row.resource_id) navigator.clipboard.writeText(row.resource_id)
@@ -309,6 +320,36 @@ function ExpandedDetail({ row, anomalyReason }: { row: PlatformAuditLogRow; anom
               )}
             </div>
           </div>
+
+          {/* Batch events: readable facts from metadata + the batch's linked terminal */}
+          {settlement && settlement.details.length > 0 && (
+            <div className="rounded-lg border bg-card p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Batch details</p>
+                {settlement.terminalSerial && row.merchant_id && (
+                  <Link
+                    href={`/manage/merchants/${row.merchant_id}/devices/terminal/${encodeURIComponent(settlement.terminalSerial)}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    View terminal and its batches
+                  </Link>
+                )}
+              </div>
+              <dl className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
+                {settlement.details.map((detail) => (
+                  <div key={detail.label} className="flex min-w-0 justify-between gap-3">
+                    <dt className="shrink-0 text-muted-foreground">{detail.label}</dt>
+                    <dd className="min-w-0 break-words text-right font-medium">{detail.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {settlement.terminalSerial && (
+                <p className="text-[11px] text-muted-foreground">
+                  The linked terminal is the reader this batch belongs to, not necessarily the device that initiated settlement.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             {/* Before/after diff */}
@@ -355,6 +396,8 @@ function rowToFakeLog(row: PlatformAuditLogRow): AuditLogWithLocation {
     location: row.location_name
       ? { id: row.location_id ?? '', name: row.location_name }
       : undefined,
+    settlement_terminal: row.settlement_terminal,
+    settlement_batch: row.settlement_batch,
   } as AuditLogWithLocation
 }
 
@@ -558,7 +601,7 @@ export default function AuditLogsPage() {
                 value={actionCategory} onChange={(e) => setActionCategory(e.target.value)}>
                 <option value="all">All categories</option>
                 {COMMON_ACTION_CATEGORIES.map((v) => (
-                  <option key={v} value={v}>{formatActionLabel(v)}</option>
+                  <option key={v} value={v}>{categoryLabel(v)}</option>
                 ))}
               </select>
             </label>
@@ -766,8 +809,8 @@ export default function AuditLogsPage() {
 
                             {/* Category */}
                             <TableCell>
-                              <Badge variant="outline" className="capitalize whitespace-nowrap text-[11px]">
-                                {row.action_category || '—'}
+                              <Badge variant="outline" className="whitespace-nowrap text-[11px]">
+                                {categoryLabel(row.action_category)}
                               </Badge>
                             </TableCell>
 

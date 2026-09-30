@@ -125,12 +125,45 @@ export interface AuditLog {
   created_at: string;
 }
 
+/**
+ * The payment terminal linked to a settlement audit row, resolved server-side
+ * from the batch's own FK (`settlement_batches.payment_terminal_id`) rather
+ * than from metadata, which most writers never record. It is the reader the
+ * batch belongs to — not proof of which device initiated the settlement.
+ *
+ * - `not_recorded`     the batch has no terminal (online-order batches, old rows)
+ * - `terminal_missing` the batch points at a terminal row that no longer resolves
+ * - `batch_missing`    the audited batch row no longer exists
+ * - `unavailable`      the lookup itself failed; nothing is inferred
+ */
+export type SettlementTerminalAttribution =
+  | { status: "linked"; terminalId: string; name: string | null; serial: string | null }
+  | { status: "not_recorded" }
+  | { status: "terminal_missing"; terminalId: string }
+  | { status: "batch_missing" }
+  | { status: "unavailable" };
+
+/**
+ * The audited batch's own label fields, read from `settlement_batches`. Writers
+ * disagree (the Valor webhook omits `acquirer`, older HQ rows carry no batch at
+ * all), so the batch row is the one consistent source.
+ */
+export interface SettlementBatchIdentity {
+  batchId: string | null;
+  batchNumber: string | null;
+  acquirer: string | null;
+}
+
 // Extended with location name for UI
 export interface AuditLogWithLocation extends AuditLog {
   location?: {
     id: string;
     name: string;
   } | null;
+  /** Present on settlement rows returned by GetAuditLogs; see SettlementTerminalAttribution. */
+  settlement_terminal?: SettlementTerminalAttribution;
+  /** Present on settlement_batch rows whose batch still exists. */
+  settlement_batch?: SettlementBatchIdentity;
 }
 
 // Stock update log interface
@@ -207,6 +240,7 @@ export const CATEGORY_LABELS: Record<AuditCategory, string> = {
   settings: "Settings",
   authentication: "Authentication",
   order: "Orders",
+  settlement: "Settlements & Batches",
 };
 
 export const CATEGORY_COLORS: Record<AuditCategory, string> = {
@@ -232,6 +266,8 @@ export const CATEGORY_COLORS: Record<AuditCategory, string> = {
     "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
   order:
     "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400",
+  settlement:
+    "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-400",
 };
 
 export const SEVERITY_COLORS: Record<AuditSeverity, string> = {

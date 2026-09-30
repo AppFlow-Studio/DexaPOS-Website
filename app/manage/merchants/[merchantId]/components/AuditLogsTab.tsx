@@ -48,8 +48,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuditLogs } from "@/app/dashboard/hooks/useAuditLogs";
-import { useAdminMerchantTerminals } from "@/lib/queries/use-admin-stations";
-import { describeSettlementActivity, type TerminalIdentity } from "@/lib/admin/settlement-activity";
+import { describeSettlementActivity } from "@/lib/audit/settlement-activity";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -186,24 +185,13 @@ interface AuditLogsTabProps {
 
 function AuditActionSummary({
   log,
-  terminals,
   merchantId,
-  terminalLookupPending,
-  terminalLookupFailed,
 }: {
   log: AuditLogWithLocation;
-  terminals: ReadonlyMap<string, TerminalIdentity>;
   merchantId: string;
-  terminalLookupPending: boolean;
-  terminalLookupFailed: boolean;
 }) {
-  const settlement = describeSettlementActivity(log, terminals);
-  const hasTerminalId = typeof log.metadata?.payment_terminal_id === 'string' && !!log.metadata.payment_terminal_id;
-  const terminalLabel = hasTerminalId && terminalLookupPending
-    ? 'Looking up terminal...'
-    : hasTerminalId && terminalLookupFailed
-      ? 'Terminal details unavailable'
-      : settlement?.terminalLabel;
+  // The terminal is resolved server-side from the batch FK (GetAuditLogs).
+  const settlement = describeSettlementActivity(log);
   return (
     <div className="flex flex-col">
       <span className="text-sm font-medium">
@@ -212,7 +200,7 @@ function AuditActionSummary({
       {settlement ? (
         <>
           <span className="text-xs text-muted-foreground">
-            {settlement.batchLabel} · {terminalLabel}
+            {[settlement.batchLabel, settlement.terminalLabel].filter(Boolean).join(' · ')}
           </span>
           {settlement.terminalSerial && (
             <Link
@@ -270,15 +258,6 @@ export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations 
     (page - 1) * pageSize,
     merchantInfo?.clerk_org_id // Pass orgIdOverride
   );
-  const { data: terminalsResult, isLoading: terminalLookupPending, isError: terminalQueryFailed } = useAdminMerchantTerminals(merchantInfo.id);
-  const terminalLookupFailed = terminalQueryFailed || terminalsResult?.success === false;
-  const terminalsById = useMemo(() => new Map<string, TerminalIdentity>(
-    (terminalsResult?.data ?? []).map((terminal) => [terminal.id, {
-      name: terminal.terminal_name,
-      serial: terminal.serial_number,
-    }]),
-  ), [terminalsResult]);
-
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setPage(1); // Reset to first page on filter change
@@ -319,12 +298,11 @@ export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations 
       ]
 
       const rowsCsv = logs.map((log) => {
-        const settlement = describeSettlementActivity(log, terminalsById)
-        const hasTerminalId = typeof log.metadata?.payment_terminal_id === 'string' && !!log.metadata.payment_terminal_id
+        const settlement = describeSettlementActivity(log)
         return [
           log.created_at,
           settlement?.title ?? formatKey(log.action),
-          hasTerminalId && terminalLookupFailed ? 'Terminal details unavailable' : settlement?.terminalLabel ?? '',
+          settlement?.terminalLabel ?? '',
           settlement?.terminalSerial ?? '',
           log.action_category,
           log.actor_name,
@@ -337,7 +315,7 @@ export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations 
         ].map(escapeCsvValue).join(',')
       })
 
-      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\\n')
+      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\n')
       const timestamp = format(new Date(), 'yyyy-MM-dd_HHmm')
       downloadCsv(`DEXA_Merchant_Audit_${timestamp}.csv`, csv)
     } finally {
@@ -410,7 +388,7 @@ export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations 
             variant="outline"
             size="sm"
             onClick={handleExport}
-            disabled={isExporting || terminalLookupPending || logs.length === 0}
+            disabled={isExporting || logs.length === 0}
             className="h-9"
           >
             <Download className="h-4 w-4 mr-2" />
@@ -791,10 +769,7 @@ export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations 
                     <TableCell>
                       <AuditActionSummary
                         log={log}
-                        terminals={terminalsById}
                         merchantId={merchantInfo.id}
-                        terminalLookupPending={terminalLookupPending}
-                        terminalLookupFailed={terminalLookupFailed}
                       />
                     </TableCell>
                     <TableCell>

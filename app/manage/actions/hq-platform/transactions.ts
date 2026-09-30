@@ -2128,7 +2128,7 @@ export async function manualBatchout(
   // 4a. Load the batch; verify ownership and that it isn't already settled.
   const { data: batch, error: fetchError } = await admin
     .from('settlement_batches')
-    .select('id, merchant_id, location_id, batch_id, batch_number, acquirer, status, closed_at, settlement_date, gross_amount, origin, payment_terminal_id')
+    .select('id, merchant_id, location_id, batch_id, batch_number, acquirer, status, closed_at, settlement_date, gross_amount, origin')
     .eq('id', batchId)
     .maybeSingle()
 
@@ -2222,7 +2222,8 @@ export async function manualBatchout(
         payments_settled: paymentsSettled,
         batch_number: batch.batch_number,
         acquirer: batch.acquirer,
-        payment_terminal_id: batch.payment_terminal_id,
+        // No payment_terminal_id: LogAuditEvent strips `*_id` keys. Audit views
+        // resolve the terminal from the batch FK (attachSettlementTerminals).
       },
     })
     if (auditResult.error) console.error('[manualBatchout] audit error:', auditResult.error)

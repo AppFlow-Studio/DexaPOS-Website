@@ -7,6 +7,7 @@
 
 import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
 import type { AuditLogWithLocation } from "@/types/audit-log";
+import { describeSettlementActivity } from "./settlement-activity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -487,6 +488,7 @@ export const RESOURCE_TYPE_ICON_NAMES: Record<string, string> = {
   cash_drawer: "DollarSign",
   station_session: "LogOut",
   role: "Shield",
+  settlement_batch: "Layers",
 };
 
 /** Maps action_category to a lucide-react icon name (fallback) */
@@ -503,6 +505,7 @@ export const CATEGORY_ICON_NAMES: Record<string, string> = {
   expense: "DollarSign",
   merchant: "Building2",
   notes: "StickyNote",
+  settlement: "Layers",
 };
 
 // ─── Severity Styling ─────────────────────────────────────────────────────────
@@ -545,6 +548,17 @@ export function buildAuditSentence(
   const action = normalizeAction(log.action ?? "");
   const resourceType = log.resource_type ?? "";
   const template = AUDIT_TEMPLATES[resourceType]?.[action];
+
+  // Batch events are written by triggers/webhooks with their facts in
+  // metadata, not `changes`, so they get their own description.
+  const settlement = describeSettlementActivity(log);
+  if (settlement) {
+    return {
+      sentence: settlement.sentence,
+      highlight: settlement.highlight,
+      iconName: CATEGORY_ICON_NAMES.settlement,
+    };
+  }
 
   const iconName =
     RESOURCE_TYPE_ICON_NAMES[resourceType] ||
