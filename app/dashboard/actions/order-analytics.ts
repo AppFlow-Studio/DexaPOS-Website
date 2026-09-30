@@ -125,6 +125,32 @@ function getLocalDateKey(
   return `${year}-${month}-${day}`;
 }
 
+const REPORT_PAGE_SIZE = 1000;
+
+/**
+ * PostgREST returns at most `max_rows` (1000) rows per request, so an unpaged
+ * reporting query silently drops everything past that for a busy merchant.
+ * Pages until an empty page; `buildPage` must apply a stable order.
+ */
+async function fetchAllReportRows<T>(
+  buildPage: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: unknown }>
+): Promise<{ data: T[]; error: unknown }> {
+  const rows: T[] = [];
+
+  for (;;) {
+    const { data, error } = await buildPage(
+      rows.length,
+      rows.length + REPORT_PAGE_SIZE - 1
+    );
+    if (error) return { data: rows, error };
+    if (!data || data.length === 0) return { data: rows, error: null };
+    rows.push(...data);
+  }
+}
+
 /**
  * Get order analytics for a date range
  */
@@ -1638,6 +1664,7 @@ import type {
   KitchenPerformanceStats,
   TablePerformanceStats,
   ServerLeaderboardRow,
+  UnattributedChannelRow,
   TipsAnalysis,
   StaffOrderActivityRow,
   StaffPerformanceStats,
@@ -1997,45 +2024,72 @@ export async function GetSalesSummaryReport(
 
   const supabase = createServerSupabaseClient();
 
-  let query = applyReportablePredicate(
-    supabase
-      .from("orders")
-      .select(
-        "created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status, order_source"
-      )
-      .eq("merchant_id", merchantId)
-  )
-    .gte("created_at", dateFrom.toISOString())
-    .lt("created_at", dateTo.toISOString());
+  const { data: orders, error } = await fetchAllReportRows((from, to) => {
+    let query = applyReportablePredicate(
+      supabase
+        .from("orders")
+        .select(
+          "id, location_id, created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status, order_source"
+        )
+        .eq("merchant_id", merchantId)
+    )
+      .gte("created_at", dateFrom.toISOString())
+      .lt("created_at", dateTo.toISOString());
 
-  if (locationId && locationId !== "all") {
-    query = query.eq("location_id", locationId);
-  }
+    if (locationId && locationId !== "all") {
+      query = query.eq("location_id", locationId);
+    }
 
-  const { data: orders, error } = await query;
-  if (error || !orders) {
+    return query
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+  });
+  if (error) {
     console.error("[GetSalesSummaryReport] Error:", error);
     return { rows: [], byChannel: emptyChannels };
   }
 
+  // Rows are keyed by the business day in each location's own timezone, not UTC:
+  // an 8:30 PM New York order belongs to that evening, not the next UTC day.
+  const locationTimezoneById = await getLocationTimezoneMap(
+    supabase,
+    merchantId,
+    locationId
+  );
+  const localDateKey = (
+    instant: string,
+    orderLocationId: string | null | undefined
+  ) =>
+    getLocalDateKey(
+      instant,
+      (orderLocationId && locationTimezoneById.get(orderLocationId)) ||
+        FALLBACK_REPORTING_TIMEZONE
+    );
+
   // Refunds are netted from the dedicated refunds source (order_payments),
   // NOT from the recognized-order gate — which excludes `refunded` orders.
   // Without this separate query the refunds column would silently read 0.
-  let refundQuery = supabase
-    .from("order_payments")
-    .select(
-      "refunded_amount, refunded_at, orders!inner(merchant_id, location_id, order_source)"
-    )
-    .eq("orders.merchant_id", merchantId)
-    .in("status", ["refunded", "partially_refunded"])
-    .gte("refunded_at", dateFrom.toISOString())
-    .lt("refunded_at", dateTo.toISOString());
+  const { data: refundRows } = await fetchAllReportRows((from, to) => {
+    let refundQuery = supabase
+      .from("order_payments")
+      .select(
+        "id, refunded_amount, refunded_at, orders!inner(merchant_id, location_id, order_source)"
+      )
+      .eq("orders.merchant_id", merchantId)
+      .in("status", ["refunded", "partially_refunded"])
+      .gte("refunded_at", dateFrom.toISOString())
+      .lt("refunded_at", dateTo.toISOString());
 
-  if (locationId && locationId !== "all") {
-    refundQuery = refundQuery.eq("orders.location_id", locationId);
-  }
+    if (locationId && locationId !== "all") {
+      refundQuery = refundQuery.eq("orders.location_id", locationId);
+    }
 
-  const { data: refundRows } = await refundQuery;
+    return refundQuery
+      .order("refunded_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+  });
   const refundsByDate = new Map<string, number>();
   const refundsByChannel = new Map<OrderSource, number>();
   for (const r of refundRows || []) {
@@ -2048,7 +2102,7 @@ export async function GetSalesSummaryReport(
     );
     if (orderSource && channel !== orderSource) continue;
 
-    const date = new Date(r.refunded_at).toISOString().split("T")[0];
+    const date = localDateKey(r.refunded_at, linkedOrder?.location_id);
     refundsByDate.set(
       date,
       (refundsByDate.get(date) || 0) + Number(r.refunded_amount || 0)
@@ -2085,7 +2139,7 @@ export async function GetSalesSummaryReport(
 
     if (orderSource && channel !== orderSource) continue;
 
-    const date = new Date(o.created_at).toISOString().split("T")[0];
+    const date = localDateKey(o.created_at, o.location_id);
     const existing = byDateMap.get(date) || {
       orderCount: 0,
       grossSales: 0,
@@ -2357,6 +2411,7 @@ export async function GetStaffPerformance(
     total_tips: 0,
     avg_tip_pct: 0,
     leaderboard: [],
+    unattributed: [],
     tips_analysis: {
       total_tips: 0,
       avg_tip_pct: 0,
@@ -2394,6 +2449,7 @@ export async function GetStaffPerformance(
     total_tips: (raw.total_tips as number) ?? 0,
     avg_tip_pct: (raw.avg_tip_pct as number) ?? 0,
     leaderboard: (raw.leaderboard as ServerLeaderboardRow[]) ?? [],
+    unattributed: (raw.unattributed as UnattributedChannelRow[]) ?? [],
     tips_analysis: (raw.tips_analysis as TipsAnalysis) ?? empty.tips_analysis,
     order_activity: (raw.order_activity as StaffOrderActivityRow[]) ?? [],
   };

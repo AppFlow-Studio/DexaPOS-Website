@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase/client";
+import {
+  usePrivateBroadcast,
+  type PrivateChannelStatus,
+} from "@/hooks/usePrivateBroadcast";
 
 export type MirrorRealtimeStatus =
   | "idle"
   | "connecting"
   | "live"
   | "degraded";
+
+const ORDER_EVENTS = ["INSERT", "UPDATE", "DELETE"] as const;
 
 /**
  * Liveness for the KDS mirror.
@@ -21,64 +26,56 @@ export type MirrorRealtimeStatus =
  * repo) -- we do not care which one, only that something moved, so every event
  * collapses to the same invalidation.
  *
- * Returned status is surfaced in the UI. "degraded" means the board is still
- * correct but is arriving on the 5s poll rather than on push -- worth showing,
- * because a support engineer watching a stale-looking board needs to know
- * whether they are looking at a quiet kitchen or a broken subscription.
+ * That broadcast is PRIVATE, so the join is authenticated with the HQ user's
+ * Clerk JWT (the realtime.messages policy admits Dexa HQ for any location).
+ *
+ * Returned status is surfaced in the UI, and useKdsMirror polls at 5s instead
+ * of 30s while it isn't "live". "degraded" means the board is still correct
+ * but is arriving on the poll rather than on push -- worth showing, because a
+ * support engineer watching a stale-looking board needs to know whether they
+ * are looking at a quiet kitchen or a broken subscription.
  */
 export function useKdsMirrorRealtime(locationId: string | null) {
   const queryClient = useQueryClient();
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const [status, setStatus] = useState<MirrorRealtimeStatus>("idle");
+  // Keyed by location, so switching location reads "connecting" until that
+  // location's channel reports, with no reset effect.
+  const [channelState, setChannelState] = useState<{
+    locationId: string;
+    status: MirrorRealtimeStatus;
+  } | null>(null);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!locationId) {
-      setStatus("idle");
-      return;
-    }
-
-    if (channelRef.current) {
-      void supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-
-    setStatus("connecting");
-
-    const invalidate = () => {
-      setLastEventAt(Date.now());
-      void queryClient.invalidateQueries({
-        queryKey: ["hq-kds-mirror", "board", locationId],
-      });
-    };
-
-    const channel = supabase
-      .channel(`location:${locationId}:orders`)
-      .on("broadcast", { event: "INSERT" }, invalidate)
-      .on("broadcast", { event: "UPDATE" }, invalidate)
-      .on("broadcast", { event: "DELETE" }, invalidate)
-      .subscribe((subscriptionStatus) => {
-        if (subscriptionStatus === "SUBSCRIBED") {
-          setStatus("live");
-        } else if (
-          subscriptionStatus === "CHANNEL_ERROR" ||
-          subscriptionStatus === "TIMED_OUT" ||
-          subscriptionStatus === "CLOSED"
-        ) {
-          setStatus("degraded");
-        }
-      });
-
-    channelRef.current = channel;
-
-    return () => {
-      if (channelRef.current) {
-        void supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      setStatus("idle");
-    };
+  const invalidate = useCallback(() => {
+    if (!locationId) return;
+    setLastEventAt(Date.now());
+    void queryClient.invalidateQueries({
+      queryKey: ["hq-kds-mirror", "board", locationId],
+    });
   }, [locationId, queryClient]);
+
+  const onStatus = useCallback(
+    (subscriptionStatus: PrivateChannelStatus) => {
+      if (!locationId) return;
+      setChannelState({
+        locationId,
+        status: subscriptionStatus === "SUBSCRIBED" ? "live" : "degraded",
+      });
+    },
+    [locationId],
+  );
+
+  usePrivateBroadcast(
+    locationId ? `location:${locationId}:orders` : null,
+    ORDER_EVENTS,
+    invalidate,
+    onStatus,
+  );
+
+  const status: MirrorRealtimeStatus = !locationId
+    ? "idle"
+    : channelState?.locationId === locationId
+      ? channelState.status
+      : "connecting";
 
   return { status, lastEventAt };
 }

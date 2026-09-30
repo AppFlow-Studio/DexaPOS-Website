@@ -472,9 +472,9 @@ function PaymentsSkeleton() {
 }
 
 /**
- * `/dashboard/transactions`: hero chart panel, a 4-tile stat row, a
- * three-pill tab strip, then the overview tab's SIX summary cards in two
- * columns.
+ * `/dashboard/financial`: hero chart panel, a 4-tile stat row, then SIX
+ * summary cards in two columns. The shared financial navigation is rendered
+ * separately by the dashboard layout.
  *
  * Close to `analytics` but not equal to it: that variant draws four summary
  * panels and omits the panel wrapper this page puts around its stat row. The
@@ -498,12 +498,6 @@ function FinancialsSkeleton() {
       </Panel>
 
       <StatSkeletons />
-
-      <div className="flex gap-2 overflow-x-auto rounded-full bg-muted/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <LoadingBlock key={index} className="h-9 w-32 shrink-0 rounded-full" />
-        ))}
-      </div>
 
       <div className="grid min-w-0 gap-4 md:grid-cols-2">
         {Array.from({ length: 6 }).map((_, index) => (

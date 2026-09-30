@@ -8,7 +8,7 @@
 -- un-awaited request is dropped as checkout tears down to the success screen —
 -- so the customer never gets the text (observed on prod order #S19-0001).
 --
--- The fix (20260923121000) adds a SERVER-SIDE order->preparing trigger that
+-- The fix (20260923164513) adds a SERVER-SIDE order->preparing trigger that
 -- calls send-receipt, so delivery no longer depends on the device staying alive.
 -- To keep the existing client fire-and-forget from DOUBLE-sending, this migration
 -- adds a dedup primitive:
@@ -30,7 +30,7 @@
 --
 -- Idempotent. Apply to staging first; deploy prod manually per convention.
 -- Deploy ORDER matters: this migration + the send-receipt edge change (which sets
--- is_confirmation) must land BEFORE the order->preparing trigger (20260923121000),
+-- is_confirmation) must land BEFORE the order->preparing trigger (20260923164513),
 -- otherwise there is a brief window where both senders fire undeduped.
 
 ALTER TABLE public.receipt_sends

@@ -1,6 +1,8 @@
 'use client'
 
+import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { usePrivateBroadcast } from '@/hooks/usePrivateBroadcast'
 import {
   InitializeFloorPlan,
   LoadFloorPlanStatus,
@@ -36,17 +38,42 @@ export function useFloorPlans (locationId: string | null) {
   })
 }
 
+const FLOOR_SESSION_EVENTS = ['INSERT', 'UPDATE', 'DELETE'] as const
+
 /**
- * Get floor plan status with table sessions (for runtime mode)
+ * Get floor plan status with table sessions (for runtime mode).
+ *
+ * Push first: table_sessions changes are broadcast PRIVATE on
+ * `floor-plan-{locationId}` (trigger table_session_events), which refetches
+ * the status right away. The 30s poll, paused in background tabs, is only the
+ * safety net (it used to be 5s, background tabs included).
  */
-export function useFloorPlanStatus (floorPlanId: string | null) {
+export function useFloorPlanStatus (
+  floorPlanId: string | null,
+  locationId?: string | null
+) {
+  const queryClient = useQueryClient()
+
+  const invalidateStatus = useCallback(() => {
+    if (!floorPlanId) return
+    void queryClient.invalidateQueries({
+      queryKey: ['floor-plan-status', floorPlanId]
+    })
+  }, [queryClient, floorPlanId])
+
+  usePrivateBroadcast(
+    floorPlanId && locationId ? `floor-plan-${locationId}` : null,
+    FLOOR_SESSION_EVENTS,
+    invalidateStatus
+  )
+
   return useQuery({
     queryKey: ['floor-plan-status', floorPlanId],
     queryFn: () => LoadFloorPlanStatus(floorPlanId!),
     enabled: !!floorPlanId,
     // Poll only status/session data so runtime state stays fresh without reloading floor plan layout.
-    refetchInterval: 5000,
-    refetchIntervalInBackground: true,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     staleTime: 2000
   })
 }

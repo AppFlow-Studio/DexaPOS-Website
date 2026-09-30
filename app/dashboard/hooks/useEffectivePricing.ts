@@ -11,7 +11,9 @@ interface EffectivePricing {
   source: "merchant" | "location";
 }
 
-export function useEffectivePricing(): EffectivePricing & { isLoading: boolean } {
+export function useEffectivePricing(
+  forceMerchantDefaults = false,
+): EffectivePricing & { isLoading: boolean } {
   const clerkOrgId = useClerkOrgId();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
@@ -24,7 +26,7 @@ export function useEffectivePricing(): EffectivePricing & { isLoading: boolean }
   });
 
   // If all locations selected, return merchant defaults
-  if (isAllLocations || !selectedLocation) {
+  if (forceMerchantDefaults || isAllLocations || !selectedLocation) {
     return {
       pricingStrategy: merchantDefaults?.data?.pricing_strategy ?? "manual",
       dualPricingPercentage: merchantDefaults?.data?.dual_pricing_percentage ?? 4.0,

@@ -8,6 +8,7 @@ import { ChannelCard, SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
+import { parseReportDateKey } from '@/lib/reporting/date-range'
 import { DollarSign, Globe, Monitor, ShoppingBag, Store, TrendingUp, Truck } from 'lucide-react'
 import type { SalesSummaryRow } from '@/types/analytics'
 import type { OrderSource } from '@/lib/orderout/platform'
@@ -55,7 +56,7 @@ export function SalesSummaryReport({
     if (!query) return rows
 
     return rows.filter((row) => {
-      const formattedDate = new Date(row.date).toLocaleDateString('en-US', {
+      const formattedDate = parseReportDateKey(row.date).toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
@@ -76,7 +77,7 @@ export function SalesSummaryReport({
       accessorKey: 'date',
       header: 'Date',
       cell: ({ row }) =>
-        new Date(row.getValue('date') as string).toLocaleDateString('en-US', {
+        parseReportDateKey(row.getValue('date') as string).toLocaleDateString('en-US', {
           weekday: 'short',
           month: 'short',
           day: 'numeric',

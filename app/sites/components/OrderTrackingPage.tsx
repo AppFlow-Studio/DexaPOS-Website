@@ -92,6 +92,8 @@ function todayHoursLabel(hours: unknown, timezone: string | null): string | null
 }
 
 const TERMINAL_STATUSES = ["completed", "cancelled", "void", "declined"];
+/** QR guest fallback poll; realtime push is the primary path. */
+const QR_FALLBACK_POLL_MS = 30_000;
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Awaiting Acceptance",
@@ -291,12 +293,17 @@ export function OrderTrackingPage({
     }
   }, [orderId]);
 
-  // QR-specific fallback polling: keep guest tracking fresher even if realtime
-  // delivery is delayed or blocked on the current network.
+  // QR-specific fallback polling. qr-session broadcasts are public (and every
+  // status change pushes on order-update:{id}), so this is only the safety net
+  // for a blocked socket: never faster than QR_FALLBACK_POLL_MS, whatever the
+  // RPC suggests (it still returns 5s from the push-less days).
   useEffect(() => {
     if (!sessionToken || !qrTableLabel || TERMINAL_STATUSES.includes(order.status)) {
       return;
     }
+
+    const nextDelay = (hintSeconds?: number | null) =>
+      Math.max(QR_FALLBACK_POLL_MS, (hintSeconds ?? 0) * 1000);
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -305,13 +312,13 @@ export function OrderTrackingPage({
     const poll = async () => {
       const result = await getQrOrderStatus(sessionToken);
       if (cancelled || !result.success) {
-        scheduleNext(5000);
+        scheduleNext(nextDelay());
         return;
       }
 
       if (result.orderId && result.orderId !== orderId) {
         await refreshOrder();
-        scheduleNext(result.pollIntervalSeconds ? result.pollIntervalSeconds * 1000 : 5000);
+        scheduleNext(nextDelay(result.pollIntervalSeconds));
         return;
       }
 
@@ -321,7 +328,7 @@ export function OrderTrackingPage({
         await refreshOrder();
       }
 
-      scheduleNext(result.pollIntervalSeconds ? result.pollIntervalSeconds * 1000 : 5000);
+      scheduleNext(nextDelay(result.pollIntervalSeconds));
     };
 
     const scheduleNext = (delayMs: number) => {
@@ -329,7 +336,7 @@ export function OrderTrackingPage({
       timer = setTimeout(poll, delayMs);
     };
 
-    scheduleNext(5000);
+    scheduleNext(nextDelay());
 
     return () => {
       cancelled = true;

@@ -34,6 +34,31 @@ const channels = [
   { key: 'is_visible_online', label: 'Online Ordering', icon: ShoppingBag },
 ] as const
 
+export function MenuChannelVisibilityIndicators({
+  value,
+}: {
+  value: MenuChannelVisibility
+}) {
+  return (
+    <div className="flex items-center gap-2" role="group" aria-label="Menu platforms">
+      {channels.map(({ key, label, icon: Icon }) => (
+        <span
+          key={key}
+          role="img"
+          aria-label={`${label}: ${value[key] ? 'on' : 'off'}`}
+          title={`${label}: ${value[key] ? 'on' : 'off'}`}
+          className={cn(
+            'inline-flex size-8 items-center justify-center rounded-full bg-muted/60',
+            value[key] ? 'text-primary' : 'text-muted-foreground/40',
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+      ))}
+    </div>
+  )
+}
+
 const sameVisibility = (
   a: MenuChannelVisibility,
   b: MenuChannelVisibility,
