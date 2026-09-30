@@ -84,7 +84,7 @@ export interface Station {
   menu_scope?: StationMenuScope;
   /**
    * Self-service kiosk ordering settings (order types + seat selection).
-   * Optional: absent before 20260923130000_station_kiosk_settings.sql; read
+   * Optional: absent before 20260930200000_station_kiosk_settings.sql; read
    * through normalizeStationKioskSettings, never raw.
    */
   kiosk_settings?: Record<string, unknown>;

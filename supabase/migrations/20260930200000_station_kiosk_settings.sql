@@ -1,17 +1,26 @@
 -- [Web + POS] Per-station kiosk ordering settings.
 --
--- Two merchant-facing kiosk controls, edited on the station detail page
+-- (Written 2026-09-23 as 20260923130000; re-stamped 2026-09-30 so it sorts
+-- after main's latest migration, which the release guard requires. Staging
+-- already ran it under the old stamp; the SQL is idempotent.)
+--
+-- Kiosk ordering controls, edited on the station detail page
 -- (/dashboard/settings/stations/[stationId] → Kiosk tab) and read by the POS
 -- kiosk (hooks/kiosk/useKioskProfile.ts) alongside the kiosk profile:
 --
 --   order_types               'both' | 'dine_in_only' | 'takeout_only'
 --   dine_in_only_skip_prompt  Dine-In only: start as Dine-In without asking
---   seat_selection_enabled    ask dine-in customers where they are sitting
---   seat_options              [{ id, label }] merchant-defined seat labels
+--   table_label               fixed table for every dine-in order, or null
+--   seat_mode                 'off' | 'ask' | 'fixed'
+--   fixed_seat_label          this kiosk's seat when seat_mode = 'fixed'
+--   seat_options              [{ id, label }] seats the guest picks from ('ask')
+--   seat_selection_enabled    legacy: written as seat_mode = 'ask' for older
+--                             kiosk builds
 --
--- The chosen seat label is written to orders.table_number by the kiosk, which
--- every staff surface (KDS, kitchen/receipt prints, order details) already
--- renders — no RPC or broadcast change needed.
+-- The kiosk writes the resulting label ("Table 1, Seat 3", "Table 1",
+-- "Seat 3") to orders.table_number, which every staff surface (KDS,
+-- kitchen/receipt prints, order details) already renders — no RPC or
+-- broadcast change needed.
 --
 -- Why a station column and not kiosk_profiles: a profile is shared by many
 -- stations, and kiosks in different areas (patio vs bar) need different seat
@@ -38,4 +47,4 @@ BEGIN
 END $$;
 
 COMMENT ON COLUMN public.stations.kiosk_settings IS
-  'Self-service kiosk ordering settings: order_types, dine_in_only_skip_prompt, seat_selection_enabled, seat_options[{id,label}]. Seat label is written to orders.table_number.';
+  'Self-service kiosk ordering settings: order_types, dine_in_only_skip_prompt, table_label, seat_mode (off/ask/fixed), fixed_seat_label, seat_options[{id,label}], legacy seat_selection_enabled. The table/seat label is written to orders.table_number.';
