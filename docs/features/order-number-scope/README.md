@@ -14,7 +14,7 @@ Setting lives at `locations.pos_config.ordering.orderNumberScope` and reaches th
 ## Design decisions
 
 1. **Counters and uniqueness are per location.** Uniqueness moves from `(merchant_id, order_number)` to `(location_id, order_number)` (`orders_order_number_location_key`). Two locations of one merchant can both hold `ORD-<date>-0001`. The old `(merchant_id, order_number)` guards (`orders_order_number_merchant_key`, `idx_unique_order_number_per_merchant`) are dropped: keeping them while keying counters by location would make those locations collide.
-2. **The server owns the shared counter; the tablet never mints a location-wide number.** In `location_wide` mode the tablet keeps minting a provisional station number (`#S1-0043`). `create_order_v4` replaces it from the shared counter when the create syncs, which is well under a second online. Registers can't mint the same provisional number, because `station_number` is unique per location, and every final number comes from one sequence. So two registers ringing at the same moment get different numbers, and an offline tablet can't produce a second `#0001`.
+2. **The server owns the shared counter; each register holds one number from it in advance.** In `location_wide` mode the tablet reserves the next number with `generate_order_number(location, NULL)` and New Order uses it at once, so the screen shows the final `#0044` straight away. `create_order_v4` keeps it because it's station-less, and the tablet reserves the next one in the background. `nextval` never repeats, so two registers ringing at the same moment get different numbers. Without a reservation (offline, or a second order before the refill lands) the tablet falls back to a provisional station number (`#S1-0043`). Registers can't share a provisional number, since `station_number` is unique per location, and `create_order_v4` replaces it on sync. An offline tablet therefore can't produce a second `#0001`.
 3. **A collision heals on the first try.** Numbers minted on the device never advance the server sequence. The old handler retried once from that lagging sequence, could land on another taken number, and failed the outbox op forever. Now the replacement comes from a counter moved past the location's highest number, and the tablet moves its own counter past the assigned number.
 
 ## Server behaviour
@@ -50,12 +50,14 @@ Display surfaces (receipts, orders, payments, KDS mirror, CFD) render `display_n
 
 - `services/localFirst/opHandlers.ts`: `create_order` already adopted `order_number_reassigned`. `seat_guests` now does the same; before, a seated order kept its provisional number on the device. Adoption updates the SQLite row and the store. The CFD re-pushes because its payload fingerprint includes the display number.
 - `lib/localOrderSequence.ts`: `seedFromAssignedOrderNumber` moves the device counter past an assigned number, so a device that collided (cleared MMKV, two devices on one station) stops colliding after one renumber.
-- No change to minting. In `location_wide` mode the tablet does not need to read the scope, because the server replaces its provisional numbers. Old tablet builds behave the same way and are renumbered on sync.
+- `lib/orderNumberReservation.ts`: the reservation described in design decision 2. It is refilled after every config fetch (boot, then every 5 minutes) and after each use. It is persisted, so a restart doesn't strand it, and dropped when the device's day changes; an unused reservation is a gap. The scope is read from the cached effective config (`ordering.orderNumberScope`, `types/locationConfig.ts`).
+- Old tablet builds don't reserve: they mint provisional station numbers, which the server replaces on sync.
+- Trade-off: a register that sits idle holds an older number, so its next order can be lower than the numbers other registers used meanwhile. Numbers are still unique.
 - No automatic reprint on renumber. A reprint (receipt or KDS ticket) renders the new number. An automatic second kitchen ticket for the same food was judged riskier than the stale number.
 
 ## Edge cases
 
-1. **Offline, location-wide** → provisional `#S{n}-NNNN`, replaced on sync. A ticket printed offline shows the provisional number (see open questions).
+1. **Offline, location-wide** → the first order uses the reserved number (already final). Later orders get provisional `#S{n}-NNNN`, replaced on sync, and a ticket printed offline shows the provisional number (see open questions).
 2. **Mid-shift flip** → new orders only; the counter jumps above today's register numbers; the day is mixed-scheme, the next day clean.
 3. **Deploy day** → sequence names change, so each counter restarts once from today's max at the location. No number is reused. Deploy at close anyway.
 4. **Multi-location merchant** → each location counts from `0001`. Searches by number (dashboard, admin, kiosk) are list searches and show one result per location.
