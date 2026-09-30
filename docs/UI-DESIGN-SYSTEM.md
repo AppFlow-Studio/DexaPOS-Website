@@ -15,7 +15,7 @@ One standard for both dashboards: the **merchant dashboard** (`/dashboard/*`) an
 - **no decorative colour.** Colour appears only for the brand-blue section heading, chart data, destructive actions and real alarms.
 - centred rounded pop-ups
 - large `tabular-nums` figures carry the emphasis
-- **tables are bounded:** own row, capped height, paged
+- **tables are bounded:** own row, 10 rows a page, **no inner vertical scroll** on tablet and laptop; **cards on phones**
 - **every empty state says so in words**
 - **phones get the essentials only**
 
@@ -152,7 +152,7 @@ import { PageShell, PageHeader, Panel, StatRow, StatTile, LocationIndicator }
   </Panel>
 
   <Panel padded>
-    {/* toolbar, then the table well: full row (§5.6), capped height (§5.7) */}
+    {/* toolbar, then the table well: full row (§5.6), paged at 10, no inner scroll (§5.7) */}
     <Table variant="data">…</Table>   {/* caps its own height and pins its header */}
     <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="orders" />
   </Panel>
@@ -240,7 +240,7 @@ Live example: [`app/dashboard/locations/[locationId]/settings/page.tsx`](../app/
     <Panel><PanelSection label="Revenue">{/* … */}</PanelSection></Panel>
   </div>
 
-  {/* A table never pairs. It gets its own row (§5.6) and is capped and paged (§5.7). */}
+  {/* A table never pairs. It gets its own row (§5.6) and is paged at 10 (§5.7). */}
   <Panel>
     <PanelSection label="Top merchants" action={<MobileColumnsButton … />}>
       <Table variant="data" …>…</Table>
@@ -597,7 +597,7 @@ The same material as the search field (§4.2) — borderless `bg-muted/60`, no s
 **The staff table is the reference.** [`components/dashboard/staff/StaffDataTable.tsx`](../components/dashboard/staff/StaffDataTable.tsx) is what every dashboard table should look like. It is built on `<Table variant="data">` — the variant already carries the whole treatment, so **you get it by passing the prop, not by copying class strings**.
 
 ```tsx
-<Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+<Table variant="data" containerClassName="hidden md:block">
 ```
 
 | Path | Status | Action |
@@ -613,8 +613,8 @@ Defined in [`components/ui/table.tsx`](../components/ui/table.tsx) and applied t
 
 | Part | Treatment |
 |------|-----------|
-| Container | `overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20` — a rounded tinted well, **no border and no frame**. From `md` up it also caps its height and scrolls (§5.7). |
-| Header | `bg-muted/50` band, row border cleared; pinned with an opaque `bg-card` while the table is capped (§5.7) |
+| Container | `overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20` — a rounded tinted well, **no border and no frame**. It never scrolls vertically: the 10-row page is the bound (§5.7). |
+| Header | `bg-muted/50` band, row border cleared. Not sticky: with no inner scroll there is nothing to pin it to (§5.7). |
 | Body rows | `[&_tr]:border-0 [&_tr]:bg-card/70 [&_tr:hover]:bg-muted/40` — **borderless**; separation comes from the card tint against the well, not from lines |
 | Cells | `[&_td]:px-3 [&_td]:py-3 [&_th]:px-3` |
 
@@ -634,34 +634,80 @@ Call sites no longer need `<TableHeader className="[&_tr]:border-0">`. Since 202
 - **Numeric cells** get `text-right tabular-nums`.
 - **Toolbar above the table**: search `<Input>` on the left (`h-10 w-full rounded-full pl-10` with the `text-muted-foreground/50` icon), filter `Select`s on the right as borderless muted pills — `h-9 rounded-full border-0 bg-muted/60 px-3 shadow-none`. A "Clear filters" ghost pill appears only when a filter is off its default.
 - **Bulk-action bar** (when rows are selected): `rounded-2xl border-0 bg-muted/60 px-3 py-3`, ghost pill buttons inside, count rendered `tabular-nums`.
-- **Every table is paged and height-capped** (§5.7). `PaginationBar` <sup>D-08</sup> renders labelled outline pills with the count ("Showing 11–20 of 29 staff"), and renders nothing when everything fits on one page. In that case show a row-count line below the table instead: `text-xs text-muted-foreground sm:text-sm`.
-- **A wide table gets its own row** (§5.6). **On phones it becomes cards** (§5.3) **or gets a column picker** (§5.8).
+- **Every table is paged at 10 rows and never scrolls inside itself** (§5.7). `PaginationBar` <sup>D-08</sup> renders labelled outline pills with the count ("Showing 11–20 of 29 staff"), and renders nothing when everything fits on one page. In that case show a row-count line below the table instead: `text-xs text-muted-foreground sm:text-sm`.
+- **A wide table gets its own row** (§5.6). **On phones it becomes cards with only the essential fields** (§5.3), **or gets a column picker** when the columns are the point (§5.8).
 
-### 5.3 Mobile: cards, never a scrolling table
+### 5.3 Phones get cards; tablets and laptops get the table <sup>D-26, D-27</sup>
+
+One rule for every list of records:
+
+| View | Width | Renders |
+|---|---|---|
+| **Phone** | below `md` (< 768px) | **Card grid**, essential fields only |
+| **Tablet** | `md` to `lg` (768–1023px) | **Table**, essential columns only |
+| **Laptop and up** | `lg` and up (≥ 1024px) | **Table**, more columns as they fit |
+
+Every view pages at 10 (§5.7). None scrolls sideways, and none scrolls vertically inside itself.
 
 The staff table renders **two trees** off one `useReactTable` instance:
 
-- the `<Table variant="data">` at `hidden xl:block`
-- a card grid at `grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden`, iterating `table.getRowModel().rows`
+- the `<Table variant="data">` at `hidden md:block`
+- a card grid at `grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden`, iterating `table.getRowModel().rows`
 
-Each card is `rounded-2xl border-0 bg-muted/45 p-4`, with the selected state as `bg-muted ring-1 ring-border` — a ring, not a border. Secondary fields sit in a `grid-cols-2` block; the row's primary action is a ghost pill in the footer of the card.
+This supersedes the per-table "fit breakpoint" (D-23), under which a 900px table stayed as cards until `xl` and tablets and small laptops never saw a table.
 
-Do not solve mobile with a horizontally scrolling table. Build the card grid, and **switch at the table's fit breakpoint** <sup>D-23</sup>: the first width at which the table's `min-w-*` width fits the content column without scrolling. The content column is the viewport minus the 16rem sidebar and 3rem of page padding:
+#### Tablet and laptop: columns join as they fit
 
-| Breakpoint | Content column | Table `min-w` that fits |
+The table must fit the content column without scrolling sideways. The content column is the viewport minus the 16rem sidebar and 3rem of page padding:
+
+| Breakpoint | Content column | Columns shown |
 |---|---|---|
-| `lg` (1024px) | 720px | ≤ 720px, e.g. `min-w-[640px]` (HQ roles, members, audit) |
-| `xl` (1280px) | 976px | ≤ 976px, e.g. `min-w-[900px]` (staff, org merchants) |
-| `2xl` (1536px) | 1232px | ≤ 1232px |
+| `md` (768px) | 464px | **Essential** columns only: the same fields as the phone card |
+| `lg` (1024px) | 720px | Essential + `lg` columns |
+| `xl` (1280px) | 976px | Essential + `lg` + `xl` columns |
+| `2xl` (1536px) | 1232px | Every column |
 
-So a 640px table uses `hidden lg:block` + `lg:hidden`, and a 900px one uses `hidden xl:block` + `xl:hidden`. Switching below the fit width brings back the sideways scroll this rule exists to prevent; the HQ merchants list, which shows a 1060px table from `md`, does exactly that. If a table cannot fit at any sensible width, it has too many columns. Default some of them off with the column picker (§5.8) rather than letting it scroll.
+Give every column a tier, and put the tier's class on **both** its `<TableHead>` and its `<TableCell>`:
 
-**The card:** `rounded-2xl border-0 bg-muted/45 p-4`.
-- **Identity and status lead.** The remaining columns drop into `mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm` label/value pairs: label `text-xs text-muted-foreground`, value `truncate font-medium tabular-nums`. No column is lost; it is only re-laid-out.
+```tsx
+<TableHead className="hidden lg:table-cell">Email</TableHead>   // lg tier
+<TableCell className="hidden lg:table-cell">{row.email}</TableCell>
+```
+
+In a TanStack table, keep the class on the column definition (`meta: { className: 'hidden xl:table-cell' }`) and apply it in both the header and the cell loop, so the two cannot drift.
+
+- **Essential columns have no class.** They show from `md` up, and they are exactly the phone card's fields. One decision sets both views.
+- **No `min-w-*` below the tier where every column shows.** An unprefixed `min-w-[900px]` forces the sideways scroll at `md` and `lg`. If a width is needed, prefix it: `2xl:min-w-[1100px]`.
+- **Row actions are essential.** The `MoreHorizontal` menu stays at every width.
+- **If the table still scrolls sideways at `lg` with its `lg` tier, it has too many columns.** Move some to the `xl` or `2xl` tier. For a report whose columns are the point, use the column picker instead (§5.8).
+
+#### Phone: cards with the essentials only
+
+A phone card is not the table row re-laid-out. **It carries only what the user needs to decide what to do next**, and everything else is one tap away in the record's detail view.
+
+**The card:** `rounded-2xl border-0 bg-muted/45 p-4`, selected state `bg-muted ring-1 ring-border` (a ring, not a border).
+
+- **Identity and status lead**, on the first line: the record's name or number, and its status word.
+- **Then at most four label/value pairs**, in `mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm`: label `text-xs text-muted-foreground`, value `truncate font-medium tabular-nums`. These are the figures the user acts on, such as an amount, a time, or a location.
+- **The primary action** is a tap on the card or a ghost pill in its footer.
+- **Everything else is dropped:** secondary ids, emails and phone numbers, created-by and updated-at, tags, counts nobody acts on. Also the §13.4 list: avatars and logos.
+- **Dropped does not mean lost.** Tapping the card opens the record's detail (its page, its dialog, or its expanded detail component), which shows every field. A card whose record has no detail view keeps the four pairs; it never grows a fifth.
+
+Choose the essentials by asking what the user decides from this list:
+
+| List | Leads with | Pairs (≤ 4) | Dropped from the card |
+|---|---|---|---|
+| Orders | Order number, status | Total, time, type | Customer email, item count, server, payment ids |
+| Staff | Name, status | Role, location | Email, phone, PIN state, hire date, avatar |
+| Audit entries | Action, result | Actor, time | Resource id, IP, user agent, the diff |
+| Devices | Device name, status | Location, last seen | Serial, firmware, model, app version |
+
+Card rules that still hold:
+
 - **Values are plain text, not pills** (§3.5). A tinted badge on a tinted card is a box inside a box.
 - **A clickable card is a real `<button>`**, or carries a stretched overlay button as the HQ health cards do. Never a `div` with `onClick`.
-- **When a row expands into detail, the row and the card render the same detail component** (HQ `AuditLogDetail`), so the two views cannot drift apart.
-- **Cards page along with the table** (§5.7). They never get an inner scroll well.
+- **When a row expands into detail, the row and the card render the same detail component** (HQ `AuditLogDetail`), so the two views cannot drift apart. Large detail should get its own page instead (§5.9).
+- **Cards page along with the table,** at the same 10 (§5.7). They never get an inner scroll well.
 
 ### 5.4 Loading and empty states
 
@@ -701,9 +747,9 @@ The arithmetic: at `lg` the content column is 720px, so half a row is about 348p
 - **The one exception** is a compact list-table of **≤ 3 short columns with no `min-w-*` width**, such as a "top 5" with name, count and share. It may sit in half a row because it cannot overflow.
 - Lists that are not tables (feeds, alert lists, station tiles) size themselves; this rule does not apply to them.
 
-### 5.7 Tables are bounded — paged, with a capped height — `DS-CTL-13` <sup>D-19</sup>
+### 5.7 Tables are bounded — 10 rows a page, no inner scroll — `DS-CTL-13` <sup>D-19, D-25</sup>
 
-A table is bounded in two ways: **pagination limits the rows, and the well limits the height.** Neither is enough alone. A paged table can still be 50 tall rows, and a capped well without paging hides how much data there is.
+A table is bounded by **pagination alone**. On tablet and laptop, a page of 10 rows shows in full: **the table never scrolls vertically inside itself.** The user sees the whole page at once, and the pager, with its count, is the only way to more rows. A scroll well inside a paged table is two navigation systems for one list, and it hides rows the pager says are on screen.
 
 **1 — Page every table.**
 
@@ -717,29 +763,24 @@ const { pageRows, pagination, setPage } = useClientPagination(rows, 10)
 ```
 
 - **Page size: 10 rows, for every table.** That covers panel tables, a page's primary list, and server-paged lists alike. The mobile card grid of the same data pages at the same 10.
-- **The only exception is a drag-to-reorder list** (menus, categories). Paging would stop a row being dragged onto another page, so those stay whole.
+- **The only exception is a drag-to-reorder list** (menus, categories). Paging would stop a row being dragged onto another page, so those stay whole. They grow the page, which scrolls as a page; they still get no inner scroll well.
 - **Server-paged data uses the same `PaginationBar`.** Pass it a `PaginationMeta`, as `AuditLogActivityMonitor.tsx` does. Do not hand-roll another pager.
 - `PaginationBar` renders nothing when everything fits on one page. Otherwise it always shows the count, e.g. "Showing 11–20 of 29 merchants".
 - **Rank before you slice.** Sort a ranked or actionable list first, so page 1 always holds the most urgent rows. HQ alerts are sorted by severity before paging.
 - **Clamp the page.** If a list shrinks while the user is on it (for example, they dismiss an alert), they must not be left on an empty page. `useClientPagination` clamps for you.
 
-**2 — The height cap is built in.** Since 2026-09-28, every `<Table variant="data">` caps itself; there is nothing to write:
+**2 — No vertical scroll inside the table, at any width.** The table's container is `overflow-y-hidden` and carries no `max-h-*`. Nothing caps its height, so nothing pins its header: the header is a plain `bg-muted/50` band.
 
-| Part | What the table does |
-|---|---|
-| Container, from `md` up | `thin-scrollbar md:max-h-[min(70vh,40rem)] md:overflow-y-auto`. The table's own container is the scroller, so its header can stick to it. |
-| Header | `sticky top-0 z-10 bg-card`, with the `bg-muted/50` band moved onto its row. A sticky header needs an opaque fill or rows show through it; this keeps the look of an unpinned header. |
-| Print | `print:max-h-none print:overflow-visible` and `print:static`, so "Export Report" prints every row |
+- **Keep rows one line tall, so 10 rows fit a laptop screen.** Cells `truncate`; long text (notes, descriptions, diffs) belongs in the detail view, not the cell. Ten single-line rows at `py-3` come to roughly 500–600px with the header.
+- **An expanded row pushes the rows below it down the page.** The page scrolls; the table does not. That is why large detail should get its own page instead of expanding (§5.9).
+- **Print** needs nothing special: with no cap, "Export Report" prints the whole page of rows.
 
-- **The cap holds about a dozen rows, so a 10-row page does not scroll.** It kicks in only for tall rows, an expanded row, or a drag-to-reorder list. This answers the objection in 4efe8504 that a scroll well hides how much data there is: the pager shows the count, and the well rarely scrolls.
-- **No cap below `md`.** Phone tables are paged or become cards, and a nested scroll area on touch traps the thumb.
-- **Opt out with `bounded={false}`** only when something else already owns the scroll: a dialog body that scrolls, a table nested in another table's expanded row, or a legacy wrapper well that has not been converted yet.
-- **A different height** goes on `containerClassName` with the same prefix, `md:max-h-80`. tailwind-merge replaces the default.
-- **Never override the header's fill.** A `bg-*` on `<TableHeader>` beats the sticky `bg-card` and makes the pinned header see-through.
+> **Code status.** `table.tsx` still ships the 2026-09-28 cap (`md:max-h-[min(70vh,40rem)] md:overflow-y-auto` + a sticky header), on by default through the `bounded` prop. Removing it is a §11 backlog item. Until it lands, a table you convert passes `bounded={false}`.
 
 **Never:**
+- **A height cap on a table**: `max-h-*` with `overflow-y-auto` on the container, through `containerClassName`, or on a wrapper `div` such as `max-h-96 overflow-auto` around a `<Table>`. Delete it and page the table.
+- **A sticky header.** It exists only to serve a scroll well.
 - **An inner scroll well without a pager and count.** It gives two stacked scrollbars and no idea how many rows there are. This was the AlertsPanel bug fixed in 4efe8504.
-- **A scroll well on a wrapper `div`**, such as `max-h-96 overflow-auto` around a `<Table>`. The header scrolls away, and with the built-in cap you get two scroll areas nested inside each other.
 - **A "Show all N" toggle that unrolls the table.** Page it instead.
 - **An inner scroll well on a phone card grid.** Page it instead; a nested scroll area on touch traps the thumb.
 
@@ -777,6 +818,30 @@ const showCol = (id: string) => !isMobile || !hidden.has(id)
 - A picker is not a filter. It controls which **columns** show; the toolbar filters rows (§5.2).
 
 Worked example: [`VoidRefundIntelligence.tsx`](../app/manage/analytics/components/VoidRefundIntelligence.tsx).
+
+### 5.9 Large row detail gets its own page — `DS-CTL-15` <sup>D-28</sup>
+
+An expandable row suits **short** detail. When a row's detail is large, **it is recommended to give the record its own detail page** (skeleton C, §2) and link the row to it, instead of expanding the row in place.
+
+A large expansion breaks the table around it: it pushes the rest of the page of 10 below the fold, the pager ends up a screen away, and on a phone the card turns into a long scroll. A page gives the detail room, a URL that can be shared and bookmarked, and a back control.
+
+**Expand in place** when the detail is all of these:
+- a handful of fields or a short note, a few lines tall
+- no table, chart, tabs or sections of its own
+- no form or edit actions beyond one or two buttons
+
+**Use a detail page** when any of these is true:
+- it holds its own table, list, chart, tabs or several sections
+- it has forms or several actions
+- expanded, it is taller than about three rows of the table
+- people will want to link to the record, or open several in turn
+
+How:
+- **The whole row links to the page**, and so does the phone card (§5.3). Use a real link (`<Link>` or a stretched overlay link), not a `div` with `onClick`, so it opens in a new tab too.
+- **The detail page uses skeleton C**, with a back control to the list (§4.4).
+- **Back returns to the same place.** Keep the list's page, filters and search in the URL's search params, so back lands on the same page of 10 with the same filters.
+- **Do not do both.** A row that links to a page does not also expand; drop the chevron.
+- **Short detail may still expand.** When it does, the row and the card render the same detail component (§5.3).
 
 ---
 
@@ -881,7 +946,7 @@ Dialogs and sheets animate via real `@keyframes` (`panel-in`, `overlay-in`) in `
 | Green/red figures and trend arrows | `text-foreground`, plus arrow glyph and sign | §3.5, §6.2 |
 | `bg-[#0C4FD1] text-white` on a selected control | `bg-background text-foreground shadow-sm ring-1 ring-border` | §3.5 |
 | A bare `<Badge>` for a status | `<Badge variant="outline">` | §4.6b |
-| `max-h-* overflow-auto` wrapper around a `<Table>` | Delete it. The table caps itself; add `PaginationBar`. | §5.7 |
+| `max-h-* overflow-auto` around a `<Table>` or on its container; a sticky `<TableHeader>` | Delete it; page the table at 10 with `PaginationBar`. Tables never scroll inside themselves. | §5.7 |
 | `rounded-xl` / `rounded-lg` on a popover | `rounded-2xl` | §4.6 |
 | `divide-y`, `border-t` between sections, `OverviewSection`'s default `divider` | Spacing (`PanelDivider` and `PanelSection`'s `divider` prop are deleted) | §5.5 |
 
@@ -919,8 +984,11 @@ Paste into your PR.
 - [ ] Nothing framing the well: no `Card` or bordered `div` around it (§5.2)
 - [ ] Own full-width row, not in a grid cell beside a chart or panel (§5.6)
 - [ ] Paged at 10 rows per page, table and card grid alike (§5.7)
-- [ ] Height cap left on. `bounded={false}` only inside a dialog body or a nested table, and no `bg-*` on `<TableHeader>` (§5.7)
-- [ ] Card grid below the table's **fit** breakpoint (§5.3), or a column picker when the columns are the point (§5.8). No horizontally scrolling table on mobile.
+- [ ] No vertical scroll inside the table at `md` and up: no `max-h-*`, no sticky header, rows one line tall. Pass `bounded={false}` until the §11 item lands (§5.7)
+- [ ] Table at `hidden md:block`, card grid at `md:hidden` (§5.3), or a column picker when the columns are the point (§5.8)
+- [ ] Every column has a tier; at 768px only the essential columns show and nothing scrolls sideways (§5.3)
+- [ ] Phone cards carry only identity, status, ≤ 4 label/value pairs and the primary action; the rest is in the detail view (§5.3)
+- [ ] Rows expand only for short detail; large detail links to its own page, and back returns to the same page and filters (§5.9)
 
 **Controls**
 - [ ] Every input muted, rounded, borderless — no bordered or `rounded-md` field (§4.2)
@@ -943,7 +1011,7 @@ Paste into your PR.
 **Mobile** (§13.4–§13.6)
 - [ ] Below `sm`: no logos, avatars, page subtitle, panel or card captions, chart captions or stat metas
 - [ ] Still visible: title, figures, status words, scope (location, date range), primary action, empty text
-- [ ] Records are cards; report tables have a column picker
+- [ ] Records are cards with the essentials only; report tables have a column picker
 - [ ] Icon-only controls have an `aria-label`; primary controls are ≥ 44px tall
 
 **Panels** (§12)
@@ -965,6 +1033,7 @@ Paste into your PR.
 - [ ] **Dark mode inside the dashboard route** (C4)
 - [ ] Data-heavy state (more than one page) and empty state
 - [ ] 375px wide — no horizontal body scroll
+- [ ] 768px and 1024px wide — the table shows, a full page of 10 without an inner scrollbar, nothing scrolling sideways
 - [ ] Panels full-screen on mobile; confirmations still centred cards (§13.1)
 - [ ] Section rail scrolls the active pill into view (§13.2)
 - [ ] Charts render with correct axis colours
@@ -994,12 +1063,16 @@ Paste into your PR.
 | **D-16** | Table implementation | `<Table variant="data">` — staff table canonical; borderless rows on a tinted well | Hairline `border-b` rows (the former D-06 answer) | `ReportDataTable`, `OrdersDataTable` |
 | **D-17** | Decorative colour | **None.** Colour only for a section heading, chart data, destructive actions and real alarms (§3.5) | Tinted icon chips; gradients; pastel cards and banners; green/red numerals and arrows; brand-fill selection; red required-field markers | HQ home, organizations, analytics, merchants (§14.6). Remaining hits: §14.8, §15.4 |
 | **D-18** | Wide tables in grids | Own full-width row. Only a ≤ 3-column table without `min-w` may share a row (§5.6) | Tables in a `md:grid-cols-2` or 3-of-7 cell that scroll sideways | Already full-row: the Terminal merchant list, KDS, staff-labour and order-type tables on `/manage/analytics`. 4 remain (§14.8) |
-| **D-19** | Table length | Paged at **10 rows per page for every table**, server-paged lists included, **and** height-capped. Every `variant="data"` table caps itself from `md` (`min(70vh,40rem)`) with a pinned header; opt out with `bounded={false}` (§5.7). | Unbounded tables; "Show all N"; a scroll well with no pager or count (4efe8504); a scroll well on a wrapper `div` | 12 `/manage/analytics` tables now paged with `PaginationBar`, most of them former `max-h` scroll wells |
+| **D-19** | Table length | Paged at **10 rows per page for every table**, server-paged lists included. ~~And height-capped from `md` (`min(70vh,40rem)`) with a pinned header~~ — **the cap is superseded by D-25** (§5.7). | Unbounded tables; "Show all N"; a scroll well with no pager or count (4efe8504); a scroll well on a wrapper `div` | 12 `/manage/analytics` tables now paged with `PaginationBar`, most of them former `max-h` scroll wells |
 | **D-20** | Empty visuals | A sentence in the footprint of the missing content; `—` for unknown values; never `return null`; never hidden on phones (§4.9) | Bare axes, empty pies, generic "No data", sections that silently vanish | `OrdersHeatmap`, `PaymentsSection` (`ChartEmpty`) |
 | **D-21** | Mobile detail | Below `sm`, via CSS, drop logos, avatars, page subtitles, panel/card/chart captions and stat metas (§13.4) | `useIsMobile` for visibility (breaks at 768px, flashes on hydrate); stripping titles, figures, status, scope or empty text | `/manage`, organizations, merchant cards |
 | **D-22** | Tables on phones | Card grid first. A column picker (2–3 key columns on, `min-w` lifted) when the columns are the point (§5.8, §13.5) | Sideways-scrolling tables; per-column value filters | `/manage/analytics` (`MobileColumnsButton`) |
-| **D-23** | Card-grid breakpoint | The table's fit breakpoint: `lg` for ≤ 720px, `xl` for ≤ 976px (§5.3) | One global breakpoint (`xl` wastes `lg`; `md` lets a 1060px table scroll) | HQ tables at `lg`; staff table at `xl` |
+| **D-23** | Card-grid breakpoint | ~~The table's fit breakpoint: `lg` for ≤ 720px, `xl` for ≤ 976px~~ — **superseded by D-26** (§5.3) | One global breakpoint (`xl` wastes `lg`; `md` lets a 1060px table scroll) | HQ tables at `lg`; staff table at `xl` |
 | **D-24** | Tab-rail centring | Scroll the rail itself with `rail.scrollTo`, clamped, and re-measure with `ResizeObserver` (§13.2) | `scrollIntoView` on the tab, which walks every scrollable ancestor | Org detail rail, `/manage` analytics rails |
+| **D-25** | Table height (2026-09-30) | **No vertical scroll inside a table at any width.** The 10-row page is the only bound; no `max-h-*`, no sticky header, rows one line tall (§5.7) | The D-19 height cap: a scroll well inside a paged table, which hides rows the pager says are showing | Open: `table.tsx` still caps by default (§11) |
+| **D-26** | Table vs. cards (2026-09-30) | **One breakpoint: cards below `md`, the table from `md` up.** Columns carry tiers (essential / `lg` / `xl` / `2xl`) so the table fits each width without sideways scroll (§5.3) | D-23's per-table fit breakpoint, which kept tablets and small laptops on cards; an unprefixed `min-w-*` | Open: tables switching at `lg`/`xl`/`2xl` (§11) |
+| **D-27** | Phone card content (2026-09-30) | **Essentials only:** identity + status, ≤ 4 label/value pairs, the primary action; the rest is one tap away in the detail view. The essential set is also the tablet table's column set (§5.3) | "No column is lost" — every column re-laid-out onto the card | Open: cards carrying every column (§11) |
+| **D-28** | Large row detail (2026-09-30) | **Recommended: its own detail page** (skeleton C), with the row and card linking to it and the list state kept in the URL. Expand in place only for short detail (§5.9) | Expanding rows into tables, tabs or forms, which pushes the page of 10 off screen | — (recommendation; applies as pages are converted) |
 
 **Retracted during implementation.** Two findings from the initial audit did not survive verification:
 
@@ -1028,7 +1101,10 @@ Fix-once items. **Do not** re-solve these per page.
 | `STATUS_CONFIG` has no dark variants | `tips/lib/constants.ts` | ✅ Done: `STATUS_CONFIG` removed, labels only |
 | Raw `<input>` elements bypass `ui/input` — see §11.1 | 12 text/number/date fields | Open |
 | Hide page subtitles, panel and chart captions and stat metas below `sm` **by default** in the primitives, with an opt-out for a subtitle that carries scope (§13.4) | `PageHeader.tsx`, `PanelSection.tsx`, `StatTile.tsx` (+ a hook on `InsetTile`), `ChartCard.tsx` | ✅ Done 2026-09-28, plus `AnalyticsPanel` and `DataPageSkeleton`. 72 call sites opted back in: 32 captions, 28 metas, 12 subtitles. |
-| Bounded mode on `<Table variant="data">`: one prop sets the container cap and the sticky, opaque header (§5.7), so call sites stop spelling it out | `table.tsx` | ✅ Done 2026-09-28, **on by default**. 10 tables pass `bounded={false}`. |
+| Bounded mode on `<Table variant="data">`: one prop sets the container cap and the sticky, opaque header (§5.7), so call sites stop spelling it out | `table.tsx` | ✅ Done 2026-09-28, **on by default** — now reversed by the next row |
+| Remove the height cap and sticky header from `variant="data"` (D-25): drop the `bounded` prop and its context, then delete every `bounded={false}` | `table.tsx`, `table.test.tsx` + 23 files | Open (2026-09-30) |
+| Move every table to the one breakpoint (D-26): table `hidden md:block`, cards `md:hidden`, columns tiered, unprefixed `min-w-*` removed | Tables switching at `lg` / `xl` / `2xl` (staff, HQ lists, audit logs, devices, …) | Open (2026-09-30) |
+| Trim phone cards to the essentials (D-27): identity + status, ≤ 4 pairs, primary action | Every card grid built under the old "no column is lost" rule; do it together with the shared card below | Open (2026-09-30) |
 | Drop `PaginationBar`'s default `border-t pt-4` (§5.5), then delete the 12 HQ `border-t-0 pt-0` overrides | `PaginationBar.tsx` + 8 files | ✅ Done 2026-09-28 |
 | Move hand-rolled pagers onto `PaginationBar` (§5.7) | HQ merchants list, `OrganizationAuditLogs`, `AlertsPanel`, `AuditLogsTab`, `OrdersDataTable` | Open. `/manage/transactions` done 2026-09-28 (all five of its pagers). kds-mirror's `TablePagination` deleted 2026-09-29; its three tables use `PaginationBar`. |
 | `SelectTrigger` is not muted by default, though §4.2 says it is. It still ships `border bg-transparent shadow-xs` (and `dark:bg-input/30`), so a bare trigger renders bordered. Move the §5.2 material into `select.tsx`, then drop the call-site overrides. | `select.tsx` | Open. Found 2026-09-28; `/manage/transactions` spells the classes out in `FilterSelect`. |
@@ -1209,7 +1285,7 @@ What the recipe does:
 ### 13.3 Layout basics
 
 - Rows of panels take `items-start`. On phones, blocks reorder with `order-*` instead of rendering a second layout (§2 E).
-- Tables become card grids below their fit breakpoint (§5.3), or get a column picker (§5.8).
+- Tables become card grids below `md` (§5.3), or get a column picker (§5.8). From `md` up they are tables with no inner scroll (§5.7).
 - 375px wide, no horizontal body scroll — already on the §9 checklist.
 - Grid tracks need `min-w-0`, or a wide child forces the whole row past the viewport.
 
@@ -1256,11 +1332,11 @@ Why `max-sm:hidden` and not `hidden sm:block`: it sets no display from `sm` up, 
 
 ### 13.5 Grids before tables — `DS-RESP-04` <sup>D-22</sup>
 
-On a phone, a list of records is a **card grid** (§5.3), not a table. Use a table below `sm` only when the columns are the point, i.e. a comparison or report where reading across a row is the task. Then give it a column picker (§5.8) with the 2–3 key columns on by default.
+On a phone (below `md`), a list of records is a **card grid** carrying only the essential fields (§5.3), not a table. Use a table below `md` only when the columns are the point, i.e. a comparison or report where reading across a row is the task. Then give it a column picker (§5.8) with the 2–3 key columns on by default.
 
 | Content | Phone layout |
 |---|---|
-| Records (merchants, staff, orders, devices, audit entries) | Card grid, `grid-cols-1`, then `sm:grid-cols-2` |
+| Records (merchants, staff, orders, devices, audit entries) | Card grid, `grid-cols-1`, then `sm:grid-cols-2`; essentials only (§5.3) |
 | KPIs | `StatRow`, two across (one across for `columns={2}`), figure `text-2xl` |
 | Report or comparison table | The table, with a column picker and the `min-w` lifted |
 | Charts | Full width, one per row |
@@ -1353,7 +1429,7 @@ distinct hand-rolled `<h1>` class strings**; all of them become `PageHeader`:
 
 | # | Exception | Rationale |
 |---|---|---|
-| HQ-1 | **Operational density.** HQ tables may run tighter than the merchant recipe. | HQ is a command centre, and operators scan far more rows per session than a merchant does. Density is the feature. It is still bounded: every HQ table is paged and height-capped (§5.7). |
+| HQ-1 | **Operational density.** HQ tables may run tighter than the merchant recipe. | HQ is a command centre, and operators scan far more rows per session than a merchant does. Density is the feature. It is still bounded: every HQ table is paged at 10 with no inner scroll (§5.7). |
 | HQ-2 | **HQ alarms keep their colour** (§3.5, use 4), exactly where HQ raises alarms. The places are listed below. | These encode a real alarm state, so the colour is semantic, not decoration. Everywhere else in HQ, status is text-led and a row that needs attention is marked by weight. |
 | HQ-3 | **`/manage` keeps its command-centre composition:** status line, tabs, then a dashboard of paired panels (§14.6.1). | This preserves the information hierarchy of the Admin HQ Dashboard Overhaul. Only the canvas, header and card nesting changed. |
 
@@ -1603,7 +1679,7 @@ Decorative colour in `organizations/[organizationId]/components/**`:
 | `ChurnRadar` (`PREVIEW_ROWS`) · `MultiLocationComparison` (`TABLE_PREVIEW_ROWS`) | "Show all N" unrolls the table | Page it |
 | `merchants/page.tsx` · `OrganizationAuditLogs.tsx` · `components/AlertsPanel.tsx` · `merchants/[merchantId]/components/AuditLogsTab.tsx` | Hand-rolled pagers. All now page at 10 (2026-09-29), but they still use their own controls. | `PaginationBar` |
 | `app/manage/transactions/**` (`PAGE_SIZE = 25` in the page, `ChargebacksSection`, `AuditLogSection`; `BATCH_PAGE_SIZE = 25`) | Still pages at 25. It is being converted in a parallel Family 4 change, so it was left to that work. | 10 per page (§5.7) |
-| `merchants/page.tsx:415-419` | The 1060px list table shows from `md`, so it scrolls inside its well until `2xl` | Cards until the table fits, or fewer columns (§5.3) |
+| `merchants/page.tsx:415-419` | The 1060px list table shows from `md`, so it scrolls sideways inside its well until `2xl` | Keep it from `md`, but tier its columns so only the essentials show at `md` (§5.3) |
 | `organizations/page.tsx:320` | A `min-w-[900px]` table switches at `lg`, where the column is 720px | Switch at `xl` |
 
 **Empty states (§4.9)**
