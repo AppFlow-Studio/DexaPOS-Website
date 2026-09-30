@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback: 20260930190000_verify_staff_pin
+-- Rollback: 20260930210000_verify_staff_pin
 -- =============================================================================
 -- The POS treats a missing verify_staff_pin as an error and falls back to its
 -- cached PIN match, so dropping it returns the per-order PIN gate to the

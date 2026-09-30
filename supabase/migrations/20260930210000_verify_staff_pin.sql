@@ -30,7 +30,7 @@
 -- Caller check: the caller's merchant must own the location (dexapos admins
 -- excepted), the same rule get_pos_bootstrap_v1 applies to the POS.
 --
--- ROLLBACK: rollback/20260930190000_verify_staff_pin_rollback.sql
+-- ROLLBACK: rollback/20260930210000_verify_staff_pin_rollback.sql
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.verify_staff_pin(
