@@ -335,9 +335,9 @@ export function ShiftModal({
             </Select>
           </div>
 
-          {/* Role Select */}
+          {/* A shift position is separate from the employee's access role. */}
           <div className="grid gap-2">
-            <Label>Role</Label>
+            <Label>Position on this shift</Label>
             <Select value={role} onValueChange={(v: any) => setRole(v)}>
               <SelectTrigger>
                 <SelectValue />

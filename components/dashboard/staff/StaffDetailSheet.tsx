@@ -89,10 +89,7 @@ interface StaffDetailSheetProps {
 
 type StaffDetailPanel =
   | "profile"
-  | "assignment"
-  | "pos-access"
-  | "dashboard-access"
-  | "locations"
+  | "access"
   | "activity";
 
 export function StaffDetailSheet({
@@ -289,7 +286,8 @@ export function StaffDetailSheet({
     }
     const staffProfileId = staff.staff_profile_id;
 
-    if (staff.overall_is_active) {
+    if (primaryLocation.is_active) {
+      if (!window.confirm(`Deactivate ${staff.display_name} at ${primaryLocation.location_name}?`)) return;
       deactivateStaff.mutate({
         staffProfileId,
         locationId: primaryLocation.location_id,
@@ -522,8 +520,7 @@ export function StaffDetailSheet({
   };
 
   // Per-location status, mirroring the "Status at this Location" switch in the
-  // assignment panel. Distinct from handleStatusToggle, which acts on the
-  // primary location and so represents the whole staff member.
+  // assignment panel. The footer action also targets the primary location.
   const handleToggleLocationStatus = (
     locationId: string,
     isActive: boolean
@@ -554,30 +551,10 @@ export function StaffDetailSheet({
       icon: Mail,
     },
     {
-      id: "assignment",
-      label: "Assignment",
-      description: "Role and primary location",
+      id: "access",
+      label: "Access & locations",
+      description: "Roles, PIN, and locations",
       icon: Shield,
-    },
-    {
-      id: "pos-access",
-      label: "POS Access",
-      description: "PIN and staff status",
-      icon: KeyRound,
-    },
-    {
-      id: "dashboard-access",
-      label: staff.is_clerk_user ? "Dashboard Access" : "Upgrade Access",
-      description: staff.is_clerk_user
-        ? "Password and account access"
-        : "Promote this staff member",
-      icon: staff.is_clerk_user ? Lock : ArrowUpCircle,
-    },
-    {
-      id: "locations",
-      label: "Locations",
-      description: "Assignments and roles",
-      icon: MapPin,
     },
     {
       id: "activity",
@@ -1435,10 +1412,14 @@ export function StaffDetailSheet({
 
   const activePanelContent: Record<StaffDetailPanel, React.ReactNode> = {
     profile: profilePanel,
-    assignment: assignmentPanel,
-    "pos-access": posAccessPanel,
-    "dashboard-access": dashboardAccessPanel,
-    locations: locationsPanel,
+    access: (
+      <div className="space-y-6">
+        {assignmentPanel}
+        {locationsPanel}
+        {posAccessPanel}
+        {dashboardAccessPanel}
+      </div>
+    ),
     activity: activityPanel,
   };
 
@@ -1571,24 +1552,26 @@ export function StaffDetailSheet({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>
-            {staff.overall_is_active ? (
+            {primaryLocation?.is_active ? (
               <Button
                 variant="destructive"
                 className="gap-2"
                 onClick={handleStatusToggle}
                 disabled={!primaryLocation}
+                aria-label={`Deactivate at ${primaryLocation.location_name}`}
               >
                 <UserX className="h-4 w-4" />
-                Deactivate
+                Deactivate primary
               </Button>
             ) : (
               <Button
                 className="gap-2"
                 onClick={handleStatusToggle}
                 disabled={!primaryLocation}
+                aria-label={`Reactivate at ${primaryLocation?.location_name ?? "primary location"}`}
               >
                 <UserCheck className="h-4 w-4" />
-                Reactivate
+                Reactivate primary
               </Button>
             )}
           </div>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import { Activity, Clock, Mail, UserPlus, Users } from "lucide-react";
+import { Mail, UserPlus, Users } from "lucide-react";
 
 import { InviteUserWizard } from "@/components/dashboard/staff/InviteUserWizard";
 import { PendingInvitesTable } from "@/components/dashboard/staff/PendingInvitesTable";
@@ -18,53 +17,31 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { usePendingInvites } from "../hooks/useInvites";
-import { useOrders } from "../hooks/useOrder";
 import { useUnifiedStaff } from "../hooks/useStaff";
 
 export default function MerchantStaffPage() {
   const { data: staffMembers, isLoading, refetch } = useUnifiedStaff();
-  const recentOrdersFilters = useMemo(() => {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    return { dateRange: { from: sevenDaysAgo, to: null } };
-  }, []);
-  const { data: orders } = useOrders(recentOrdersFilters);
   const { data: pendingInvites } = usePendingInvites();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const staff = useMemo(() => staffMembers || [], [staffMembers]);
-  const ordersList = useMemo(
-    () => (Array.isArray(orders) ? orders : []),
-    [orders],
-  );
-
   const stats = useMemo(
     () => ({
       active: staff.filter((member) => member.overall_is_active).length,
       clerk: staff.filter((member) => member.is_clerk_user).length,
-      recentOrders: ordersList.length,
+      pendingInvites: pendingInvites?.length ?? 0,
     }),
-    [staff, ordersList],
+    [staff, pendingInvites],
   );
 
   return (
     <PageShell>
       <PageHeader
-        title="Staff & Access"
-        subtitle="Manage dashboard users and POS staff with location-specific access."
+        title="People"
+        subtitle="Find staff, invite someone new, and manage their access."
         stackActionsBelowIndicatorOnMobile
         actions={
           <>
-            <Button
-              variant="outline"
-              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-              asChild
-            >
-              <Link href="/dashboard/staff/timesheets">
-                <Clock className="mr-1.5 h-4 w-4" />
-                Timesheets
-              </Link>
-            </Button>
             <InviteUserWizard
               open={isWizardOpen}
               onOpenChange={setIsWizardOpen}
@@ -107,10 +84,10 @@ export default function MerchantStaffPage() {
             isLoading={isLoading}
           />
           <StatTile
-            label="Recent activity"
-            value={stats.recentOrders}
-            meta="Orders in the last 7 days"
-            icon={<Activity />}
+            label="Pending invites"
+            value={stats.pendingInvites}
+            meta="Awaiting acceptance"
+            icon={<Mail />}
             isLoading={isLoading}
           />
         </StatRow>

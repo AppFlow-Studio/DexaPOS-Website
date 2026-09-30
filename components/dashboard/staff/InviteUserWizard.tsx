@@ -80,18 +80,14 @@ interface InviteUserWizardProps {
   elevated?: boolean;
 }
 
-type Step = "type" | "details" | "role" | "locations" | "pos_config" | "review";
+type Step = "details" | "access" | "review";
 
-const CLERK_STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
-  { key: "type", label: "Staff type", icon: <UserCheck className="h-4 w-4" /> },
+const EMPTY_ROLES: RolesModel[] = [];
+const EMPTY_LOCATIONS: LocationsModel[] = [];
+
+const STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
   { key: "details", label: "Details", icon: <User className="h-4 w-4" /> },
-  { key: "role", label: "Role", icon: <Shield className="h-4 w-4" /> },
-  {
-    key: "locations",
-    label: "Locations",
-    icon: <MapPin className="h-4 w-4" />,
-  },
-  { key: "pos_config", label: "POS Setup", icon: <Lock className="h-4 w-4" /> },
+  { key: "access", label: "Access & locations", icon: <Shield className="h-4 w-4" /> },
   {
     key: "review",
     label: "Review",
@@ -99,22 +95,14 @@ const CLERK_STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-const POS_STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
-  { key: "type", label: "Staff type", icon: <UserCheck className="h-4 w-4" /> },
-  { key: "details", label: "Details", icon: <User className="h-4 w-4" /> },
-  { key: "role", label: "Role", icon: <Shield className="h-4 w-4" /> },
-  {
-    key: "locations",
-    label: "Locations",
-    icon: <MapPin className="h-4 w-4" />,
-  },
-  { key: "pos_config", label: "POS Setup", icon: <Lock className="h-4 w-4" /> },
-  {
-    key: "review",
-    label: "Review",
-    icon: <CheckCircle2 className="h-4 w-4" />,
-  },
-];
+function getAssignableRoles(roles: RolesModel[], staffType: StaffType, currentUserLevel: number) {
+  return roles.filter((role) =>
+    (staffType === "clerk"
+      ? role.level_type === "admin" || role.level_type === "manager"
+      : role.level_type === "member") &&
+    (currentUserLevel <= 0 || role.level <= currentUserLevel),
+  );
+}
 
 export function InviteUserWizard({
   open: controlledOpen,
@@ -130,17 +118,17 @@ export function InviteUserWizard({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const onOpenChange = controlledOnOpenChange || setInternalOpen;
 
-  const [currentStep, setCurrentStep] = React.useState<Step>("type");
+  const [currentStep, setCurrentStep] = React.useState<Step>("details");
   const [showDiscardConfirm, setShowDiscardConfirm] = React.useState(false);
   const { data: rolesData, isLoading: isRolesLoading } = useQuery({
     queryKey: ["merchant-roles"],
     queryFn: () => GetMerchantRoles(),
     staleTime: 5 * 60 * 1000, // cache for 5 minutes
   });
-  const roles = rolesData || [];
+  const roles = rolesData ?? EMPTY_ROLES;
   const isLoading = isRolesLoading;
   const { data: locationsData } = useLocations(clerkOrgId, userInfo?.id || "");
-  const locations = locationsData || [];
+  const locations = locationsData ?? EMPTY_LOCATIONS;
 
   // Get current user's role and level for filtering
   const currentUserRole = React.useMemo(() => {
@@ -207,9 +195,10 @@ export function InviteUserWizard({
   // Reset form when closing
   React.useEffect(() => {
     if (!open) {
-      setCurrentStep("type");
+      setCurrentStep("details");
       setShowDiscardConfirm(false);
       setStaffType("clerk");
+      setCreationMethod("direct");
       setFirstName("");
       setLastName("");
       setEmail("");
@@ -247,51 +236,27 @@ export function InviteUserWizard({
     return () => clearTimeout(timeout);
   }, [pinCode, autoGeneratePin, selectedLocationIds]);
 
-  // Determine which steps to show based on staff type
-  const STEPS = staffType === "clerk" ? CLERK_STEPS : POS_STEPS;
-
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
+  const detailsValid = () => {
+    if (!firstName.trim() || !lastName.trim()) return false;
+    if (email.trim() && (emailCheck.isChecking || emailCheck.hasConflict)) return false;
+    if (!email.trim()) return staffType !== "clerk";
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const accessValid = () => {
+    if (!filteredRoles.some((role) => role.code === selectedRoleCode)) return false;
+    if (locations.length > 0 && selectedLocationIds.size === 0) return false;
+    if (staffType === "clerk" && !enablePosAccess) return true;
+    if (autoGeneratePin) return true;
+    return !pinError && !pinChecking && /^\d{4}$/.test(pinCode);
+  };
+
   const canGoNext = () => {
-    switch (currentStep) {
-      case "type":
-        return !!staffType;
-      case "details":
-        // Name is always required
-        if (!firstName.trim() || !lastName.trim()) return false;
-        // Block while live email check is pending or has flagged a conflict
-        if (email.trim().length > 0 && (emailCheck.isChecking || emailCheck.hasConflict)) {
-          return false;
-        }
-        // Email is required for Clerk, optional for POS
-        if (staffType === "clerk") {
-          return !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        }
-        return true; // POS staff can proceed without email
-      case "role":
-        return !!selectedRoleCode;
-      case "locations":
-        // Allow proceeding if no locations exist yet (staff created without assignment)
-        return locations.length === 0 || selectedLocationIds.size > 0;
-      case "pos_config":
-        // Block if PIN conflict detected or still checking
-        if (!autoGeneratePin && (pinError || pinChecking)) return false;
-        // For POS staff, PIN is required
-        if (staffType === "pos") {
-          if (!autoGeneratePin && !pinCode.trim()) return false;
-          if (!autoGeneratePin && !/^\d{4}$/.test(pinCode)) return false;
-        }
-        // For Clerk staff, POS access is optional, but if enabled, PIN validation applies
-        if (staffType === "clerk" && enablePosAccess) {
-          if (!autoGeneratePin && !pinCode.trim()) return false;
-          if (!autoGeneratePin && !/^\d{4}$/.test(pinCode)) return false;
-        }
-        return true;
-      case "review":
-        return true;
-      default:
-        return false;
-    }
+    if (currentStep === "details") return detailsValid();
+    if (currentStep === "access") return accessValid();
+    return detailsValid() && accessValid();
   };
 
   const handleNext = () => {
@@ -311,6 +276,7 @@ export function InviteUserWizard({
   };
 
   const handleSubmit = async () => {
+    if (!detailsValid() || !accessValid()) return;
     const formData: InviteStaffFormData = {
       staff_type: staffType,
       first_name: firstName,
@@ -373,7 +339,10 @@ export function InviteUserWizard({
     phone.trim() !== "" ||
     pinCode.trim() !== "" ||
     hourlyRate.trim() !== "" ||
-    employmentType !== null;
+    employmentType !== null ||
+    staffType !== "clerk" ||
+    creationMethod !== "direct" ||
+    enablePosAccess;
 
   // Called by the footer Cancel button and the dialog close button.
   const handleRequestClose = () => {
@@ -394,42 +363,21 @@ export function InviteUserWizard({
     }
   };
 
-  // Filter roles based on staff type and current user's level
-  const filteredRoles = React.useMemo(() => {
-    let baseFilteredRoles = [];
-
-    if (staffType === "clerk") {
-      // Dashboard users: admin and manager level roles
-      baseFilteredRoles = roles.filter(
-        (r) => r.level_type === "admin" || r.level_type === "manager",
-      );
-    } else {
-      // POS staff: member level roles
-      baseFilteredRoles = roles.filter((r) => r.level_type === "member");
-    }
-
-    // Filter by current user's level - can only assign roles with level <= their own
-    if (currentUserLevel > 0) {
-      baseFilteredRoles = baseFilteredRoles.filter(
-        (r) => r.level <= currentUserLevel,
-      );
-    }
-
-    return baseFilteredRoles;
-  }, [roles, staffType, currentUserLevel]);
+  const filteredRoles = getAssignableRoles(roles, staffType, currentUserLevel);
 
   // Auto-select first role when staffType changes or filtered roles change
   React.useEffect(() => {
-    if (filteredRoles.length > 0) {
+    const assignableRoles = getAssignableRoles(roles, staffType, currentUserLevel);
+    if (assignableRoles.length > 0) {
       // Only auto-select if current selection is not in filtered list
-      const currentRoleInFiltered = filteredRoles.some(
+      const currentRoleInFiltered = assignableRoles.some(
         (r) => r.code === selectedRoleCode,
       );
       if (!currentRoleInFiltered) {
-        setSelectedRoleCode(filteredRoles[0].code);
+        setSelectedRoleCode(assignableRoles[0].code);
       }
     }
-  }, [filteredRoles, staffType]);
+  }, [roles, staffType, currentUserLevel, selectedRoleCode]);
 
   const selectedRole = filteredRoles.find((r) => r.code === selectedRoleCode);
   const isAdminRole = (selectedRole?.level ?? 0) >= 9;
@@ -437,10 +385,15 @@ export function InviteUserWizard({
   // Auto-select all locations when an owner/admin role is chosen
   React.useEffect(() => {
     if (isAdminRole && locations.length > 0) {
-      setSelectedLocationIds(new Set(locations.map((l) => l.id)));
-      if (!primaryLocationId) {
-        setPrimaryLocationId(locations[0].id);
-      }
+      const locationIds = locations.map((location) => location.id);
+      setSelectedLocationIds((current) =>
+        current.size === locationIds.length && locationIds.every((id) => current.has(id))
+          ? current
+          : new Set(locationIds),
+      );
+      setPrimaryLocationId((current) =>
+        current && locationIds.includes(current) ? current : locationIds[0],
+      );
     }
   }, [isAdminRole, locations]);
 
@@ -494,10 +447,13 @@ export function InviteUserWizard({
                 const isAccessible = index <= currentStepIndex;
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={step.key}
+                    disabled={!isAccessible}
+                    aria-current={isActive ? "step" : undefined}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors",
+                      "flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left transition-colors",
                       isActive && "bg-primary text-primary-foreground",
                       isCompleted && !isActive && "bg-primary/10 text-primary",
                       !isAccessible && "opacity-50 cursor-not-allowed",
@@ -505,7 +461,7 @@ export function InviteUserWizard({
                       !isActive &&
                       "hover:bg-muted cursor-pointer",
                     )}
-                    onClick={() => isAccessible && setCurrentStep(step.key)}
+                    onClick={() => setCurrentStep(step.key)}
                   >
                     <div
                       className={cn(
@@ -527,7 +483,7 @@ export function InviteUserWizard({
                       )}
                     </div>
                     <span className="text-sm font-medium">{step.label}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -536,28 +492,21 @@ export function InviteUserWizard({
           {/* Main Content */}
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <DialogHeader className="shrink-0 border-b-0 px-4 pb-4 pt-5 pr-14 text-left sm:px-6">
+              <span className="text-xs font-medium text-muted-foreground">
+                Step {currentStepIndex + 1} of {STEPS.length}
+              </span>
               <DialogTitle className="text-[1.0625rem] font-semibold">
-                {currentStep === "type" && "Choose staff type"}
                 {currentStep === "details" &&
-                  `Add ${staffType === "clerk" ? "dashboard user" : "POS staff"}`}
-                {currentStep === "role" &&
-                  `Assign ${firstName || "user"} a role`}
-                {currentStep === "locations" && "Assign to locations"}
-                {currentStep === "pos_config" && "POS configuration"}
+                  "Add staff member"}
+                {currentStep === "access" && "Access & locations"}
                 {currentStep === "review" &&
-                  `Review and ${staffType === "clerk" ? "send invite" : "create staff"}`}
+                  `Review and ${staffType === "clerk" && creationMethod === "invitation" ? "send invite" : "create staff"}`}
               </DialogTitle>
               <DialogDescription>
-                {currentStep === "type" &&
-                  "Select whether this person needs dashboard access or POS-only access."}
                 {currentStep === "details" &&
-                  "Enter the basic information for the new staff member."}
-                {currentStep === "role" &&
-                  "A team member's role determines what they can see and do."}
-                {currentStep === "locations" &&
-                  "Select the locations where this team member will have access."}
-                {currentStep === "pos_config" &&
-                  "Configure PIN and employment details for POS access."}
+                  "Choose how they sign in and enter their contact details."}
+                {currentStep === "access" &&
+                  "Set their role, locations, and POS credentials before saving."}
                 {currentStep === "review" &&
                   "Review all details before proceeding."}
               </DialogDescription>
@@ -575,8 +524,8 @@ export function InviteUserWizard({
                 /* Field rounding rides on the wrapper so the shared
                    Input/Select primitives stay untouched elsewhere. */
                 <div className={cn("py-6 space-y-6", roundedFields)}>
-                  {/* Step 0: Staff Type Selection */}
-                  {currentStep === "type" && (
+                  {/* Details: account type and contact information. */}
+                  {currentStep === "details" && (
                     <div className="space-y-4">
                       <div className="text-sm text-muted-foreground">
                         Choose the type of access this person needs.
@@ -615,8 +564,8 @@ export function InviteUserWizard({
                                 {/* <Badge variant="outline" className="text-xs">Recommended</Badge> */}
                               </div>
                               <div className="text-sm text-muted-foreground mt-1">
-                                Full access to dashboard with email invitation.
-                                Can manage settings, view reports, and use POS.
+                                Dashboard access for managers and admins. POS
+                                access can be added in the next step.
                               </div>
                             </label>
                           </div>
@@ -647,9 +596,8 @@ export function InviteUserWizard({
                                 </span>
                               </div>
                               <div className="text-sm text-muted-foreground mt-1">
-                                PIN-based access to POS only. No email or
-                                dashboard access. Perfect for cashiers and shift
-                                workers.
+                                PIN-based POS access without dashboard access.
+                                Email is optional.
                               </div>
                             </label>
                           </div>
@@ -658,9 +606,9 @@ export function InviteUserWizard({
                     </div>
                   )}
 
-                  {/* Step 1: Details */}
                   {currentStep === "details" && (
                     <div className="space-y-6">
+                      <h3 className="text-base font-semibold">Account & contact</h3>
                       {/* Creation Method Selection - Only for Clerk users */}
                       {staffType === "clerk" && (
                         <>
@@ -803,6 +751,9 @@ export function InviteUserWizard({
                             {emailCheck.message}
                           </p>
                         )}
+                        {email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && (
+                          <p className="text-xs text-destructive">Enter a valid email address.</p>
+                        )}
                         {emailCheck.isAvailable && (
                           <p className="text-xs text-emerald-600">
                             Email is available.
@@ -810,7 +761,7 @@ export function InviteUserWizard({
                         )}
                         {staffType === "clerk" && !emailCheck.hasConflict && !emailCheck.isAvailable && !emailCheck.isChecking && (
                           <p className="text-xs text-muted-foreground">
-                            An invitation will be sent to this email address.
+                            This email will be used for dashboard access.
                           </p>
                         )}
                       </div>
@@ -832,10 +783,11 @@ export function InviteUserWizard({
                     </div>
                   )}
 
-                  {/* Step 2: Assign Role */}
+                  {/* Access: role, locations, and POS setup. */}
                   {/* TODO: Might drop some roles here and keep only 5 Main Ones  */}
-                  {currentStep === "role" && (
+                  {currentStep === "access" && (
                     <div className="space-y-4">
+                      <h3 className="text-base font-semibold">Role</h3>
                       <div className="text-sm text-muted-foreground">
                         Select a role that matches the permissions this user
                         needs.
@@ -847,13 +799,8 @@ export function InviteUserWizard({
                           <div className="flex items-start gap-2">
                             <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                             <p className="text-xs text-muted-foreground">
-                              You can only assign roles up to your permission
-                              level{" "}
-                              <strong>
-                                (Level {currentUserLevel}:{" "}
-                                {currentUserRole.name})
-                              </strong>
-                              . Higher-level roles are filtered from this list.
+                              As a <strong>{currentUserRole.name}</strong>, you can only
+                              assign roles with the same or less access than yours.
                             </p>
                           </div>
                         </div>
@@ -884,38 +831,32 @@ export function InviteUserWizard({
                                 htmlFor={role.code}
                                 className="flex-1 cursor-pointer"
                               >
-                                <div className="font-medium">
-                                  {role.name}{" "}
-                                  <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5">
-                                    {role.code}
-                                  </Badge>
-                                </div>
+                                <div className="font-medium">{role.name}</div>
                                 <div className="text-sm text-muted-foreground mt-1">
-                                  {role.description ||
-                                    "No description available"}
+                                  {role.description?.trim() ||
+                                    (role.level_type === "member"
+                                      ? "Works on the POS at assigned locations."
+                                      : "Can use the dashboard at assigned locations.")}
                                 </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5">
-                                    Level {role.level}
-                                  </Badge>
-                                  <Badge
-                                    variant="secondary"
-                                    className="rounded-full text-xs font-medium px-2.5 py-0.5"
-                                  >
-                                    {role.level_type}
-                                  </Badge>
+                                <div className="mt-2 text-xs font-medium text-muted-foreground">
+                                  {role.level_type === "member" ? "POS access" : "Dashboard access"}
                                 </div>
                               </label>
                             </div>
                           ))}
                         </div>
                       </RadioGroup>
+                      {filteredRoles.length === 0 && (
+                        <p role="alert" className="text-sm text-destructive">
+                          No roles are available to assign. Ask an owner or admin to review role access.
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  {/* Step 3: Assign Locations */}
-                  {currentStep === "locations" && (
+                  {currentStep === "access" && (
                     <div className="space-y-4">
+                      <h3 className="text-base font-semibold">Locations</h3>
                       {isAdminRole ? (
                         /* ── Admin / Owner: auto-assigned, show info banner ── */
                         <div className="rounded-xl bg-muted/60 p-4">
@@ -1023,9 +964,9 @@ export function InviteUserWizard({
                     </div>
                   )}
 
-                  {/* Step 4: POS Configuration */}
-                  {currentStep === "pos_config" && (
+                  {currentStep === "access" && (
                     <div className="space-y-6">
+                      <h3 className="text-base font-semibold">POS & employment</h3>
                       {staffType === "clerk" && (
                         <>
                           {/* Enable POS Access Toggle for Clerk */}
@@ -1244,7 +1185,7 @@ export function InviteUserWizard({
                       {/* Role */}
                       <div>
                         <div className="text-sm font-medium mb-2">
-                          {staffType === "clerk" ? "Inviting" : "Creating"} as{" "}
+                          {staffType === "clerk" && creationMethod === "invitation" ? "Inviting" : "Creating"} as{" "}
                           {selectedRole?.name}
                         </div>
                         <div className="text-sm text-muted-foreground">

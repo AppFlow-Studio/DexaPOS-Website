@@ -1,9 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Banknote, TrendingUp, AlertTriangle, Layers, CreditCard } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { usePlatformSettlementBatches } from '@/lib/queries/use-platform-analytics'
 import { BatchReconciliationSection } from '@/app/manage/transactions/components/BatchReconciliationSection'
 import { GetAdminBatchPayments } from '@/app/manage/actions/admin-merchant/batch-payments'
@@ -64,7 +66,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
         [merchantId]
     )
     const { data: result, isLoading } = usePlatformSettlementBatches(summaryFilters)
-    const batches = result?.data ?? []
+    const batches = useMemo(() => result?.data ?? [], [result?.data])
 
     const totals = useMemo(() => {
         const acc = { count: batches.length, gross: 0, net: 0, txns: 0, discrepancies: 0 }
@@ -92,15 +94,17 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
         },
         {
             icon: TrendingUp,
-            label: 'Net deposit',
+            label: 'Batch net total',
             value: formatCurrency(totals.net),
-            meta: 'Funded to bank',
+            meta: 'Across visible batches; not bank deposits',
         },
         {
             icon: AlertTriangle,
             label: 'Discrepancies',
             value: totals.discrepancies.toLocaleString(),
-            meta: totals.discrepancies > 0 ? 'Review flagged batches' : 'All matched',
+            meta: totals.discrepancies > 0
+                ? 'Review flagged batches'
+                : totals.count > 0 ? 'No mismatches in visible batches' : 'No batches yet',
             tone: totals.discrepancies > 0 ? 'warn' : 'good',
         },
     ]
@@ -119,21 +123,31 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
 
     return (
         <div className="space-y-5">
-            <SectionHead
-                title="TSYS Settlements"
-                sub="Acquiring batches from TSYS alongside our local reconciliation."
-            />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <SectionHead
+                    title="Batches & Deposits"
+                    sub="Match POS batches to their terminals, then compare processor records and bank deposits."
+                />
+                <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={`/manage/merchants/${merchantId}?tab=devices`}>Payment devices</Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={`/manage/merchants/${merchantId}?tab=audit&category=settlement`}>Settlement activity</Link>
+                    </Button>
+                </div>
+            </div>
 
             <KpiStrip cells={cells} loading={isLoading} />
 
             <Tabs defaultValue="ours">
                 <div className="overflow-x-auto overflow-y-hidden">
                 <TabsList className="inline-flex w-max">
-                    <TabsTrigger value="ours">Our batches</TabsTrigger>
-                    <TabsTrigger value="payments">Payments</TabsTrigger>
-                    <TabsTrigger value="luqra">TSYS transactions</TabsTrigger>
-                    <TabsTrigger value="batches">TSYS batches</TabsTrigger>
-                    <TabsTrigger value="deposits">Deposits</TabsTrigger>
+                    <TabsTrigger value="ours">POS batches</TabsTrigger>
+                    <TabsTrigger value="payments">Card payments</TabsTrigger>
+                    <TabsTrigger value="luqra">Processor transactions</TabsTrigger>
+                    <TabsTrigger value="batches">Processor batches</TabsTrigger>
+                    <TabsTrigger value="deposits">Bank deposits</TabsTrigger>
                 </TabsList>
                 </div>
 
@@ -163,6 +177,9 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 </TabsContent>
 
                 <TabsContent value="batches" className="pt-4">
+                    <p className="mb-3 text-sm text-muted-foreground">
+                        Processor batches are grouped by merchant ID and location. This view does not currently identify the linked payment terminal; use POS batches for terminal-level reconciliation.
+                    </p>
                     {locations.length === 0 ? (
                         <Empty
                             icon={CreditCard}
