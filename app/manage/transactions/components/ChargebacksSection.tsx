@@ -1,9 +1,10 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { AlertTriangle, RefreshCcwDot } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,19 +31,23 @@ import {
   type PlatformChargebackStatus,
 } from '@/app/manage/actions/hq-platform/transactions-shared'
 import { usePlatformChargebacks } from '@/lib/queries/use-platform-analytics'
+import { chargebackDetailHref, paymentDetailHref } from '../routes'
 import {
-  CardField,
-  CardFields,
   CardGridEmpty,
   FilterDate,
   FilterSelect,
+  LedgerToolbar,
   LoadError,
-  RecordCard,
   RecordCardSkeletons,
+  RecordLinkCard,
+  RowLink,
   TableEmptyRow,
 } from './ledger-primitives'
 
-const PAGE_SIZE = 25
+// 10 a page, so the table sits in the page with no scroll of its own.
+const PAGE_SIZE = 10
+/** A column the tablet table leaves out; it joins at `xl`. */
+const XL_ONLY = 'hidden xl:table-cell'
 const CARD_NETWORK_OPTIONS = ['visa', 'mastercard', 'amex', 'discover', 'other'] as const
 const OPEN_CHARGEBACK_STATUSES = new Set(['notified', 'under_review', 'defended'])
 
@@ -54,28 +59,28 @@ const CARD_NETWORK_LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number): string {
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function formatDateTime(value?: string): string {
+export function formatDateTime(value?: string): string {
   if (!value) return '—'
   return format(new Date(value), 'MMM d, yyyy h:mm a')
 }
 
-function formatDate(value?: string): string {
+export function formatDate(value?: string): string {
   if (!value) return '—'
   return format(new Date(value), 'MMM d, yyyy')
 }
 
-function formatStatusLabel(value: string): string {
+export function formatStatusLabel(value: string): string {
   return value
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
 }
 
-function formatNetwork(network?: string): string {
+export function formatNetwork(network?: string): string {
   if (!network) return '—'
   return CARD_NETWORK_LABELS[network.toLowerCase()] ?? network.toUpperCase()
 }
@@ -89,7 +94,7 @@ function pluralize(count: number, singular: string, plural: string): string {
  * (UI-DESIGN-SYSTEM §3.5 use 4, HQ-2): the glyph takes red or amber, the
  * words say it too. Spans only, so it can sit inside a card field's <p>.
  */
-function renderDeadline(deadline?: string, status?: string) {
+export function renderDeadline(deadline?: string, status?: string) {
   if (!deadline) {
     return <span className="text-muted-foreground">—</span>
   }
@@ -138,24 +143,19 @@ function DetailLine({ label, children }: { label: string; children: React.ReactN
 }
 
 /**
- * The expanded chargeback. The table row and the phone card render this same
- * component (§5.3), so the two views cannot drift apart. The tiles take the
- * card fill: they sit on a selected row or a selected (muted) card.
- * `withPhoneFacts` shows, on phones only, the reason, network, reason code and
- * defendable flag that the slimmed phone card leaves out.
+ * A chargeback's original payment, defense documents and resolution, as three
+ * tiles. Rendered on the chargeback detail page.
  */
-function ChargebackDetail({
+export function ChargebackDetail({
   row,
   className,
-  withPhoneFacts = false,
 }: {
   row: PlatformChargebackRow
   className?: string
-  withPhoneFacts?: boolean
 }) {
   return (
-    <div className={cn('grid min-w-0 gap-3 lg:grid-cols-3', className)}>
-      <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
+    <div className={cn('grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-3', className)}>
+      <div className="min-w-0 space-y-2 rounded-2xl bg-muted/45 p-4">
         <h4 className="text-sm font-semibold">Original payment</h4>
         {row.original_payment ? (
           <div className="space-y-1 text-sm">
@@ -176,15 +176,17 @@ function ChargebackDetail({
         ) : (
           <p className="text-sm text-muted-foreground">Original payment details unavailable.</p>
         )}
-        <Link
-          href={`/manage/transactions?search=${encodeURIComponent(row.original_payment_id)}`}
-          className="inline-block text-xs font-medium underline-offset-2 hover:underline"
-        >
-          View in payments
-        </Link>
+        {row.original_payment_id && (
+          <Link
+            href={paymentDetailHref(row.original_payment_id)}
+            className="inline-block text-xs font-medium underline-offset-2 hover:underline"
+          >
+            Open payment
+          </Link>
+        )}
       </div>
 
-      <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
+      <div className="min-w-0 space-y-2 rounded-2xl bg-muted/45 p-4">
         <h4 className="text-sm font-semibold">Defense documents</h4>
         {row.defense_documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">No defense documents attached.</p>
@@ -216,19 +218,9 @@ function ChargebackDetail({
         )}
       </div>
 
-      <div className="min-w-0 space-y-2 rounded-2xl bg-card p-4">
+      <div className="min-w-0 space-y-2 rounded-2xl bg-muted/45 p-4">
         <h4 className="text-sm font-semibold">Resolution</h4>
         <div className="space-y-1 text-sm">
-          {withPhoneFacts && (
-            <div className="space-y-1 sm:hidden">
-              <DetailLine label="Reason">{row.reason_description || '—'}</DetailLine>
-              <DetailLine label="Network">{formatNetwork(row.card_network)}</DetailLine>
-              <DetailLine label="Reason code">
-                <span className="font-mono text-xs">{row.reason_code}</span>
-              </DetailLine>
-              <DetailLine label="Defendable">{row.defendable ? 'Yes' : 'No'}</DetailLine>
-            </div>
-          )}
           <DetailLine label="PSP reference">{row.dispute_psp_reference || '—'}</DetailLine>
           <DetailLine label="Defense submitted">{formatDateTime(row.defense_submitted_at)}</DetailLine>
           <DetailLine label="Resolved">{formatDateTime(row.resolved_at)}</DetailLine>
@@ -242,16 +234,21 @@ function ChargebackDetail({
   )
 }
 
+/**
+ * The chargeback list. Each chargeback opens its own page; `from` tells that
+ * page where "Back" goes (the transactions tab by default).
+ */
 export function ChargebacksSection({
   scopedMerchantId,
-}: { scopedMerchantId?: string } = {}) {
+  from,
+}: { scopedMerchantId?: string; from?: 'disputes' } = {}) {
+  const router = useRouter()
   const [merchantId, setMerchantId] = useState(scopedMerchantId ?? 'all')
   const [status, setStatus] = useState<'all' | PlatformChargebackStatus>('all')
   const [cardNetwork, setCardNetwork] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [merchants, setMerchants] = useState<PlatformMerchant[]>([])
   const [loadingMerchants, setLoadingMerchants] = useState(true)
 
@@ -290,7 +287,6 @@ export function ChargebacksSection({
 
   useEffect(() => {
     setPage(1)
-    setExpandedId(null)
   }, [merchantId, status, cardNetwork, dateFrom, dateTo])
 
   const {
@@ -349,13 +345,12 @@ export function ChargebacksSection({
     setDateFrom('')
     setDateTo('')
     setPage(1)
-    setExpandedId(null)
   }
 
-  const toggleExpanded = (id: string) =>
-    setExpandedId((current) => (current === id ? null : id))
-
-  const columnCount = scopedMerchantId ? 9 : 10
+  // Per-column visibility, in table order, shared by the loading rows.
+  const columnClasses = scopedMerchantId
+    ? [XL_ONLY, '', XL_ONLY, '', XL_ONLY, '', XL_ONLY, '', '']
+    : [XL_ONLY, '', '', XL_ONLY, '', XL_ONLY, '', XL_ONLY, '', '']
   const showLoading = isLoading || isFetching
   const showEmpty = !showLoading && rows.length === 0
 
@@ -383,7 +378,7 @@ export function ChargebacksSection({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <LedgerToolbar onRefresh={() => void refetch()} refreshing={isFetching}>
         {!scopedMerchantId && (
           <FilterSelect
             value={merchantId}
@@ -415,19 +410,7 @@ export function ChargebacksSection({
             Clear filters
           </Button>
         )}
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 px-4"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCcwDot className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      </LedgerToolbar>
 
       {errorCode && (
         <LoadError
@@ -438,29 +421,32 @@ export function ChargebacksSection({
       )}
 
       <div>
+        {/* A table from `md`; the ID, reason code, network and defendable
+            columns join at `xl`. Every row opens the chargeback's own page. */}
         <Table
           variant="data"
-          containerClassName="hidden 2xl:block"
-          className={scopedMerchantId ? 'min-w-[1000px]' : 'min-w-[1120px]'}
+          bounded={false}
+          containerClassName="hidden md:block"
+          className={scopedMerchantId ? 'md:min-w-[620px] xl:min-w-[1000px]' : 'md:min-w-[720px] xl:min-w-[1120px]'}
         >
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <span className="inline-flex items-center gap-1">Chargeback ID <InfoIcon tip="The ID of the original payment being disputed. Click to view that transaction in the payments table." side="bottom" /></span>
+              <TableHead className={XL_ONLY}>
+                <span className="inline-flex items-center gap-1">Chargeback ID <InfoIcon tip="The ID of the original payment being disputed." side="bottom" /></span>
               </TableHead>
               {!scopedMerchantId && <TableHead>Merchant</TableHead>}
               <TableHead className="text-right tabular-nums">
                 <span className="inline-flex items-center justify-end gap-1">Amount <InfoIcon tip="The amount being disputed by the cardholder." side="bottom" /></span>
               </TableHead>
-              <TableHead>
+              <TableHead className={XL_ONLY}>
                 <span className="inline-flex items-center gap-1">Reason code <InfoIcon tip="The card network's standardized code for the dispute type (e.g. 4853 = Cardholder Dispute, 4837 = No Cardholder Authorization)." side="bottom" /></span>
               </TableHead>
               <TableHead>Reason</TableHead>
-              <TableHead>Network</TableHead>
+              <TableHead className={XL_ONLY}>Network</TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Notified: bank has filed the dispute. Under Review: being investigated. Defended: merchant submitted evidence. Won: merchant kept funds. Lost: funds reversed to cardholder." side="bottom" /></span>
               </TableHead>
-              <TableHead>
+              <TableHead className={XL_ONLY}>
                 <span className="inline-flex items-center gap-1">Defendable <InfoIcon tip="Whether there is enough evidence (receipt, EMV data, cardholder signature) to submit a defense before the deadline." side="bottom" /></span>
               </TableHead>
               <TableHead>
@@ -473,8 +459,8 @@ export function ChargebacksSection({
             {showLoading ? (
               Array.from({ length: 6 }).map((_, rowIndex) => (
                 <TableRow key={`chargeback-loading-${rowIndex}`}>
-                  {Array.from({ length: columnCount }).map((__, cellIndex) => (
-                    <TableCell key={`chargeback-loading-${rowIndex}-${cellIndex}`}>
+                  {columnClasses.map((cellClass, cellIndex) => (
+                    <TableCell key={`chargeback-loading-${rowIndex}-${cellIndex}`} className={cellClass}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
                   ))}
@@ -482,72 +468,56 @@ export function ChargebacksSection({
               ))
             ) : showEmpty ? (
               <TableEmptyRow
-                colSpan={columnCount}
+                colSpan={columnClasses.length}
                 title="No chargebacks match these filters"
                 hint={filtersOffDefault ? 'Clear the filters to widen the results.' : undefined}
               />
             ) : (
               rows.map((row) => {
-                const isExpanded = expandedId === row.id
-
+                const href = chargebackDetailHref(row.id, from)
                 return (
-                  <Fragment key={row.id}>
-                    <TableRow
-                      className="cursor-pointer"
-                      data-state={isExpanded ? 'selected' : undefined}
-                      aria-expanded={isExpanded}
-                      onClick={() => toggleExpanded(row.id)}
+                  <TableRow key={row.id} className="cursor-pointer" onClick={() => router.push(href)}>
+                    <TableCell
+                      className={`${XL_ONLY} max-w-[10rem] truncate font-mono text-xs`}
+                      title={row.original_payment_id}
                     >
-                      <TableCell className="max-w-[10rem] truncate font-mono text-xs">
-                        <Link
-                          href={`/manage/transactions?search=${encodeURIComponent(row.original_payment_id)}`}
-                          className="underline-offset-2 hover:underline"
-                          title={row.original_payment_id}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {row.original_payment_id}
-                        </Link>
+                      {row.original_payment_id}
+                    </TableCell>
+                    {!scopedMerchantId && (
+                      <TableCell className="min-w-[8rem] whitespace-normal">
+                        {row.merchant_name || row.merchant_id}
                       </TableCell>
-                      {!scopedMerchantId && (
-                        <TableCell className="min-w-[8rem] whitespace-normal">
-                          {row.merchant_name || row.merchant_id}
-                        </TableCell>
-                      )}
-                      <TableCell className="text-right tabular-nums">{formatCurrency(row.amount)}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.reason_code}</TableCell>
-                      <TableCell className="max-w-[14rem] truncate" title={row.reason_description || undefined}>
-                        {row.reason_description || '—'}
-                      </TableCell>
-                      <TableCell>{formatNetwork(row.card_network)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{formatStatusLabel(row.status)}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{row.defendable ? 'Yes' : 'No'}</Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        {renderDeadline(row.defense_deadline, row.status)}
-                      </TableCell>
-                      <TableCell className="whitespace-normal text-xs text-muted-foreground">
-                        {formatDateTime(row.received_at)}
-                      </TableCell>
-                    </TableRow>
-
-                    {isExpanded && (
-                      <TableRow data-state="selected">
-                        <TableCell colSpan={columnCount} className="whitespace-normal">
-                          <ChargebackDetail row={row} />
-                        </TableCell>
-                      </TableRow>
                     )}
-                  </Fragment>
+                    <TableCell className="text-right tabular-nums">
+                      <RowLink href={href}>{formatCurrency(row.amount)}</RowLink>
+                    </TableCell>
+                    <TableCell className={`${XL_ONLY} font-mono text-xs`}>{row.reason_code}</TableCell>
+                    <TableCell className="max-w-[14rem] truncate" title={row.reason_description || undefined}>
+                      {row.reason_description || '—'}
+                    </TableCell>
+                    <TableCell className={XL_ONLY}>{formatNetwork(row.card_network)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{formatStatusLabel(row.status)}</Badge>
+                    </TableCell>
+                    <TableCell className={XL_ONLY}>
+                      <Badge variant="outline">{row.defendable ? 'Yes' : 'No'}</Badge>
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      {renderDeadline(row.defense_deadline, row.status)}
+                    </TableCell>
+                    <TableCell className="whitespace-normal text-xs text-muted-foreground">
+                      {formatDateTime(row.received_at)}
+                    </TableCell>
+                  </TableRow>
                 )
               })
             )}
           </TableBody>
         </Table>
 
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+        {/* Phones: amount, merchant, status and the deadline (with its alarm);
+            the rest is on the chargeback's page. */}
+        <div className="grid min-w-0 grid-cols-1 gap-3 md:hidden">
           {showLoading ? (
             <RecordCardSkeletons />
           ) : showEmpty ? (
@@ -556,58 +526,16 @@ export function ChargebacksSection({
               hint={filtersOffDefault ? 'Clear the filters to widen the results.' : undefined}
             />
           ) : (
-            rows.map((row) => {
-              const isExpanded = expandedId === row.id
-              return (
-                <RecordCard
-                  key={row.id}
-                  selected={isExpanded}
-                  className={isExpanded ? 'sm:col-span-2' : undefined}
-                >
-                  <button
-                    type="button"
-                    className="w-full min-w-0 text-left"
-                    aria-expanded={isExpanded}
-                    onClick={() => toggleExpanded(row.id)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-base font-medium tabular-nums">{formatCurrency(row.amount)}</p>
-                      <p className="shrink-0 text-sm text-muted-foreground">{formatStatusLabel(row.status)}</p>
-                    </div>
-                    {/* Full card width, and wraps rather than truncates, so the
-                        status beside the amount never cuts the name short. */}
-                    {!scopedMerchantId && (
-                      <p className="break-words text-sm text-muted-foreground">
-                        {row.merchant_name || row.merchant_id}
-                      </p>
-                    )}
-                    {/* Phones keep only amount, merchant, deadline and received;
-                        the rest moves to the expanded view (withPhoneFacts). */}
-                    <CardFields>
-                      <CardField label="Chargeback ID" value={row.original_payment_id} mono className="hidden sm:block" />
-                      <CardField label="Reason code" value={row.reason_code} mono className="hidden sm:block" />
-                      <CardField label="Reason" value={row.reason_description || '—'} className="hidden sm:block" />
-                      <CardField label="Network" value={formatNetwork(row.card_network)} className="hidden sm:block" />
-                      <CardField label="Defendable" value={row.defendable ? 'Yes' : 'No'} className="hidden sm:block" />
-                      <CardField
-                        label="Defense deadline"
-                        value={renderDeadline(row.defense_deadline, row.status)}
-                      />
-                      <CardField
-                        label="Received"
-                        value={
-                          <>
-                            <span className="sm:hidden">{formatDate(row.received_at)}</span>
-                            <span className="hidden sm:inline">{formatDateTime(row.received_at)}</span>
-                          </>
-                        }
-                      />
-                    </CardFields>
-                  </button>
-                  {isExpanded && <ChargebackDetail row={row} className="mt-4" withPhoneFacts />}
-                </RecordCard>
-              )
-            })
+            rows.map((row) => (
+              <RecordLinkCard
+                key={row.id}
+                href={chargebackDetailHref(row.id, from)}
+                title={scopedMerchantId ? formatStatusLabel(row.status) : row.merchant_name || row.merchant_id}
+                figure={formatCurrency(row.amount)}
+                subtitle={scopedMerchantId ? `Received ${formatDate(row.received_at)}` : formatStatusLabel(row.status)}
+                status={renderDeadline(row.defense_deadline, row.status)}
+              />
+            ))
           )}
         </div>
 

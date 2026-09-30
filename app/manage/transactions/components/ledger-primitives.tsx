@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import { RefreshCcwDot } from 'lucide-react'
 import { DatePopover } from '@/components/ui/date-popover'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +45,99 @@ export function RecordCard({
         >
             {children}
         </div>
+    )
+}
+
+/**
+ * A phone record card that opens the record's detail page (or, with
+ * `onSelect`, toggles it open in place). The whole card is one control, so it
+ * holds no other links or buttons, and it carries only the few facts needed to
+ * pick the record out; the rest lives on the detail page.
+ */
+export function RecordLinkCard({
+    href,
+    onSelect,
+    selected = false,
+    title,
+    figure,
+    subtitle,
+    status,
+}: {
+    /** Where the card goes. Pass this or `onSelect`. */
+    href?: string
+    /** Makes the card a toggle button instead, for a host that expands in place. */
+    onSelect?: () => void
+    selected?: boolean
+    /** Identity line, e.g. merchant or action. */
+    title: React.ReactNode
+    /** Right-aligned key figure, e.g. an amount. */
+    figure?: React.ReactNode
+    /** One muted line beneath: who / when. */
+    subtitle?: React.ReactNode
+    /** Right-aligned beneath the figure: status in words, or an alarm. */
+    status?: React.ReactNode
+}) {
+    const className = cn(
+        'block w-full min-w-0 rounded-2xl bg-muted/45 p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        selected && 'bg-muted ring-1 ring-border'
+    )
+    // Spans only: a <button> may hold phrasing content alone.
+    const body = (
+        <>
+            <span className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate font-medium">{title}</span>
+                {figure !== undefined && (
+                    <span className="shrink-0 font-medium tabular-nums">{figure}</span>
+                )}
+            </span>
+            {(subtitle !== undefined || status !== undefined) && (
+                <span className="mt-1 flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                    <span className="min-w-0 truncate tabular-nums">{subtitle}</span>
+                    {status !== undefined && <span className="shrink-0 text-right">{status}</span>}
+                </span>
+            )}
+        </>
+    )
+
+    if (href) {
+        return (
+            <Link href={href} className={className}>
+                {body}
+            </Link>
+        )
+    }
+    return (
+        <button type="button" aria-pressed={selected} onClick={onSelect} className={className}>
+            {body}
+        </button>
+    )
+}
+
+/**
+ * The keyboard-reachable link in a clickable table row's first cell. The row
+ * itself navigates on click; this gives it a focus stop and a real href, and
+ * stops the click so the row does not push the same route a second time.
+ */
+export function RowLink({
+    href,
+    children,
+    className,
+    title,
+}: {
+    href: string
+    children: React.ReactNode
+    className?: string
+    title?: string
+}) {
+    return (
+        <Link
+            href={href}
+            title={title}
+            onClick={(event) => event.stopPropagation()}
+            className={cn('underline-offset-2 hover:underline focus-visible:underline', className)}
+        >
+            {children}
+        </Link>
     )
 }
 
@@ -159,6 +254,38 @@ export function LoadError({
                     Retry
                 </Button>
             )}
+        </div>
+    )
+}
+
+/**
+ * A tab's toolbar: the filters wrap on the left while Refresh stays pinned to
+ * the top-right corner, so it never drops onto a line of its own. On phones
+ * Refresh is icon-only to leave the filters their width.
+ */
+export function LedgerToolbar({
+    children,
+    onRefresh,
+    refreshing = false,
+}: {
+    children: React.ReactNode
+    onRefresh: () => void
+    refreshing?: boolean
+}) {
+    return (
+        <div className="flex min-w-0 items-start gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div>
+            <Button
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 px-3 sm:px-4"
+                onClick={onRefresh}
+                disabled={refreshing}
+                aria-label="Refresh"
+            >
+                <RefreshCcwDot className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+                <span className="hidden sm:inline">Refresh</span>
+            </Button>
         </div>
     )
 }

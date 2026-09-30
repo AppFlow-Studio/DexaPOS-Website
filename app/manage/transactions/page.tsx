@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -40,6 +40,7 @@ import {
     ArrowUpDown,
     ArrowUpRight,
     Banknote,
+    Check,
     Columns3,
     CreditCard,
     Download,
@@ -48,6 +49,7 @@ import {
     RefreshCcwDot,
     X,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { usePlatformSalesTrend, usePlatformTransactionSummary, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
 import {
     getPlatformTransactionsExport,
@@ -65,13 +67,19 @@ import type { PaginationMeta } from '@/types/pagination'
 import { AnalyticsTooltip, CHART_MARGIN } from '@/app/manage/components/analytics-primitives'
 import { TransactionFilterDialog } from './components/TransactionFilterDialog'
 import { TransactionSearchBar, highlightText } from './components/TransactionSearchBar'
-import { TransactionDetailInlinePanel } from './components/TransactionDetailInlinePanel'
 import { BatchReconciliationSection } from './components/BatchReconciliationSection'
 import { MerchantBreakdownSection, formatBreakdownRangeLabel } from './components/MerchantBreakdownSection'
 import { ChargebacksSection } from './components/ChargebacksSection'
 import { AuditLogSection } from './components/AuditLogSection'
 import { ConnectivityStrip } from './components/ConnectivityStrip'
-import { PaymentsLedger } from './components/PaymentsLedger'
+import { isTransactionTab, paymentDetailHref, type TransactionTab } from './routes'
+import {
+    batchLabel,
+    formatMoney,
+    isCardPayment,
+    netFeeLabel,
+    tsysMatchLabel,
+} from './components/payment-format'
 import { TransactionsPageSkeleton } from './components/TransactionsPageSkeleton'
 import {
     CardField,
@@ -80,6 +88,7 @@ import {
     LoadError,
     RecordCard,
     RecordCardSkeletons,
+    RowLink,
     TableEmptyRow,
 } from './components/ledger-primitives'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -273,6 +282,29 @@ function isCardMethod(method: string): boolean {
     return method === 'card' || method.startsWith('card_')
 }
 
+/**
+ * The Settlement view's words for one row, from its attached ledger row. Only
+ * card payments settle, carry fees or match TSYS, so anything else — or a row
+ * whose ledger lookup failed — reads "—" rather than a misleading "Pending".
+ */
+function settlementFacts(tx: PlatformTransaction) {
+    const row = tx.ledger
+    if (!row || !isCardPayment(row)) {
+        return { netFee: null, netDeposit: null, batch: null, settled: null, tsysMatch: null }
+    }
+    return {
+        netFee: row.net_fee > 0 ? netFeeLabel(row) : null,
+        netDeposit: formatMoney(row.net_deposit),
+        batch: batchLabel(row),
+        settled: row.is_settled ? 'Settled' : 'Pending',
+        tsysMatch: tsysMatchLabel(row),
+    }
+}
+
+function orDash(value: string | null) {
+    return value ?? <span className="text-muted-foreground">—</span>
+}
+
 function getCustomerLabel(customerName?: string): string {
     if (!customerName) return 'Walk-in'
     const trimmed = customerName.trim()
@@ -366,25 +398,74 @@ type TransactionColumnKey =
     | 'tip'
     | 'discount'
     | 'total'
+    | 'netFee'
+    | 'netDeposit'
+    | 'batch'
+    | 'settled'
+    | 'tsysMatch'
     | 'payStatus'
     | 'staff'
     | 'date'
 
-const DEFAULT_COLUMN_VISIBILITY: Record<TransactionColumnKey, boolean> = {
-    order: true,
-    merchant: true,
-    customer: true,
-    method: true,
-    card: true,
-    entry: false,
-    subtotal: true,
-    tax: false,
-    tip: true,
-    discount: false,
-    total: true,
-    payStatus: true,
-    staff: false,
-    date: true,
+/**
+ * The ledger's two column presets. Sales is what was sold; Settlement is what
+ * the processor did with it (the old Payments ledger tab). A preset only picks
+ * the starting columns — the Columns menu still toggles any of them.
+ */
+type LedgerView = 'sales' | 'settlement'
+
+const LEDGER_VIEWS: { value: LedgerView; label: string }[] = [
+    { value: 'sales', label: 'Sales' },
+    { value: 'settlement', label: 'Settlement' },
+]
+
+const COLUMN_PRESETS: Record<LedgerView, Record<TransactionColumnKey, boolean>> = {
+    sales: {
+        order: true,
+        merchant: true,
+        customer: true,
+        method: true,
+        card: true,
+        entry: false,
+        subtotal: true,
+        tax: false,
+        tip: true,
+        discount: false,
+        total: true,
+        netFee: false,
+        netDeposit: false,
+        batch: false,
+        settled: false,
+        tsysMatch: false,
+        payStatus: true,
+        staff: false,
+        date: true,
+    },
+    settlement: {
+        order: true,
+        merchant: true,
+        customer: false,
+        method: false,
+        card: true,
+        entry: false,
+        subtotal: false,
+        tax: false,
+        tip: false,
+        discount: false,
+        total: true,
+        netFee: true,
+        netDeposit: true,
+        batch: true,
+        settled: true,
+        tsysMatch: true,
+        payStatus: true,
+        staff: false,
+        date: true,
+    },
+}
+
+function parseLedgerView(value: string | null): LedgerView {
+    return value === 'settlement' ? 'settlement' : 'sales'
 }
 
 const COLUMN_LABELS: Record<TransactionColumnKey, string> = {
@@ -399,6 +480,11 @@ const COLUMN_LABELS: Record<TransactionColumnKey, string> = {
     tip: 'Tip',
     discount: 'Discount',
     total: 'Total',
+    netFee: 'Net fee',
+    netDeposit: 'Net deposit',
+    batch: 'Batch',
+    settled: 'Settled',
+    tsysMatch: 'TSYS match',
     payStatus: 'Status',
     staff: 'Staff',
     date: 'Date',
@@ -416,6 +502,11 @@ const COLUMN_TOGGLE_ORDER: TransactionColumnKey[] = [
     'tip',
     'discount',
     'total',
+    'netFee',
+    'netDeposit',
+    'batch',
+    'settled',
+    'tsysMatch',
     'payStatus',
     'staff',
     'date',
@@ -436,6 +527,8 @@ const FILTER_PARAM_KEYS = [
     'dateFrom',
     'dateTo',
     'datePreset',
+    'unsettled',
+    'unmatched',
 ] as const
 
 type SummaryCardId =
@@ -461,12 +554,11 @@ const SUMMARY_DEFINITIONS: { id: SummaryCardId; title: string; tip: string }[] =
     { id: 'voided_returned', title: 'Voids & refunds', tip: 'Total count and dollar value of voided and refunded transactions. Voids cancel a transaction before settlement; refunds return money after capture. The void rate is the percentage of total transactions that were voided.' },
 ]
 
-const TABS = [
-    { value: 'payments', label: 'Payments ledger' },
+const TABS: { value: TransactionTab; label: string }[] = [
     { value: 'settlements', label: 'Settlements' },
     { value: 'disputes', label: 'Disputes' },
     { value: 'audit', label: 'Audit' },
-] as const
+]
 
 // ─── Inner page (needs useSearchParams) ─────────────────────────────────────
 
@@ -478,10 +570,21 @@ function TransactionsPageInner() {
     const [exportFormat, setExportFormat] = useState<ExportFormat | null>(null)
     const [isRefreshing, startRefreshTransition] = useTransition()
     const [isRefunding, startRefundTransition] = useTransition()
-    const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null)
     const [refundTarget, setRefundTarget] = useState<PlatformTransaction | null>(null)
-    const [columnVisibility, setColumnVisibility] = useState<Record<TransactionColumnKey, boolean>>(DEFAULT_COLUMN_VISIBILITY)
-    const [activeTab, setActiveTab] = useState<string>('settlements')
+    // The view is in `?view=` so it survives a reload and a shared link.
+    const ledgerView = parseLedgerView(searchParams.get('view'))
+    const [columnVisibility, setColumnVisibility] = useState<Record<TransactionColumnKey, boolean>>(
+        () => COLUMN_PRESETS[ledgerView]
+    )
+    // The tab lives in `?tab=` so a record's detail page can link back to it.
+    const tabParam = searchParams.get('tab')
+    const activeTab: TransactionTab = isTransactionTab(tabParam) ? tabParam : 'settlements'
+    const setActiveTab = (value: string) => {
+        if (!isTransactionTab(value) || value === activeTab) return
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tab', value)
+        router.replace(`?${params.toString()}`, { scroll: false })
+    }
     const tabRailRef = useRef<HTMLDivElement>(null)
     const tabRailPositioned = useRef(false)
 
@@ -514,6 +617,8 @@ function TransactionsPageInner() {
         maxAmount: searchParams.get('maxAmount') ? Number(searchParams.get('maxAmount')) : undefined,
         dateFrom: searchParams.get('dateFrom') ? `${searchParams.get('dateFrom')}T00:00:00` : undefined,
         dateTo: searchParams.get('dateTo') ? `${searchParams.get('dateTo')}T23:59:59` : undefined,
+        unsettledOnly: searchParams.get('unsettled') === '1' || undefined,
+        unmatchedOnly: searchParams.get('unmatched') === '1' || undefined,
         sortBy: normalizedSortBy,
         sortDir: normalizedSortDirection,
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -583,6 +688,25 @@ function TransactionsPageInner() {
     }
 
     // Clears what narrows the ledger; keeps the chosen sort.
+    /** Switching view resets the columns to that view's preset. */
+    const setLedgerView = (view: LedgerView) => {
+        if (view === ledgerView) return
+        setColumnVisibility(COLUMN_PRESETS[view])
+        updateUrlParams((params) => {
+            if (view === 'sales') params.delete('view')
+            else params.set('view', view)
+        })
+    }
+
+    /** "Unsettled only" / "Unmatched only": URL flags, so Clear filters and Back keep working. */
+    const toggleReconciliationFilter = (key: 'unsettled' | 'unmatched') => {
+        updateUrlParams((params) => {
+            if (params.get(key) === '1') params.delete(key)
+            else params.set(key, '1')
+            params.delete('page')
+        })
+    }
+
     const clearFilters = () => {
         setSearchValue('')
         updateUrlParams((params) => {
@@ -624,13 +748,6 @@ function TransactionsPageInner() {
         }
     }, [page, totalPages])
 
-    useEffect(() => {
-        if (!expandedTransactionId) return
-        if (!transactions.some((tx) => tx.id === expandedTransactionId)) {
-            setExpandedTransactionId(null)
-        }
-    }, [transactions, expandedTransactionId])
-
     // The section rail keeps the active tab in view (§13.2): scroll the rail
     // itself, clamped, and re-measure once it has a width.
     useEffect(() => {
@@ -669,9 +786,8 @@ function TransactionsPageInner() {
         setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
     }
 
-    const openTransactionDetails = (transactionId: string) => {
-        setExpandedTransactionId((current) => (current === transactionId ? null : transactionId))
-    }
+    /** Each transaction opens its own page; Back there returns to this ledger. */
+    const transactionHref = (transactionId: string) => paymentDetailHref(transactionId)
 
     const handleConfirmRefund = () => {
         if (!refundTarget) return
@@ -848,8 +964,12 @@ function TransactionsPageInner() {
     const searchQuery = filters.search ?? ''
     const isTableLoading = transactionsLoading || transactionsFetching
 
+    // The export RPC has no settlement filters: rather than export rows the
+    // reconciliation filters exclude, export is off while one is applied.
+    const exportBlocked = Boolean(filters.unsettledOnly || filters.unmatchedOnly)
+
     const handleExportRequest = async (formatType: ExportFormat) => {
-        if (isExporting) return
+        if (isExporting || exportBlocked) return
 
         setIsExporting(true)
         setExportFormat(formatType)
@@ -912,8 +1032,8 @@ function TransactionsPageInner() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => openTransactionDetails(tx.id)}>
-                    {expandedTransactionId === tx.id ? 'Hide details' : 'View details'}
+                <DropdownMenuItem asChild>
+                    <Link href={transactionHref(tx.id)}>View details</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                     <Link href={`/manage/merchants/${tx.merchant_id}/transactions`}>View in merchant</Link>
@@ -972,8 +1092,13 @@ function TransactionsPageInner() {
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Export format</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
+                                {exportBlocked && (
+                                    <p className="max-w-60 px-2 py-1.5 text-xs text-muted-foreground">
+                                        Export can&apos;t apply Unsettled only or Unmatched only yet. Turn them off to export.
+                                    </p>
+                                )}
                                 <DropdownMenuItem
-                                    disabled={isExporting}
+                                    disabled={isExporting || exportBlocked}
                                     onSelect={(event) => {
                                         event.preventDefault()
                                         void handleExportRequest('csv')
@@ -982,7 +1107,7 @@ function TransactionsPageInner() {
                                     Export CSV
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    disabled={isExporting}
+                                    disabled={isExporting || exportBlocked}
                                     onSelect={(event) => {
                                         event.preventDefault()
                                         void handleExportRequest('xlsx')
@@ -1177,10 +1302,35 @@ function TransactionsPageInner() {
                     label={
                         <span className="inline-flex items-center gap-1">
                             All transactions
-                            <InfoIcon tip="Every payment record across all merchants and locations. Click any row to expand full transaction details. Use the column picker to show or hide fields." />
+                            <InfoIcon tip="Every payment record across all merchants and locations. Open a row for its full detail. Sales shows what was sold; Settlement shows fees, net deposit, batch and TSYS match. The Columns menu shows or hides any field." />
                         </span>
                     }
-                    caption="Platform-wide payment activity across all merchants"
+                    caption={
+                        ledgerView === 'settlement'
+                            ? 'What the processor did with each payment: fees, deposit, batch and TSYS match'
+                            : 'Platform-wide payment activity across all merchants'
+                    }
+                    action={
+                        // A two-option view switch on the DS-CTL-05 pill rail.
+                        <div role="group" aria-label="Ledger view" className="inline-flex gap-0.5 rounded-full bg-muted/70 p-1">
+                            {LEDGER_VIEWS.map((view) => (
+                                <button
+                                    key={view.value}
+                                    type="button"
+                                    aria-pressed={ledgerView === view.value}
+                                    onClick={() => setLedgerView(view.value)}
+                                    className={cn(
+                                        'shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-[0.8125rem] font-medium transition-colors',
+                                        ledgerView === view.value
+                                            ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    )}
+                                >
+                                    {view.label}
+                                </button>
+                            ))}
+                        </div>
+                    }
                 >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <TransactionSearchBar
@@ -1216,6 +1366,28 @@ function TransactionsPageInner() {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             <TransactionFilterDialog searchParams={searchParams} />
+                            {/* Reconciliation filters (card payments only). Shown in the
+                                Settlement view, and in Sales while one is still applied
+                                so an active filter is never hidden. */}
+                            {(ledgerView === 'settlement' || filters.unsettledOnly || filters.unmatchedOnly) &&
+                                ([
+                                    { key: 'unsettled', label: 'Unsettled only', active: !!filters.unsettledOnly },
+                                    { key: 'unmatched', label: 'Unmatched only', active: !!filters.unmatchedOnly },
+                                ] as const).map((chip) => (
+                                    <Button
+                                        key={chip.key}
+                                        variant="ghost"
+                                        aria-pressed={chip.active}
+                                        onClick={() => toggleReconciliationFilter(chip.key)}
+                                        className={cn(
+                                            'h-9 shrink-0 gap-1.5 rounded-full border-0 px-4 text-[0.8125rem] shadow-none hover:bg-muted hover:text-foreground',
+                                            chip.active ? 'bg-muted font-medium text-foreground' : 'bg-muted/60 text-muted-foreground'
+                                        )}
+                                    >
+                                        {chip.active && <Check className="h-3.5 w-3.5" />}
+                                        {chip.label}
+                                    </Button>
+                                ))}
                             {hasActiveFilters && (
                                 <Button variant="ghost" className="h-9 gap-1.5 px-4 text-[0.8125rem] text-muted-foreground" onClick={clearFilters}>
                                     <X className="h-3.5 w-3.5" />
@@ -1282,6 +1454,21 @@ function TransactionsPageInner() {
                                                     </Button>
                                                 </TableHead>
                                             )}
+                                            {columnVisibility.netFee && (
+                                                <TableHead className="text-right">{headLabel('Net fee', 'Dual-pricing and tip fees after refunds. Card payments only.')}</TableHead>
+                                            )}
+                                            {columnVisibility.netDeposit && (
+                                                <TableHead className="text-right">{headLabel('Net deposit', 'Total minus the net fee: what the merchant receives for this payment.')}</TableHead>
+                                            )}
+                                            {columnVisibility.batch && (
+                                                <TableHead>{headLabel('Batch', 'The processor batch the payment settled in.')}</TableHead>
+                                            )}
+                                            {columnVisibility.settled && (
+                                                <TableHead>{headLabel('Settled', 'Whether the processor has paid this card payment out.')}</TableHead>
+                                            )}
+                                            {columnVisibility.tsysMatch && (
+                                                <TableHead>{headLabel('TSYS match', 'Whether a TSYS (Luqra) transaction has been matched to this payment.')}</TableHead>
+                                            )}
                                             {columnVisibility.payStatus && (
                                                 <TableHead>{headLabel('Status', 'Current payment status. Captured = funds collected. Authorized = card approved but not yet settled. Refunded = money returned. Void = cancelled before settlement.')}</TableHead>
                                             )}
@@ -1313,102 +1500,109 @@ function TransactionsPageInner() {
                                         ) : transactions.length === 0 ? (
                                             <TableEmptyRow colSpan={totalVisibleColumns} title={emptyTitle} hint={emptyHint} />
                                         ) : transactions.map((tx) => {
-                                            const isExpanded = expandedTransactionId === tx.id
+                                            const href = transactionHref(tx.id)
                                             return (
-                                                <Fragment key={tx.id}>
-                                                    {/* `data-state`, not a bg class: the data variant's row
-                                                        fill out-specifies a class on the row (§5.1). */}
-                                                    <TableRow
-                                                        data-state={isExpanded ? 'selected' : undefined}
-                                                        aria-expanded={isExpanded}
-                                                        className="cursor-pointer"
-                                                        onClick={() => openTransactionDetails(tx.id)}
-                                                    >
-                                                        {columnVisibility.order && (
-                                                            <TableCell className="font-mono text-xs">
+                                                <TableRow
+                                                    key={tx.id}
+                                                    className="cursor-pointer"
+                                                    onClick={() => router.push(href)}
+                                                >
+                                                    {/* The order number is the row's link, so the
+                                                        row has one keyboard focus stop. */}
+                                                    {columnVisibility.order && (
+                                                        <TableCell className="font-mono text-xs">
+                                                            <RowLink href={href} title="Open transaction">
                                                                 {tx.order_number
                                                                     ? highlightText(tx.order_number, searchQuery)
                                                                     : <span className="text-muted-foreground">—</span>}
-                                                            </TableCell>
-                                                        )}
-                                                        {columnVisibility.merchant && (
-                                                            <TableCell className="font-medium">
-                                                                {highlightText(tx.merchant_name, searchQuery)}
-                                                                {tx.location_name && (
-                                                                    <div className="text-xs font-normal text-muted-foreground">{tx.location_name}</div>
-                                                                )}
-                                                            </TableCell>
-                                                        )}
-                                                        {columnVisibility.customer && (
-                                                            <TableCell>{highlightText(getCustomerLabel(tx.customer_name), searchQuery)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.method && (
-                                                            <TableCell>{getMethodBadge(tx.payment_method)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.card && (
-                                                            <TableCell>
-                                                                {tx.card_last_four ? (
-                                                                    <span className="inline-flex items-center gap-1.5 font-mono text-xs">
-                                                                        <CardBrandIcon brand={tx.card_type} className="h-5 w-auto" />
-                                                                        <span>****{highlightText(tx.card_last_four, searchQuery)}</span>
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground">—</span>
-                                                                )}
-                                                            </TableCell>
-                                                        )}
-                                                        {columnVisibility.entry && (
-                                                            <TableCell className="text-sm text-muted-foreground">
-                                                                {getEntryModeLabel(tx)}
-                                                            </TableCell>
-                                                        )}
-                                                        {columnVisibility.subtotal && (
-                                                            <TableCell className="text-right tabular-nums">{formatCurrency(tx.subtotal_amount)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.tax && (
-                                                            <TableCell className="text-right tabular-nums">{formatCurrency(tx.tax_amount)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.tip && (
-                                                            <TableCell className="text-right tabular-nums">{formatOptionalCurrency(tx.tip_amount)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.discount && (
-                                                            <TableCell className="text-right tabular-nums">{formatOptionalCurrency(tx.discount_amount)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.total && (
-                                                            <TableCell className="text-right font-medium tabular-nums">
-                                                                {formatCurrency(tx.total_amount)}
-                                                            </TableCell>
-                                                        )}
-                                                        {columnVisibility.payStatus && (
-                                                            <TableCell>{getPaymentStatusBadge(tx.status)}</TableCell>
-                                                        )}
-                                                        {columnVisibility.staff && (
-                                                            <TableCell>{tx.staff_name || <span className="text-muted-foreground">—</span>}</TableCell>
-                                                        )}
-                                                        {columnVisibility.date && (
-                                                            <TableCell className="text-sm text-muted-foreground tabular-nums">
-                                                                {formatTxDate(tx.created_at)}
-                                                            </TableCell>
-                                                        )}
-                                                        <TableCell onClick={(event) => event.stopPropagation()}>
-                                                            {renderRowActions(tx)}
+                                                            </RowLink>
                                                         </TableCell>
-                                                    </TableRow>
-                                                    {isExpanded && (
-                                                        <TableRow data-state="selected">
-                                                            <TableCell colSpan={totalVisibleColumns} className="whitespace-normal p-0">
-                                                                <TransactionDetailInlinePanel transactionId={tx.id} />
-                                                            </TableCell>
-                                                        </TableRow>
                                                     )}
-                                                </Fragment>
+                                                    {columnVisibility.merchant && (
+                                                        <TableCell className="font-medium">
+                                                            {highlightText(tx.merchant_name, searchQuery)}
+                                                            {tx.location_name && (
+                                                                <div className="text-xs font-normal text-muted-foreground">{tx.location_name}</div>
+                                                            )}
+                                                        </TableCell>
+                                                    )}
+                                                    {columnVisibility.customer && (
+                                                        <TableCell>{highlightText(getCustomerLabel(tx.customer_name), searchQuery)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.method && (
+                                                        <TableCell>{getMethodBadge(tx.payment_method)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.card && (
+                                                        <TableCell>
+                                                            {tx.card_last_four ? (
+                                                                <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+                                                                    <CardBrandIcon brand={tx.card_type} className="h-5 w-auto" />
+                                                                    <span>****{highlightText(tx.card_last_four, searchQuery)}</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">—</span>
+                                                            )}
+                                                        </TableCell>
+                                                    )}
+                                                    {columnVisibility.entry && (
+                                                        <TableCell className="text-sm text-muted-foreground">
+                                                            {getEntryModeLabel(tx)}
+                                                        </TableCell>
+                                                    )}
+                                                    {columnVisibility.subtotal && (
+                                                        <TableCell className="text-right tabular-nums">{formatCurrency(tx.subtotal_amount)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.tax && (
+                                                        <TableCell className="text-right tabular-nums">{formatCurrency(tx.tax_amount)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.tip && (
+                                                        <TableCell className="text-right tabular-nums">{formatOptionalCurrency(tx.tip_amount)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.discount && (
+                                                        <TableCell className="text-right tabular-nums">{formatOptionalCurrency(tx.discount_amount)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.total && (
+                                                        <TableCell className="text-right font-medium tabular-nums">
+                                                            {formatCurrency(tx.total_amount)}
+                                                        </TableCell>
+                                                    )}
+                                                    {columnVisibility.netFee && (
+                                                        <TableCell className="text-right tabular-nums">{orDash(settlementFacts(tx).netFee)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.netDeposit && (
+                                                        <TableCell className="text-right tabular-nums">{orDash(settlementFacts(tx).netDeposit)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.batch && (
+                                                        <TableCell className="font-mono text-xs">{orDash(settlementFacts(tx).batch)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.settled && (
+                                                        <TableCell>{orDash(settlementFacts(tx).settled)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.tsysMatch && (
+                                                        <TableCell>{orDash(settlementFacts(tx).tsysMatch)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.payStatus && (
+                                                        <TableCell>{getPaymentStatusBadge(tx.status)}</TableCell>
+                                                    )}
+                                                    {columnVisibility.staff && (
+                                                        <TableCell>{tx.staff_name || <span className="text-muted-foreground">—</span>}</TableCell>
+                                                    )}
+                                                    {columnVisibility.date && (
+                                                        <TableCell className="text-sm text-muted-foreground tabular-nums">
+                                                            {formatTxDate(tx.created_at)}
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell onClick={(event) => event.stopPropagation()}>
+                                                        {renderRowActions(tx)}
+                                                    </TableCell>
+                                                </TableRow>
                                             )
                                         })}
                                     </TableBody>
                                 </Table>
 
                                 {/* Below `xl` each transaction is a card (§5.3). The card
-                                    and the row open the same detail panel. */}
+                                    and the row open the same detail page. */}
                                 <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
                                     {isTableLoading ? (
                                         <RecordCardSkeletons count={4} />
@@ -1416,23 +1610,16 @@ function TransactionsPageInner() {
                                         <CardGridEmpty title={emptyTitle} hint={emptyHint} />
                                     ) : (
                                         transactions.map((tx) => {
-                                            const isExpanded = expandedTransactionId === tx.id
                                             const orderLabel = tx.order_number || 'No order #'
                                             return (
-                                                <RecordCard
-                                                    key={tx.id}
-                                                    selected={isExpanded}
-                                                    className={isExpanded ? 'sm:col-span-2' : undefined}
-                                                >
-                                                    {/* A stretched button makes the whole summary the
+                                                <RecordCard key={tx.id}>
+                                                    {/* A stretched link makes the whole summary the
                                                         control, while the actions menu stays its own
                                                         button above it — never a div with onClick. */}
                                                     <div className="relative">
-                                                        <button
-                                                            type="button"
-                                                            aria-expanded={isExpanded}
-                                                            aria-label={`${isExpanded ? 'Hide' : 'Show'} details for order ${orderLabel}`}
-                                                            onClick={() => openTransactionDetails(tx.id)}
+                                                        <Link
+                                                            href={transactionHref(tx.id)}
+                                                            aria-label={`Open transaction for order ${orderLabel}`}
                                                             className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                         />
                                                         <div className="pointer-events-none relative flex items-start gap-2">
@@ -1452,32 +1639,38 @@ function TransactionsPageInner() {
                                                                     {' · '}
                                                                     {formatTxDate(tx.created_at)}
                                                                 </p>
-                                                                <CardFields>
-                                                                    <CardField label="Status" value={PAYMENT_STATUS_LABELS[tx.status] ?? tx.status} />
-                                                                    <CardField
-                                                                        label="Method"
-                                                                        value={
-                                                                            tx.card_last_four
-                                                                                ? `${getMethodLabel(tx.payment_method)} ****${tx.card_last_four}`
-                                                                                : getMethodLabel(tx.payment_method)
-                                                                        }
-                                                                    />
-                                                                    <CardField label="Customer" value={highlightText(getCustomerLabel(tx.customer_name), searchQuery)} />
-                                                                    <CardField label="Tip" value={formatOptionalCurrency(tx.tip_amount)} />
-                                                                    {tx.location_name && <CardField label="Location" value={tx.location_name} />}
-                                                                    {tx.staff_name && <CardField label="Staff" value={tx.staff_name} />}
-                                                                </CardFields>
+                                                                {ledgerView === 'settlement' ? (
+                                                                    <CardFields>
+                                                                        <CardField label="Status" value={PAYMENT_STATUS_LABELS[tx.status] ?? tx.status} />
+                                                                        <CardField label="Net deposit" value={orDash(settlementFacts(tx).netDeposit)} />
+                                                                        <CardField label="Settled" value={orDash(settlementFacts(tx).settled)} />
+                                                                        <CardField label="TSYS match" value={orDash(settlementFacts(tx).tsysMatch)} />
+                                                                        <CardField label="Batch" value={orDash(settlementFacts(tx).batch)} mono />
+                                                                        <CardField label="Net fee" value={orDash(settlementFacts(tx).netFee)} />
+                                                                    </CardFields>
+                                                                ) : (
+                                                                    <CardFields>
+                                                                        <CardField label="Status" value={PAYMENT_STATUS_LABELS[tx.status] ?? tx.status} />
+                                                                        <CardField
+                                                                            label="Method"
+                                                                            value={
+                                                                                tx.card_last_four
+                                                                                    ? `${getMethodLabel(tx.payment_method)} ****${tx.card_last_four}`
+                                                                                    : getMethodLabel(tx.payment_method)
+                                                                            }
+                                                                        />
+                                                                        <CardField label="Customer" value={highlightText(getCustomerLabel(tx.customer_name), searchQuery)} />
+                                                                        <CardField label="Tip" value={formatOptionalCurrency(tx.tip_amount)} />
+                                                                        {tx.location_name && <CardField label="Location" value={tx.location_name} />}
+                                                                        {tx.staff_name && <CardField label="Staff" value={tx.staff_name} />}
+                                                                    </CardFields>
+                                                                )}
                                                             </div>
                                                             <div className="pointer-events-auto -mr-1 -mt-1 shrink-0">
                                                                 {renderRowActions(tx)}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {isExpanded && (
-                                                        <div className="mt-4 min-w-0">
-                                                            <TransactionDetailInlinePanel transactionId={tx.id} />
-                                                        </div>
-                                                    )}
                                                 </RecordCard>
                                             )
                                         })
@@ -1517,16 +1710,6 @@ function TransactionsPageInner() {
                     </TabsList>
                 </div>
 
-                <TabsContent value="payments" className="mt-4">
-                    <Panel>
-                        <PanelSection
-                            label="Payments ledger"
-                            caption="Processor payments with fees, net deposits, and settlement status"
-                        >
-                            <PaymentsLedger initialMerchantIds={filters.merchantIds} />
-                        </PanelSection>
-                    </Panel>
-                </TabsContent>
                 <TabsContent value="settlements" className="mt-4">
                     <Panel>
                         <PanelSection

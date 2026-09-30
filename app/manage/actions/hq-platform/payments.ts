@@ -9,6 +9,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { getAssignedMerchantScope, applyMerchantScope } from './shared'
+import { mapPaymentRow, PAYMENT_SELECT } from './payment-rows'
 
 export interface PlatformPaymentFilters {
     merchantIds?: string[] | null
@@ -92,21 +93,7 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
 
         let q = supabase
             .from('order_payments')
-            .select(
-                `
-                id, order_id, merchant_id, location_id, payment_method, amount, tip_amount, total_amount,
-                status, terminal_type, terminal_id, processor_name, authorization_code, card_type, card_last_four,
-                batch_number, dejavoo_batch_number, acquirer, settlement_batch_id, is_settled, settled_at,
-                captured_at, initiated_at,
-                dual_pricing_fee, tip_fee, refunded_dual_pricing_fee, refunded_tip_fee,
-                orders!inner(id, order_number, merchant_id),
-                merchant:merchants(id, name),
-                location:locations(id, name, luqra_mid),
-                settlement_batch:settlement_batches(id, batch_id, business_date, status),
-                luqra_match:luqra_transactions!luqra_transactions_reconciled_payment_id_fkey(id, batch_id, mid)
-              `,
-                { count: 'exact' }
-            )
+            .select(PAYMENT_SELECT, { count: 'exact' })
             .order('captured_at', { ascending: false, nullsFirst: false })
             .range(fromIdx, fromIdx + count - 1)
 
@@ -147,65 +134,7 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
             return { success: false as const, error: error.message, data: null }
         }
 
-        const rows: PlatformPaymentRow[] = (data ?? []).map((r) => {
-            const row = r as Record<string, unknown>
-            const orders = row.orders as { id: string; order_number: string | null; merchant_id: string } | null
-            const merchant = row.merchant as { id: string; name: string } | null
-            const loc = row.location as { id: string; name: string; luqra_mid: string | null } | null
-            const sb = row.settlement_batch as { id: string; batch_id: string } | null
-            const lmRaw = row.luqra_match as
-                | { id: string; batch_id: string; mid: string }
-                | { id: string; batch_id: string; mid: string }[]
-                | null
-                | undefined
-            const lm = Array.isArray(lmRaw) ? lmRaw[0] ?? null : lmRaw ?? null
-
-            const dualFee = Number(row.dual_pricing_fee ?? 0)
-            const tipFee = Number(row.tip_fee ?? 0)
-            const refundedDualFee = Number(row.refunded_dual_pricing_fee ?? 0)
-            const refundedTipFee = Number(row.refunded_tip_fee ?? 0)
-            const netFee = Math.max(0, dualFee - refundedDualFee) + Math.max(0, tipFee - refundedTipFee)
-            const totalAmount = Number(row.total_amount ?? 0)
-
-            return {
-                id: row.id as string,
-                order_id: row.order_id as string,
-                order_number: orders?.order_number ?? null,
-                merchant_id: (row.merchant_id as string) ?? orders?.merchant_id ?? '',
-                merchant_name: merchant?.name ?? null,
-                location_id: (row.location_id as string) ?? null,
-                location_name: loc?.name ?? null,
-                payment_method: row.payment_method as string,
-                amount: Number(row.amount ?? 0),
-                tip_amount: Number(row.tip_amount ?? 0),
-                total_amount: totalAmount,
-                status: row.status as string,
-                terminal_type: row.terminal_type as string,
-                terminal_id: (row.terminal_id as string) ?? null,
-                processor_name: (row.processor_name as string) ?? null,
-                authorization_code: (row.authorization_code as string) ?? null,
-                card_type: (row.card_type as string) ?? null,
-                card_last_four: (row.card_last_four as string) ?? null,
-                batch_number: (row.batch_number as string) ?? null,
-                dejavoo_batch_number: (row.dejavoo_batch_number as string) ?? null,
-                acquirer: (row.acquirer as string) ?? null,
-                settlement_batch_id: (row.settlement_batch_id as string) ?? null,
-                settlement_batch_label: sb?.batch_id ?? null,
-                is_settled: !!row.is_settled,
-                settled_at: (row.settled_at as string) ?? null,
-                captured_at: (row.captured_at as string) ?? null,
-                initiated_at: row.initiated_at as string,
-                luqra_transaction_id: lm?.id ?? null,
-                luqra_batch_id: lm?.batch_id ?? null,
-                luqra_mid: loc?.luqra_mid ?? lm?.mid ?? null,
-                dual_pricing_fee: dualFee,
-                tip_fee: tipFee,
-                refunded_dual_pricing_fee: refundedDualFee,
-                refunded_tip_fee: refundedTipFee,
-                net_fee: netFee,
-                net_deposit: totalAmount - netFee,
-            }
-        })
+        const rows: PlatformPaymentRow[] = (data ?? []).map((r) => mapPaymentRow(r as Record<string, unknown>))
 
         const filtered = filters.unmatchedOnly ? rows.filter((r) => !r.luqra_transaction_id) : rows
 
@@ -230,6 +159,46 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
         }
     }
 }
+
+/**
+ * One ledger payment for its detail page. Same shape and permission as the
+ * list; a payment outside the admin's merchant scope reads as not found.
+ */
+export async function getPlatformPaymentById(paymentId: string) {
+    try {
+        const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+        const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+        const supabase = createServiceRoleClient()
+        const { data, error } = await supabase
+            .from('order_payments')
+            .select(PAYMENT_SELECT)
+            .eq('id', paymentId)
+            .maybeSingle()
+
+        if (error) {
+            return { success: false as const, error: error.message, data: null }
+        }
+        if (!data) {
+            return { success: true as const, error: null, data: null }
+        }
+
+        const row = mapPaymentRow(data as Record<string, unknown>)
+        if (merchantScope !== null && !merchantScope.includes(row.merchant_id)) {
+            return { success: true as const, error: null, data: null }
+        }
+
+        return { success: true as const, error: null, data: row }
+    } catch (err) {
+        console.error('[getPlatformPaymentById] Error:', err)
+        return {
+            success: false as const,
+            error: err instanceof Error ? err.message : 'Failed',
+            data: null,
+        }
+    }
+}
+
 
 // ----------------------------------------------------------------------------
 // Connectivity status — most recent Luqra sync + processor terminal counts.

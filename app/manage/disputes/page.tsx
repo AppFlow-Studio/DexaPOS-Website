@@ -82,7 +82,7 @@ export default function HQDisputesPage() {
 
       <Panel>
         <PanelSection label="Chargebacks" caption="Review disputes, deadlines, and defense status across merchants.">
-          <ChargebacksSection />
+          <ChargebacksSection from="disputes" />
         </PanelSection>
       </Panel>
     </PageShell>

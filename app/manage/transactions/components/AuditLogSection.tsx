@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { RefreshCcwDot } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,22 +29,26 @@ import {
   type PlatformPaymentAuditActionType,
 } from '@/app/manage/actions/hq-platform/transactions-shared'
 import { usePlatformPaymentAuditLogs } from '@/lib/queries/use-platform-analytics'
+import { paymentAuditEventDetailHref } from '../routes'
 import {
-  CardField,
-  CardFields,
   CardGridEmpty,
   FilterDate,
   FilterSelect,
+  LedgerToolbar,
   LoadError,
-  RecordCard,
   RecordCardSkeletons,
+  RecordLinkCard,
+  RowLink,
   TableEmptyRow,
 } from './ledger-primitives'
 
-const PAGE_SIZE = 25
+// 10 a page, so the table sits in the page with no scroll of its own.
+const PAGE_SIZE = 10
 
-/** Columns in the wide table — the loading and empty rows span all of them. */
-const COLUMN_COUNT = 10
+/** A column the tablet table leaves out; it joins at `xl`. */
+const XL_ONLY = 'hidden xl:table-cell'
+/** Per-column visibility, in table order, shared by the loading rows. */
+const COLUMN_CLASSES = ['', '', XL_ONLY, '', '', XL_ONLY, '', XL_ONLY, '', XL_ONLY]
 
 const ACTION_OPTIONS = PLATFORM_PAYMENT_AUDIT_ACTIONS.map((actionValue) => ({
   value: actionValue,
@@ -56,12 +60,12 @@ const OUTCOME_OPTIONS = [
   { value: 'failed', label: 'Failed' },
 ]
 
-function formatDateTime(value?: string): string {
+export function formatDateTime(value?: string): string {
   if (!value) return '—'
   return format(new Date(value), 'MMM d, yyyy h:mm:ss a')
 }
 
-function formatActionLabel(value: string): string {
+export function formatActionLabel(value: string): string {
   return value
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -69,6 +73,7 @@ function formatActionLabel(value: string): string {
 }
 
 export function AuditLogSection() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [userFilter, setUserFilter] = useState('')
   const [actionFilter, setActionFilter] = useState<'all' | PlatformPaymentAuditActionType>('all')
@@ -186,7 +191,7 @@ export function AuditLogSection() {
         <InfoIcon tip="Total number of admin audit events logged matching current filters." side="right" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <LedgerToolbar onRefresh={() => void refetch()} refreshing={isFetching}>
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -230,17 +235,7 @@ export function AuditLogSection() {
             Clear filters
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 px-4 sm:ml-auto"
-          onClick={() => void refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCcwDot className="h-3.5 w-3.5" />
-          Refresh
-        </Button>
-      </div>
+      </LedgerToolbar>
 
       {errorCode && (
         <LoadError
@@ -249,7 +244,14 @@ export function AuditLogSection() {
         />
       )}
 
-      <Table variant="data" containerClassName="hidden 2xl:block" className="min-w-[1150px]">
+      {/* A table from `md`; role, resource ID, IP and fields join at `xl`.
+          Every row opens the event's own page. */}
+      <Table
+        variant="data"
+        bounded={false}
+        containerClassName="hidden md:block"
+        className="md:min-w-[720px] xl:min-w-[1150px]"
+      >
         <TableHeader>
           <TableRow>
             <TableHead>
@@ -258,20 +260,20 @@ export function AuditLogSection() {
             <TableHead>
               <span className="inline-flex items-center gap-1">User <InfoIcon tip="The admin's email address. Each access is attributed to a specific user for accountability." side="bottom" /></span>
             </TableHead>
-            <TableHead>
+            <TableHead className={XL_ONLY}>
               <span className="inline-flex items-center gap-1">Role <InfoIcon tip="The user's permission level at the time of the action (e.g. admin, viewer, owner)." side="bottom" /></span>
             </TableHead>
             <TableHead>
               <span className="inline-flex items-center gap-1">Action <InfoIcon tip="What the user did — list (viewed a list), detail (opened a specific record), export (downloaded data), or search (queried by card number or ID)." side="bottom" /></span>
             </TableHead>
             <TableHead>Resource type</TableHead>
-            <TableHead>Resource ID</TableHead>
+            <TableHead className={XL_ONLY}>Resource ID</TableHead>
             <TableHead>
               <span className="inline-flex items-center gap-1">Outcome <InfoIcon tip="Whether the action completed successfully. Failed actions may indicate permission errors or system issues." side="bottom" /></span>
             </TableHead>
-            <TableHead>IP address</TableHead>
+            <TableHead className={XL_ONLY}>IP address</TableHead>
             <TableHead>Merchant</TableHead>
-            <TableHead>
+            <TableHead className={XL_ONLY}>
               <span className="inline-flex items-center gap-1">Fields accessed <InfoIcon tip="Specific data fields the user viewed or exported. Used to demonstrate the minimum necessary data access for compliance audits." side="bottom" /></span>
             </TableHead>
           </TableRow>
@@ -281,88 +283,79 @@ export function AuditLogSection() {
           {showSkeleton ? (
             Array.from({ length: 6 }).map((_, rowIndex) => (
               <TableRow key={`payment-audit-loading-${rowIndex}`}>
-                {Array.from({ length: COLUMN_COUNT }).map((__, cellIndex) => (
-                  <TableCell key={`payment-audit-loading-${rowIndex}-${cellIndex}`}>
+                {COLUMN_CLASSES.map((cellClass, cellIndex) => (
+                  <TableCell key={`payment-audit-loading-${rowIndex}-${cellIndex}`} className={cellClass}>
                     <Skeleton className="h-4 w-full" />
                   </TableCell>
                 ))}
               </TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableEmptyRow colSpan={COLUMN_COUNT} title={emptyTitle} hint={emptyHint} />
+            <TableEmptyRow colSpan={COLUMN_CLASSES.length} title={emptyTitle} hint={emptyHint} />
           ) : (
-            rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-                  {formatDateTime(row.event_timestamp)}
-                </TableCell>
-                <TableCell className="text-sm">{row.user_email || '—'}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{row.user_role || '—'}</TableCell>
-                {/* A failed event is marked by weight, not a red row (§3.5). */}
-                <TableCell
-                  className={cn(
-                    'text-sm',
-                    row.success ? 'text-muted-foreground' : 'font-medium text-foreground'
-                  )}
-                >
-                  {formatActionLabel(row.action)}
-                </TableCell>
-                <TableCell className="text-sm">{row.resource_type}</TableCell>
-                <TableCell className="font-mono text-xs">{row.resource_id || '—'}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{row.success ? 'Success' : 'Failed'}</Badge>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{row.ip_address || '—'}</TableCell>
-                <TableCell className="text-sm">
-                  {row.merchant_name || row.merchant_id || '—'}
-                </TableCell>
-                <TableCell>
-                  {row.fields_accessed.length === 0 ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {row.fields_accessed.map((field) => (
-                        <Badge key={`${row.id}-${field}`} variant="outline" className="font-mono text-[10px]">
-                          {field}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))
+            rows.map((row) => {
+              const href = paymentAuditEventDetailHref(row.id)
+              return (
+                <TableRow key={row.id} className="cursor-pointer" onClick={() => router.push(href)}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                    <RowLink href={href}>{formatDateTime(row.event_timestamp)}</RowLink>
+                  </TableCell>
+                  <TableCell className="text-sm">{row.user_email || '—'}</TableCell>
+                  <TableCell className={`${XL_ONLY} text-sm text-muted-foreground`}>{row.user_role || '—'}</TableCell>
+                  {/* A failed event is marked by weight, not a red row (§3.5). */}
+                  <TableCell
+                    className={cn(
+                      'text-sm',
+                      row.success ? 'text-muted-foreground' : 'font-medium text-foreground'
+                    )}
+                  >
+                    {formatActionLabel(row.action)}
+                  </TableCell>
+                  <TableCell className="text-sm">{row.resource_type}</TableCell>
+                  <TableCell className={`${XL_ONLY} font-mono text-xs`}>{row.resource_id || '—'}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{row.success ? 'Success' : 'Failed'}</Badge>
+                  </TableCell>
+                  <TableCell className={`${XL_ONLY} font-mono text-xs text-muted-foreground`}>{row.ip_address || '—'}</TableCell>
+                  <TableCell className="text-sm">
+                    {row.merchant_name || row.merchant_id || '—'}
+                  </TableCell>
+                  <TableCell className={XL_ONLY}>
+                    {row.fields_accessed.length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {row.fields_accessed.map((field) => (
+                          <Badge key={`${row.id}-${field}`} variant="outline" className="font-mono text-[10px]">
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })
           )}
         </TableBody>
       </Table>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+      {/* Phones: action, outcome, who and when; the rest is on the event's page. */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 md:hidden">
         {showSkeleton ? (
           <RecordCardSkeletons count={4} />
         ) : rows.length === 0 ? (
           <CardGridEmpty title={emptyTitle} hint={emptyHint} />
         ) : (
           rows.map((row) => (
-            <RecordCard key={row.id}>
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="truncate font-medium">{formatActionLabel(row.action)}</p>
-                <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {formatDateTime(row.event_timestamp)}
-                </p>
-              </div>
-              <CardFields>
-                <CardField label="User" value={row.user_email || '—'} />
-                <CardField label="Role" value={row.user_role || '—'} />
-                <CardField label="Resource" value={row.resource_type || '—'} />
-                <CardField label="Resource ID" mono value={row.resource_id || '—'} />
-                <CardField label="Outcome" value={row.success ? 'Success' : 'Failed'} />
-                <CardField label="Merchant" value={row.merchant_name || row.merchant_id || '—'} />
-                <CardField label="IP address" mono value={row.ip_address || '—'} />
-                <CardField
-                  label="Fields accessed"
-                  value={row.fields_accessed.length === 0 ? '—' : row.fields_accessed.join(', ')}
-                />
-              </CardFields>
-            </RecordCard>
+            <RecordLinkCard
+              key={row.id}
+              href={paymentAuditEventDetailHref(row.id)}
+              title={formatActionLabel(row.action)}
+              figure={row.success ? 'Success' : 'Failed'}
+              subtitle={row.user_email || '—'}
+              status={formatDateTime(row.event_timestamp)}
+            />
           ))
         )}
       </div>

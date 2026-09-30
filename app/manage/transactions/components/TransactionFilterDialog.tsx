@@ -45,6 +45,9 @@ const PAYMENT_STATUSES = [
     { value: 'partially_refunded', label: 'Partial Refund' },
     { value: 'declined', label: 'Declined' },
     { value: 'void', label: 'Void' },
+    // Hidden by default; choose them to see attempts that never completed.
+    { value: 'pending', label: 'Pending' },
+    { value: 'failed', label: 'Failed' },
 ]
 
 const PAYMENT_METHODS = [

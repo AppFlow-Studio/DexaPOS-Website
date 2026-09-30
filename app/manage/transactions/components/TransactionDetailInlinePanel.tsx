@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { usePlatformTransactionDetails } from '@/lib/queries/use-platform-analytics'
+import { entryModeLabel } from './payment-format'
 
 interface TransactionDetailInlinePanelProps {
   transactionId: string
@@ -52,13 +53,7 @@ function toLabel(value?: string) {
 }
 
 function getEntryModeLabel(raw?: string) {
-  if (!raw) return 'N/A'
-  const value = raw.toLowerCase()
-  if (value.includes('contact') || value.includes('tap')) return 'Contactless'
-  if (value.includes('chip') || value.includes('emv') || value.includes('insert')) return 'Chip'
-  if (value.includes('swipe') || value.includes('magstripe') || value.includes('mag')) return 'Swipe'
-  if (value.includes('manual') || value.includes('keyed') || value.includes('key')) return 'Manual'
-  return 'N/A'
+  return entryModeLabel(raw) ?? 'N/A'
 }
 
 async function copyToClipboard(value: string, label: string) {

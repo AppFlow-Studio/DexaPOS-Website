@@ -16,6 +16,8 @@ import type {
   PlatformChargebackStatus,
   PlatformPaymentAuditActionType,
 } from './transactions-shared'
+import type { PlatformPaymentRow } from './payments'
+import { fetchPaymentRowsByIds } from './payment-rows'
 
 const USE_PLATFORM_TX_VIEW = process.env.USE_PLATFORM_TX_VIEW === 'true'
 const DEFAULT_AUDIT_REQUEST_PATH = '/manage/transactions'
@@ -25,6 +27,46 @@ const CARD_LAST_FOUR_SEARCH_REGEX = /^\d{4}$/
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 let hasLoggedMissingPaymentAuditFunction = false
+
+const CHARGEBACK_SELECT = `
+  id,
+  original_payment_id,
+  dispute_psp_reference,
+  merchant_id,
+  location_id,
+  amount,
+  reason_code,
+  reason_description,
+  card_network,
+  status,
+  defendable,
+  defense_deadline,
+  defense_submitted_at,
+  defense_documents,
+  resolved_at,
+  resolution,
+  resolution_amount,
+  received_at,
+  created_at,
+  updated_at
+`
+
+const PAYMENT_AUDIT_LOG_SELECT = `
+  id,
+  event_timestamp,
+  user_email,
+  user_role,
+  action,
+  resource_type,
+  resource_id,
+  success,
+  ip_address,
+  fields_accessed,
+  merchant_id,
+  location_id,
+  request_path,
+  error_message
+`
 
 // Types
 
@@ -59,6 +101,8 @@ export interface PlatformTransaction {
   entry_mode?: string
   // Timestamps
   created_at: string
+  /** Fees, net deposit, batch, settlement and TSYS match — the ledger's Settlement view. */
+  ledger?: PlatformPaymentRow
 }
 
 export interface PlatformTransactionFilters {
@@ -76,6 +120,10 @@ export interface PlatformTransactionFilters {
   dateTo?: string
   sortBy?: 'created_at' | 'order_number' | 'total_amount'
   sortDir?: 'asc' | 'desc'
+  /** Card payments the processor has not paid out yet (`is_settled = false`). */
+  unsettledOnly?: boolean
+  /** Card payments with no matched TSYS (Luqra) transaction. */
+  unmatchedOnly?: boolean
 }
 
 interface PlatformTransactionExportRpcRow {
@@ -1490,12 +1538,30 @@ async function getPlatformTransactionsFromView(
   }
 }
 
+/** The card values of the `payment_method` enum (`card` and every `card_*`), as `isCardPayment` reads them. */
+const CARD_PAYMENT_METHODS = ['card', 'card_spinapi', 'card_dvpaylite', 'card_manual', 'card_online']
+
+/** The reconciliation filters the `get_admin_transactions` RPC has no parameter for. */
+function hasReconciliationFilter(filters?: PlatformTransactionFilters): boolean {
+  return Boolean(filters?.unsettledOnly || filters?.unmatchedOnly)
+}
+
+/**
+ * Filters `order_payments` directly. The fallback when the RPC fails, and the
+ * primary path for the reconciliation filters. Those read settlement and
+ * `luqra_transactions`, which the ledger's other settlement reads also take
+ * through the service role; merchant scope is already in `filters`.
+ */
 async function getPlatformTransactionsLegacy(
   limit: number,
   offset: number,
   filters?: PlatformTransactionFilters
 ): Promise<{ data: PlatformTransaction[]; total: number }> {
-  const supabase = createServerSupabaseClient()
+  const supabase = hasReconciliationFilter(filters) ? createServiceRoleClient() : createServerSupabaseClient()
+  // An anti-join: embed the match, then keep rows where it is null.
+  const luqraEmbed = filters?.unmatchedOnly
+    ? 'luqra_match:luqra_transactions!luqra_transactions_reconciled_payment_id_fkey(id),'
+    : ''
 
   let query = supabase
     .from('order_payments')
@@ -1515,6 +1581,7 @@ async function getPlatformTransactionsLegacy(
       reference_number,
       captured_at,
       initiated_at,
+      ${luqraEmbed}
       orders!inner(
         id,
         order_number,
@@ -1536,7 +1603,25 @@ async function getPlatformTransactionsLegacy(
     `,
       { count: 'exact' }
     )
-    .not('status', 'in', '(pending,failed)')
+
+  // As the RPC: pending and failed attempts are hidden unless a status is asked for.
+  if (!filters?.paymentStatuses?.length) {
+    query = query.not('status', 'in', '(pending,failed)')
+  }
+
+  // Only card payments settle or match TSYS; cash would read as "unsettled" forever.
+  // `payment_method` is an enum, which takes no LIKE, so the card values are listed.
+  if (hasReconciliationFilter(filters)) {
+    query = query.in('payment_method', CARD_PAYMENT_METHODS)
+  }
+
+  if (filters?.unsettledOnly) {
+    query = query.eq('is_settled', false)
+  }
+
+  if (filters?.unmatchedOnly) {
+    query = query.is('luqra_match', null)
+  }
 
   if (filters?.merchantIds && filters.merchantIds.length > 0) {
     query = query.in('orders.merchant_id', filters.merchantIds)
@@ -1664,6 +1749,37 @@ async function getPlatformTransactionsLegacy(
   }
 }
 
+/**
+ * One page of the ledger: the RPC, falling back to the view (when enabled) and
+ * then the direct query. The reconciliation filters skip straight to the
+ * direct query, the only path with settlement and TSYS-match filters.
+ */
+async function loadPlatformTransactionPage(
+  limit: number,
+  offset: number,
+  filters?: PlatformTransactionFilters
+): Promise<{ data: PlatformTransaction[]; total: number }> {
+  if (hasReconciliationFilter(filters)) {
+    return getPlatformTransactionsLegacy(limit, offset, filters)
+  }
+
+  const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, filters)
+  if (!fromRpc.errorCode) return { data: fromRpc.data, total: fromRpc.total }
+  console.warn(
+    `[getPlatformTransactions] Falling back from RPC to query path due to rpc error (${fromRpc.errorCode}).`
+  )
+
+  if (USE_PLATFORM_TX_VIEW) {
+    const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
+    if (!fromView.errorCode) return { data: fromView.data, total: fromView.total }
+    console.warn(
+      `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
+    )
+  }
+
+  return getPlatformTransactionsLegacy(limit, offset, filters)
+}
+
 // Platform Transactions
 
 export async function getPlatformTransactions(
@@ -1686,32 +1802,11 @@ export async function getPlatformTransactions(
   const cardLastFourSearchTerm = getCardLastFourSearchTerm(scopedFilters)
 
   try {
-    let result: { data: PlatformTransaction[]; total: number } | null = null
+    const page = await loadPlatformTransactionPage(limit, offset, scopedFilters)
 
-    const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, scopedFilters)
-    if (!fromRpc.errorCode) {
-      result = { data: fromRpc.data, total: fromRpc.total }
-    } else {
-      console.warn(
-        `[getPlatformTransactions] Falling back from RPC to query path due to rpc error (${fromRpc.errorCode}).`
-      )
-
-      if (USE_PLATFORM_TX_VIEW) {
-        const fromView = await getPlatformTransactionsFromView(limit, offset, scopedFilters)
-        if (!fromView.errorCode) {
-          result = { data: fromView.data, total: fromView.total }
-        } else {
-          console.warn(
-            `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
-          )
-        }
-      }
-
-      if (!result) {
-        const legacyResult = await getPlatformTransactionsLegacy(limit, offset, scopedFilters)
-        result = { data: legacyResult.data, total: legacyResult.total }
-      }
-    }
+    // The Settlement view's facts, one lookup for the page (≤ one page of ids).
+    const ledgerRows = await fetchPaymentRowsByIds(page.data.map((tx) => tx.id))
+    const result = { ...page, data: page.data.map((tx) => ({ ...tx, ledger: ledgerRows.get(tx.id) })) }
 
     void logPlatformPaymentAuditEvent({
       action: 'view_transaction_list',
@@ -1996,6 +2091,51 @@ export async function getPlatformSettlementBatches(
   }
 }
 
+/**
+ * One settlement batch for its detail page. The reconciliation figures
+ * (linked amount, discrepancy) only exist in `get_admin_settlement_batches`,
+ * so this narrows that RPC to the batch's merchant and business date and picks
+ * the row by id. The RPC applies its own merchant allow-list, so a batch
+ * outside the admin's scope comes back as not found.
+ */
+export async function getPlatformSettlementBatchById(
+  batchId: string
+): Promise<{ data: PlatformSettlementBatch | null; errorCode?: string }> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  // Only the lookup keys are read with elevated access; the figures and the
+  // scope check come from the RPC under the caller's own session.
+  const admin = createServiceRoleClient()
+  const { data: keys, error: keysError } = await admin
+    .from('settlement_batches')
+    .select('merchant_id, business_date')
+    .eq('id', batchId)
+    .maybeSingle()
+
+  if (keysError) {
+    console.error('[getPlatformSettlementBatchById:lookup] Error:', keysError)
+    return { data: null, errorCode: keysError.code }
+  }
+  if (!keys?.merchant_id) return { data: null }
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('get_admin_settlement_batches', {
+    p_merchant_ids: [keys.merchant_id],
+    p_status: null,
+    p_date_from: keys.business_date ?? null,
+    p_date_to: keys.business_date ?? null,
+    p_limit: 500,
+  })
+
+  if (error) {
+    console.error('[getPlatformSettlementBatchById:rpc] Error:', error)
+    return { data: null, errorCode: error.code }
+  }
+
+  const row = ((data ?? []) as PlatformSettlementBatchRpcRow[]).find((batch) => batch.id === batchId)
+  return { data: row ? mapRpcRowToSettlementBatch(row) : null }
+}
+
 export async function getPlatformSettlementBatchPayments(
   batchId: string,
   merchantId?: string
@@ -2228,25 +2368,7 @@ export async function getPlatformPaymentAuditLogs(
 
   let query = supabase
     .from('payment_audit_log')
-    .select(
-      `
-      id,
-      event_timestamp,
-      user_email,
-      user_role,
-      action,
-      resource_type,
-      resource_id,
-      success,
-      ip_address,
-      fields_accessed,
-      merchant_id,
-      location_id,
-      request_path,
-      error_message
-      `,
-      { count: 'exact' }
-    )
+    .select(PAYMENT_AUDIT_LOG_SELECT, { count: 'exact' })
     .order('event_timestamp', { ascending: false })
 
   if (scopedFilters?.merchantIds && scopedFilters.merchantIds.length > 0) {
@@ -2335,6 +2457,48 @@ export async function getPlatformPaymentAuditLogs(
   }
 }
 
+/**
+ * One payment audit event for its detail page. An event outside the admin's
+ * merchant scope reads as not found.
+ */
+export async function getPlatformPaymentAuditLogById(
+  eventId: string
+): Promise<{ data: PlatformPaymentAuditLogRow | null; errorCode?: string }> {
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('payment_audit_log')
+    .select(PAYMENT_AUDIT_LOG_SELECT)
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getPlatformPaymentAuditLogById] Error:', error)
+    return { data: null, errorCode: error.code }
+  }
+
+  const row = data as PlatformPaymentAuditLogDbRow | null
+  if (!row) return { data: null }
+  // Scoped admins only see events tied to one of their merchants.
+  if (merchantScope !== null && (!row.merchant_id || !merchantScope.includes(row.merchant_id))) {
+    return { data: null }
+  }
+
+  const merchantNameById = new Map<string, string>()
+  if (row.merchant_id) {
+    const { data: merchant } = await supabase
+      .from('merchants')
+      .select('id, name')
+      .eq('id', row.merchant_id)
+      .maybeSingle()
+    if (merchant?.id) merchantNameById.set(merchant.id, merchant.name || 'Unknown')
+  }
+
+  return { data: mapDbRowToPaymentAuditLog(row, merchantNameById) }
+}
+
 export async function getPlatformChargebacks(
   filters?: PlatformChargebackFilters,
   limit: number = 50,
@@ -2361,31 +2525,7 @@ export async function getPlatformChargebacks(
 
   let baseQuery = supabase
     .from('chargebacks')
-    .select(
-      `
-      id,
-      original_payment_id,
-      dispute_psp_reference,
-      merchant_id,
-      location_id,
-      amount,
-      reason_code,
-      reason_description,
-      card_network,
-      status,
-      defendable,
-      defense_deadline,
-      defense_submitted_at,
-      defense_documents,
-      resolved_at,
-      resolution,
-      resolution_amount,
-      received_at,
-      created_at,
-      updated_at
-      `,
-      { count: 'exact' }
-    )
+    .select(CHARGEBACK_SELECT, { count: 'exact' })
     .order('defense_deadline', { ascending: true, nullsFirst: false })
     .order('received_at', { ascending: false })
 
@@ -2406,7 +2546,82 @@ export async function getPlatformChargebacks(
   }
 
   const rows = (data ?? []) as PlatformChargebackDbRow[]
+  const mapped = await enrichChargebackRows(supabase, rows)
 
+  const pendingStatuses: PlatformChargebackStatus[] = ['notified', 'under_review']
+
+  let pendingQuery = supabase
+    .from('chargebacks')
+    .select('id', { count: 'exact', head: true })
+    .in('status', pendingStatuses)
+  pendingQuery = applyChargebackFilters(pendingQuery, scopedFilters, false)
+
+  const { count: pendingCountRaw, error: pendingCountError } = await pendingQuery
+  if (pendingCountError) {
+    console.error('[getPlatformChargebacks:pendingCount] Error:', pendingCountError)
+  }
+
+  const now = new Date()
+  const cutoff = new Date(now.getTime() + 72 * 60 * 60 * 1000)
+
+  let urgentQuery = supabase
+    .from('chargebacks')
+    .select('id', { count: 'exact', head: true })
+    .in('status', pendingStatuses)
+    .not('defense_deadline', 'is', null)
+    .gte('defense_deadline', now.toISOString())
+    .lte('defense_deadline', cutoff.toISOString())
+  urgentQuery = applyChargebackFilters(urgentQuery, scopedFilters, false)
+
+  const { count: urgentCountRaw, error: urgentCountError } = await urgentQuery
+  if (urgentCountError) {
+    console.error('[getPlatformChargebacks:urgentCount] Error:', urgentCountError)
+  }
+
+  return {
+    data: mapped,
+    total: count || 0,
+    pendingCount: pendingCountRaw || 0,
+    urgentCount: urgentCountRaw || 0,
+  }
+}
+
+/**
+ * One chargeback for its detail page, enriched exactly like the list. A
+ * chargeback outside the admin's merchant scope reads as not found.
+ */
+export async function getPlatformChargebackById(
+  chargebackId: string
+): Promise<{ data: PlatformChargebackRow | null; errorCode?: string }> {
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('chargebacks')
+    .select(CHARGEBACK_SELECT)
+    .eq('id', chargebackId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getPlatformChargebackById] Error:', error)
+    return { data: null, errorCode: error.code }
+  }
+
+  const row = data as PlatformChargebackDbRow | null
+  if (!row || (merchantScope !== null && !merchantScope.includes(row.merchant_id ?? ''))) {
+    return { data: null }
+  }
+
+  const [mapped] = await enrichChargebackRows(supabase, [row])
+  return { data: mapped ?? null }
+}
+
+/** Merchant names, original payments and their orders, joined onto chargeback rows. */
+async function enrichChargebackRows(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  rows: PlatformChargebackDbRow[]
+): Promise<PlatformChargebackRow[]> {
   const merchantIds = Array.from(
     new Set(rows.map((row) => row.merchant_id).filter((value): value is string => Boolean(value)))
   )
@@ -2484,42 +2699,7 @@ export async function getPlatformChargebacks(
     }
   }
 
-  const pendingStatuses: PlatformChargebackStatus[] = ['notified', 'under_review']
-
-  let pendingQuery = supabase
-    .from('chargebacks')
-    .select('id', { count: 'exact', head: true })
-    .in('status', pendingStatuses)
-  pendingQuery = applyChargebackFilters(pendingQuery, scopedFilters, false)
-
-  const { count: pendingCountRaw, error: pendingCountError } = await pendingQuery
-  if (pendingCountError) {
-    console.error('[getPlatformChargebacks:pendingCount] Error:', pendingCountError)
-  }
-
-  const now = new Date()
-  const cutoff = new Date(now.getTime() + 72 * 60 * 60 * 1000)
-
-  let urgentQuery = supabase
-    .from('chargebacks')
-    .select('id', { count: 'exact', head: true })
-    .in('status', pendingStatuses)
-    .not('defense_deadline', 'is', null)
-    .gte('defense_deadline', now.toISOString())
-    .lte('defense_deadline', cutoff.toISOString())
-  urgentQuery = applyChargebackFilters(urgentQuery, scopedFilters, false)
-
-  const { count: urgentCountRaw, error: urgentCountError } = await urgentQuery
-  if (urgentCountError) {
-    console.error('[getPlatformChargebacks:urgentCount] Error:', urgentCountError)
-  }
-
-  return {
-    data: rows.map((row) => mapDbRowToChargeback(row, merchantNameById, paymentById, orderById)),
-    total: count || 0,
-    pendingCount: pendingCountRaw || 0,
-    urgentCount: urgentCountRaw || 0,
-  }
+  return rows.map((row) => mapDbRowToChargeback(row, merchantNameById, paymentById, orderById))
 }
 
 export interface PlatformTransactionStats {
@@ -2817,6 +2997,34 @@ export interface PlatformTransactionDetails {
   order_discounts: PlatformTransactionOrderDiscount[]
   payment_events: PlatformTransactionPaymentEvent[]
   payment_segments: PlatformTransactionSegment[]
+  /** Staff display names for voided_by / returned_by / tip_adjusted_by, keyed by staff_profiles.id. */
+  staff_names?: Record<string, string>
+}
+
+/** Resolves the payment's void/return/tip-adjust staff ids to names. A failed lookup leaves the ids. */
+async function withStaffNames(data: PlatformTransactionDetails | null): Promise<PlatformTransactionDetails | null> {
+  if (!data) return data
+  const ids = [
+    ...new Set([data.voided_by, data.returned_by, data.tip_adjusted_by].filter((id): id is string => !!id)),
+  ]
+  if (ids.length === 0) return data
+
+  const supabase = createServerSupabaseClient()
+  const { data: rows, error } = await supabase
+    .from('staff_profiles')
+    .select('id, display_name, first_name, last_name')
+    .in('id', ids)
+  if (error) {
+    console.warn('[getPlatformTransactionDetails:staffNames]', error.message)
+    return data
+  }
+
+  const staff_names: Record<string, string> = {}
+  for (const row of rows ?? []) {
+    const name = row.display_name || [row.first_name, row.last_name].filter(Boolean).join(' ')
+    if (name) staff_names[row.id] = name
+  }
+  return { ...data, staff_names }
 }
 
 function mapRpcPaymentEvent(event: any, fallbackId: string): PlatformTransactionPaymentEvent {
@@ -3181,7 +3389,7 @@ export async function getPlatformTransactionDetails(
         success: Boolean(fromRpc.data),
         errorMessage: fromRpc.data ? undefined : 'Transaction detail not found',
       })
-      return fromRpc.data
+      return withStaffNames(fromRpc.data)
     }
 
     console.warn(
@@ -3199,7 +3407,7 @@ export async function getPlatformTransactionDetails(
       success: Boolean(fromLegacy),
       errorMessage: fromLegacy ? undefined : `Transaction detail fallback failed (${fromRpc.errorCode})`,
     })
-    return fromLegacy
+    return withStaffNames(fromLegacy)
   } catch (error) {
     void logPlatformPaymentAuditEvent({
       action: 'view_payment_detail',

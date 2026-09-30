@@ -1,11 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import type { DateRange } from 'react-day-picker'
 import { format, parse } from 'date-fns'
-import { ChevronRight, RefreshCcwDot } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,31 +24,35 @@ import type { PaginationMeta } from '@/types/pagination'
 import {
     getPlatformPayments,
     type PlatformPaymentFilters,
-    type PlatformPaymentRow,
 } from '@/app/manage/actions/hq-platform/payments'
+import { paymentDetailHref } from '../routes'
 import {
-    CardField,
-    CardFields,
+    batchLabel,
+    capitalise,
+    formatDateTime,
+    formatMoney,
+    netFeeLabel,
+    tsysMatchLabel,
+} from './payment-format'
+import {
     CardGridEmpty,
     FilterDate,
+    LedgerToolbar,
     LoadError,
-    RecordCard,
     RecordCardSkeletons,
+    RecordLinkCard,
+    RowLink,
     TableEmptyRow,
 } from './ledger-primitives'
 
-/** Columns in the wide table — the loading and empty rows span all of them. */
-const COLUMN_COUNT = 12
+/** A column the tablet table leaves out; it joins at `xl`. */
+const XL_ONLY = 'hidden xl:table-cell'
 
-function formatMoney(n: number) {
-    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-}
-
-function formatDateTime(iso?: string | null) {
-    if (!iso) return '—'
-    const d = new Date(iso)
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-}
+/**
+ * Per-column visibility, in table order, so the loading rows hide the same
+ * cells the loaded rows do and nothing jumps.
+ */
+const COLUMN_CLASSES = ['', '', '', '', XL_ONLY, XL_ONLY, '', XL_ONLY, '', '', '', XL_ONLY]
 
 function toIsoDate(d?: Date): string | null {
     if (!d) return null
@@ -73,38 +76,6 @@ function defaultRange(): DateRange {
     return { from, to }
 }
 
-function capitalise(value: string): string {
-    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value
-}
-
-/**
- * Prefer the host batch number ("009", optionally prefixed with the acquirer
- * like "TSYS-009"). Fall back to settlement_batch_label only for pre-Wave-A.1
- * rows where batch_number is null.
- */
-function batchLabel(r: PlatformPaymentRow): string | null {
-    const hostBatchNumber = r.batch_number ?? r.dejavoo_batch_number ?? null
-    return hostBatchNumber
-        ? (r.acquirer ? `${r.acquirer}-${hostBatchNumber}` : hostBatchNumber)
-        : (r.settlement_batch_label ?? null)
-}
-
-function methodLabel(r: PlatformPaymentRow): string {
-    const method = capitalise(r.payment_method)
-    if (!r.card_type) return method
-    return `${method} · ${r.card_type}${r.card_last_four ? ` •••${r.card_last_four}` : ''}`
-}
-
-function netFeeLabel(r: PlatformPaymentRow): string {
-    // The minus sign says it is a deduction; no colour needed (§3.5).
-    return r.net_fee > 0 ? `−${formatMoney(r.net_fee)}` : '—'
-}
-
-function tsysMatchLabel(r: PlatformPaymentRow): string {
-    if (!r.luqra_transaction_id) return 'Unmatched'
-    return r.luqra_batch_id ? `Matched ${r.luqra_batch_id}` : 'Matched'
-}
-
 export function PaymentsLedger({
     initialMerchantIds,
 }: {
@@ -114,8 +85,9 @@ export function PaymentsLedger({
     const [unsettledOnly, setUnsettledOnly] = useState(false)
     const [unmatchedOnly, setUnmatchedOnly] = useState(false)
     const [page, setPage] = useState(1)
-    // A page's primary list pages at 25 (UI-DESIGN-SYSTEM §5.7).
-    const count = 25
+    const router = useRouter()
+    // 10 a page, so the table sits in the page with no scroll of its own.
+    const count = 10
 
     // The default window, as field strings, so "Clear filters" can tell when
     // the range has moved off it.
@@ -197,7 +169,7 @@ export function PaymentsLedger({
 
     return (
         <div className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
+            <LedgerToolbar onRefresh={() => void refetch()} refreshing={isFetching}>
                 <FilterDate
                     value={fromField}
                     onChange={(value) => setRangeEdge('from', value)}
@@ -239,17 +211,7 @@ export function PaymentsLedger({
                         Clear filters
                     </Button>
                 )}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-4 sm:ml-auto"
-                    onClick={() => void refetch()}
-                    disabled={isFetching}
-                >
-                    <RefreshCcwDot className="h-3.5 w-3.5" />
-                    Refresh
-                </Button>
-            </div>
+            </LedgerToolbar>
 
             <StatRow columns={4}>
                 <StatTile
@@ -303,19 +265,26 @@ export function PaymentsLedger({
                 />
             ) : (
                 <>
-                    <Table variant="data" containerClassName="hidden 2xl:block" className="min-w-[1180px]">
+                    {/* A table from `md`; the four reconciliation columns join at
+                        `xl`. Every row opens the payment's own page. */}
+                    <Table
+                        variant="data"
+                        bounded={false}
+                        containerClassName="hidden md:block"
+                        className="md:min-w-[760px] xl:min-w-[1180px]"
+                    >
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Captured</TableHead>
                                 <TableHead>Merchant</TableHead>
                                 <TableHead>Order</TableHead>
                                 <TableHead>Method</TableHead>
-                                <TableHead>Auth</TableHead>
-                                <TableHead>Batch</TableHead>
+                                <TableHead className={XL_ONLY}>Auth</TableHead>
+                                <TableHead className={XL_ONLY}>Batch</TableHead>
                                 <TableHead className="text-right tabular-nums">
                                     <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full payment amount including tip. This is the gross amount charged to the cardholder." side="bottom" /></span>
                                 </TableHead>
-                                <TableHead className="text-right tabular-nums">
+                                <TableHead className={`${XL_ONLY} text-right tabular-nums`}>
                                     <span className="inline-flex items-center justify-end gap-1">Net fee <InfoIcon tip="Platform fee deducted from this payment. Equals the dual-pricing fee plus tip fee, minus any refunded fee portions. Reconciles with TSYS line-for-line." side="bottom" /></span>
                                 </TableHead>
                                 <TableHead className="text-right tabular-nums">
@@ -327,7 +296,7 @@ export function PaymentsLedger({
                                 <TableHead>
                                     <span className="inline-flex items-center gap-1">Settled <InfoIcon tip="Whether this payment has been confirmed settled by the processor and included in a net deposit to the merchant's bank." side="bottom" /></span>
                                 </TableHead>
-                                <TableHead>
+                                <TableHead className={XL_ONLY}>
                                     <span className="inline-flex items-center gap-1">TSYS match <InfoIcon tip="Whether this payment has a matching TSYS transaction ID. Matched = TSYS confirmed receipt. Unmatched = payment not yet reconciled with TSYS." side="bottom" /></span>
                                 </TableHead>
                             </TableRow>
@@ -336,49 +305,38 @@ export function PaymentsLedger({
                             {isLoading ? (
                                 Array.from({ length: 6 }).map((_, idx) => (
                                     <TableRow key={`pmt-loading-${idx}`}>
-                                        {Array.from({ length: COLUMN_COUNT }).map((__, ci) => (
-                                            <TableCell key={`pmt-loading-${idx}-${ci}`}>
+                                        {COLUMN_CLASSES.map((cellClass, ci) => (
+                                            <TableCell key={`pmt-loading-${idx}-${ci}`} className={cellClass}>
                                                 <Skeleton className="h-4 w-full" />
                                             </TableCell>
                                         ))}
                                     </TableRow>
                                 ))
                             ) : rows.length === 0 ? (
-                                <TableEmptyRow colSpan={COLUMN_COUNT} title={emptyTitle} hint={emptyHint} />
+                                <TableEmptyRow colSpan={COLUMN_CLASSES.length} title={emptyTitle} hint={emptyHint} />
                             ) : (
                                 rows.map((r) => {
                                     const batch = batchLabel(r)
+                                    const href = paymentDetailHref(r.id)
                                     return (
-                                        <TableRow key={r.id}>
+                                        <TableRow
+                                            key={r.id}
+                                            className="cursor-pointer"
+                                            onClick={() => router.push(href)}
+                                        >
                                             <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                                                {formatDateTime(r.captured_at ?? r.initiated_at)}
+                                                <RowLink href={href}>
+                                                    {formatDateTime(r.captured_at ?? r.initiated_at)}
+                                                </RowLink>
                                             </TableCell>
                                             <TableCell>
-                                                {r.merchant_name ? (
-                                                    <Link
-                                                        href={`/manage/merchants/${r.merchant_id}`}
-                                                        className="underline-offset-2 hover:underline"
-                                                    >
-                                                        {r.merchant_name}
-                                                    </Link>
-                                                ) : (
-                                                    <span className="text-muted-foreground">—</span>
-                                                )}
+                                                {r.merchant_name ?? <span className="text-muted-foreground">—</span>}
                                                 <p className="text-xs text-muted-foreground">
                                                     {r.location_name ?? '—'}
                                                 </p>
                                             </TableCell>
-                                            <TableCell>
-                                                {r.order_number ? (
-                                                    <Link
-                                                        href={`/manage/transactions?orderId=${r.order_id}`}
-                                                        className="font-mono text-xs underline-offset-2 hover:underline"
-                                                    >
-                                                        {r.order_number}
-                                                    </Link>
-                                                ) : (
-                                                    <span className="text-muted-foreground">—</span>
-                                                )}
+                                            <TableCell className="font-mono text-xs">
+                                                {r.order_number ?? <span className="text-muted-foreground">—</span>}
                                             </TableCell>
                                             <TableCell>
                                                 <span className="capitalize">{r.payment_method}</span>
@@ -389,16 +347,16 @@ export function PaymentsLedger({
                                                     </p>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs">
+                                            <TableCell className={`${XL_ONLY} font-mono text-xs`}>
                                                 {r.authorization_code ?? '—'}
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs">
+                                            <TableCell className={`${XL_ONLY} font-mono text-xs`}>
                                                 {batch ?? <span className="text-muted-foreground">—</span>}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
                                                 {formatMoney(r.total_amount)}
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums">
+                                            <TableCell className={`${XL_ONLY} text-right tabular-nums`}>
                                                 {r.net_fee > 0 ? (
                                                     netFeeLabel(r)
                                                 ) : (
@@ -414,19 +372,8 @@ export function PaymentsLedger({
                                             <TableCell>
                                                 <Badge variant="outline">{r.is_settled ? 'Settled' : 'Pending'}</Badge>
                                             </TableCell>
-                                            <TableCell>
-                                                {r.luqra_transaction_id ? (
-                                                    <Link
-                                                        href={`/manage/transactions?paymentId=${r.id}`}
-                                                        className="inline-flex items-center gap-1"
-                                                        title="Open payment in transactions"
-                                                    >
-                                                        <Badge variant="outline">{tsysMatchLabel(r)}</Badge>
-                                                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    </Link>
-                                                ) : (
-                                                    <Badge variant="outline">Unmatched</Badge>
-                                                )}
+                                            <TableCell className={XL_ONLY}>
+                                                <Badge variant="outline">{tsysMatchLabel(r)}</Badge>
                                             </TableCell>
                                         </TableRow>
                                     )
@@ -435,78 +382,24 @@ export function PaymentsLedger({
                         </TableBody>
                     </Table>
 
-                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 2xl:hidden">
+                    {/* Phones: amount, when, who and status only; the rest is on
+                        the payment's page. */}
+                    <div className="grid min-w-0 grid-cols-1 gap-3 md:hidden">
                         {isLoading ? (
                             <RecordCardSkeletons count={4} />
                         ) : rows.length === 0 ? (
                             <CardGridEmpty title={emptyTitle} hint={emptyHint} />
                         ) : (
-                            rows.map((r) => {
-                                const batch = batchLabel(r)
-                                return (
-                                    <RecordCard key={r.id}>
-                                        <div className="flex items-baseline justify-between gap-3">
-                                            <p className="font-medium tabular-nums">{formatMoney(r.total_amount)}</p>
-                                            <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                                                {formatDateTime(r.captured_at ?? r.initiated_at)}
-                                            </p>
-                                        </div>
-                                        <p className="mt-1 truncate text-sm text-muted-foreground">
-                                            {r.merchant_name ? (
-                                                <Link
-                                                    href={`/manage/merchants/${r.merchant_id}`}
-                                                    className="text-foreground underline-offset-2 hover:underline"
-                                                >
-                                                    {r.merchant_name}
-                                                </Link>
-                                            ) : (
-                                                '—'
-                                            )}
-                                            {r.location_name && ` · ${r.location_name}`}
-                                        </p>
-                                        <CardFields>
-                                            <CardField
-                                                label="Order"
-                                                mono
-                                                value={
-                                                    r.order_number ? (
-                                                        <Link
-                                                            href={`/manage/transactions?orderId=${r.order_id}`}
-                                                            className="underline-offset-2 hover:underline"
-                                                        >
-                                                            {r.order_number}
-                                                        </Link>
-                                                    ) : (
-                                                        '—'
-                                                    )
-                                                }
-                                            />
-                                            <CardField label="Method / card" value={methodLabel(r)} />
-                                            <CardField label="Auth" mono value={r.authorization_code ?? '—'} />
-                                            <CardField label="Batch" mono value={batch ?? '—'} />
-                                            <CardField label="Net fee" value={netFeeLabel(r)} />
-                                            <CardField label="Net deposit" value={formatMoney(r.net_deposit)} />
-                                            <CardField label="Status" value={capitalise(r.status)} />
-                                            <CardField label="Settled" value={r.is_settled ? 'Settled' : 'Pending'} />
-                                            <CardField
-                                                label="TSYS match"
-                                                value={
-                                                    r.luqra_transaction_id ? (
-                                                        <Link
-                                                            href={`/manage/transactions?paymentId=${r.id}`}
-                                                            className="underline-offset-2 hover:underline"
-                                                        >
-                                                            {tsysMatchLabel(r)}
-                                                        </Link>
-                                                    ) : (
-                                                        'Unmatched'
-                                                    )
-                                                }
-                                            />
-                                        </CardFields>
-                                    </RecordCard>
-                                )
-                            })
+                            rows.map((r) => (
+                                <RecordLinkCard
+                                    key={r.id}
+                                    href={paymentDetailHref(r.id)}
+                                    title={r.merchant_name ?? '—'}
+                                    figure={formatMoney(r.total_amount)}
+                                    subtitle={formatDateTime(r.captured_at ?? r.initiated_at)}
+                                    status={`${capitalise(r.status)} · ${r.is_settled ? 'Settled' : 'Pending'}`}
+                                />
+                            ))
                         )}
                     </div>
 

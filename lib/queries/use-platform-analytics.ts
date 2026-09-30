@@ -22,10 +22,14 @@ import {
   type PlatformAuditLogFilters,
   type PlatformAuditLogsResult,
 } from '@/app/manage/actions/hq-platform/analytics'
+import { getPlatformPaymentById } from '@/app/manage/actions/hq-platform/payments'
 import {
+  getPlatformChargebackById,
   getPlatformChargebacks,
   getPlatformMerchantBreakdown,
+  getPlatformPaymentAuditLogById,
   getPlatformPaymentAuditLogs,
+  getPlatformSettlementBatchById,
   getPlatformSettlementBatchPayments,
   getPlatformSettlementBatches,
   getPlatformTransactionDetails,
@@ -74,6 +78,10 @@ export const platformKeys = {
   paymentAuditLogs: (filters?: PlatformPaymentAuditLogFilters, limit: number = 50, offset: number = 0) =>
     [...platformKeys.all, 'payment-audit-logs', filters, limit, offset] as const,
   transactionDetails: (transactionId: string | null) => [...platformKeys.all, 'transaction-details', transactionId] as const,
+  paymentDetail: (paymentId: string) => [...platformKeys.all, 'payment-detail', paymentId] as const,
+  settlementBatchDetail: (batchId: string) => [...platformKeys.all, 'settlement-batch-detail', batchId] as const,
+  chargebackDetail: (chargebackId: string) => [...platformKeys.all, 'chargeback-detail', chargebackId] as const,
+  paymentAuditEventDetail: (eventId: string) => [...platformKeys.all, 'payment-audit-event-detail', eventId] as const,
   auditLogs: (filters?: PlatformAuditLogFilters, limit: number = 50, offset: number = 0) =>
     [...platformKeys.all, 'audit-logs', filters, limit, offset] as const,
 }
@@ -183,6 +191,44 @@ export function usePlatformPaymentAuditLogs(
     queryKey: platformKeys.paymentAuditLogs(filters, limit, offset),
     queryFn: () => getPlatformPaymentAuditLogs(filters, limit, offset),
     placeholderData: keepPreviousData,
+  })
+}
+
+// ─── Single-record reads for the /manage/transactions detail pages ──────────
+
+export function usePlatformPayment(paymentId: string) {
+  return useQuery({
+    queryKey: platformKeys.paymentDetail(paymentId),
+    queryFn: () => getPlatformPaymentById(paymentId),
+    enabled: !!paymentId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePlatformSettlementBatch(batchId: string) {
+  return useQuery({
+    queryKey: platformKeys.settlementBatchDetail(batchId),
+    queryFn: () => getPlatformSettlementBatchById(batchId),
+    enabled: !!batchId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePlatformChargeback(chargebackId: string) {
+  return useQuery({
+    queryKey: platformKeys.chargebackDetail(chargebackId),
+    queryFn: () => getPlatformChargebackById(chargebackId),
+    enabled: !!chargebackId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePlatformPaymentAuditEvent(eventId: string) {
+  return useQuery({
+    queryKey: platformKeys.paymentAuditEventDetail(eventId),
+    queryFn: () => getPlatformPaymentAuditLogById(eventId),
+    enabled: !!eventId,
+    staleTime: 30_000,
   })
 }
 
