@@ -10,7 +10,8 @@ import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 type RangePreset = "today" | "yesterday" | "7d" | "30d";
 
 interface ComparisonToolbarProps {
-  activeRange: RangePreset;
+  /** null when the shared report range is one these shortcuts don't cover. */
+  activeRange: RangePreset | null;
   onRangeChange: (range: RangePreset) => void;
   compareMode: "previous" | "year";
   onCompareModeChange: (mode: "previous" | "year") => void;
@@ -36,7 +37,7 @@ export function ComparisonToolbar({
   return (
     <div className="flex min-w-0 flex-col gap-4 rounded-2xl border-0 bg-muted/60 p-4">
       {/* Range Selectors */}
-      <ScrollableTabsBar activeValue={activeRange} className="pb-0">
+      <ScrollableTabsBar activeValue={activeRange ?? ""} className="pb-0">
         <div className="flex w-fit min-w-full items-center gap-0.5 rounded-full bg-background/70 p-1 sm:min-w-0">
           {presets.map((preset) => (
             <button

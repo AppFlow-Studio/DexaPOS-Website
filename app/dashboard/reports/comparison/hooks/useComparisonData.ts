@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
-import { subDays, format } from "date-fns";
+import { format } from "date-fns";
 import {
   LocationComparisonData,
   DaypartData,
@@ -17,8 +16,7 @@ import {
   getHourlyComparisonFromOrders,
   getLocationRankingsFromOrders,
 } from "@/app/dashboard/actions/location-analytics-fallback";
-
-type RangePreset = "today" | "yesterday" | "7d" | "30d";
+import { parseReportDateKey } from "@/lib/reporting/date-range";
 
 // Color palette for locations (max 6)
 export const LOCATION_COLORS = [
@@ -32,38 +30,6 @@ export const LOCATION_COLORS = [
 
 export function getLocationColor(index: number): string {
   return LOCATION_COLORS[index % LOCATION_COLORS.length];
-}
-
-// Calculate date range from preset
-export function getDateRangeFromPreset(preset: RangePreset): {
-  startDate: string;
-  endDate: string;
-} {
-  const today = new Date();
-  let startDate: Date;
-  let endDate: Date = today;
-
-  switch (preset) {
-    case "today":
-      startDate = today;
-      break;
-    case "yesterday":
-      startDate = subDays(today, 1);
-      endDate = subDays(today, 1);
-      break;
-    case "7d":
-      startDate = subDays(today, 6);
-      break;
-    case "30d":
-    default:
-      startDate = subDays(today, 29);
-      break;
-  }
-
-  return {
-    startDate: format(startDate, "yyyy-MM-dd"),
-    endDate: format(endDate, "yyyy-MM-dd"),
-  };
 }
 
 // Transform comparison data for line chart
@@ -237,8 +203,7 @@ export function transformToHeatmapData(
   const aggregated = new Map<string, number>();
 
   locationData.forEach((item) => {
-    const date = new Date(item.business_date);
-    const dayOfWeek = date.getDay();
+    const dayOfWeek = item.day_of_week ?? parseReportDateKey(item.business_date).getDay();
     const hour = item.hour_of_day;
     const key = `${dayOfWeek}-${hour}`;
 
@@ -272,13 +237,13 @@ export function transformToHeatmapData(
 export function useComparisonData(
   clerkOrgId: string | undefined,
   locationIds: string[],
-  rangePreset: RangePreset,
+  /** The shared report range (stores/report-date-range-store.ts). */
+  dateRange: { from: Date; to: Date },
   enabled: boolean = true
 ) {
-  const { startDate, endDate } = useMemo(
-    () => getDateRangeFromPreset(rangePreset),
-    [rangePreset]
-  );
+  // Calendar days, inclusive; the server anchors them to each location's timezone.
+  const startDate = format(dateRange.from, "yyyy-MM-dd");
+  const endDate = format(dateRange.to, "yyyy-MM-dd");
 
   const shouldFetch = enabled && !!clerkOrgId && locationIds.length > 0;
 
@@ -364,9 +329,16 @@ export function useComparisonData(
 
   // Rankings data - using fallback
   const rankingsQuery = useQuery({
-    queryKey: ["rankings-fallback", clerkOrgId, startDate, endDate],
+    queryKey: ["rankings-fallback", clerkOrgId, locationIds, startDate, endDate],
     queryFn: () =>
-      getLocationRankingsFromOrders(clerkOrgId!, startDate, endDate),
+      getLocationRankingsFromOrders(
+        clerkOrgId!,
+        startDate,
+        endDate,
+        "gross_sales",
+        10,
+        locationIds
+      ),
     enabled: shouldFetch,
     staleTime: 5 * 60 * 1000,
   });

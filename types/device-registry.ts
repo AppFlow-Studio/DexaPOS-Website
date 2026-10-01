@@ -134,6 +134,19 @@ export type DeviceActivityItem =
       actor: string | null
     }
 
+/**
+ * A support ticket the merchant has open against one of their devices, surfaced
+ * on the device row and in its detail dialog. Tickets are tied to a device by
+ * `metadata.device_id`, written when the report is filed.
+ */
+export interface DeviceSupportTicketLink {
+  ticket_id: string
+  ticket_number: string
+  subject: string
+  status: string
+  created_at: string
+}
+
 export interface AdminDeviceInventoryFilters {
   status?: DeviceLifecycleStatus | 'all' | null
   category?: DeviceCategory | 'all' | null

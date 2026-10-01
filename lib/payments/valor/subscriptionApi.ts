@@ -238,7 +238,7 @@ export interface ValorUpdateSubscriptionBody {
   subscription_starts_from: string;
   charge_until: string;
   charge_on: string;
-  failure_notification: "1";
+  failure_notification: "0" | "1";
   additional_prompts: Array<{ name: string; value: string }>;
   invoice_no?: string;
   email?: string;
@@ -323,7 +323,9 @@ export function buildUpdateSubscriptionBody(
     subscription_starts_from: addBody.subscription_starts_from,
     charge_until: addBody.charge_until,
     charge_on: addBody.charge_on,
-    failure_notification: "1",
+    // Valor rejects failure_notification "1" with no email or phone to notify
+    // (`SUB21`), so only ask for it when there is somewhere to send it.
+    failure_notification: addBody.email || addBody.phone ? "1" : "0",
     additional_prompts: addBody.additional_prompts,
     ...(addBody.invoice_no ? { invoice_no: addBody.invoice_no } : {}),
     ...(addBody.email ? { email: addBody.email } : {}),

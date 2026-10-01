@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
+import { applySalePredicate } from "@/lib/reporting/recognized-order";
 import type {
   TaxSummary,
   TaxBreakdownRow,
@@ -84,50 +84,49 @@ export async function GetTaxSummary(
 
   const supabase = createServerSupabaseClient();
 
-  // End of day so orders placed after page-load time are always included
-  const dateToEOD = new Date(dateTo);
-  dateToEOD.setHours(23, 59, 59, 999);
+  // Tax totals come from the same calculation as Financials / Sales Overview
+  // (get_sales_report, supabase/migrations/20260930150000_report_number_consistency.sql):
+  // tax on the lane the order was charged on (cash-priced orders at cash tax),
+  // refunded tax dated by the refund, same sale-order set. `dateTo` is already
+  // the exclusive end of the last selected day (useReportingQueryRange).
+  const { data: report, error: reportError } = await (supabase as any).rpc(
+    "get_sales_report",
+    {
+      p_merchant_id: merchantId,
+      p_location_ids: locationId && locationId !== "all" ? [locationId] : null,
+      p_start: dateFrom.toISOString(),
+      p_end: dateTo.toISOString(),
+      p_group_by: "total",
+    }
+  );
+  if (reportError) {
+    console.error("[TaxReport] summary error:", reportError);
+    return { error: reportError.message };
+  }
+  const totals = (report as Array<Record<string, number>> | null)?.[0] ?? {};
 
-  // Tax is collected at payment time, so only recognized (paid) orders count —
-  // the canonical predicate excludes unpaid open checks as well as
-  // draft/cancelled/void/refunded.
-  let ordersQuery = applyReportablePredicate(
+  const totalOrders = Number(totals.order_count) || 0;
+  const grossTaxCollected = Number(totals.tax) || 0;
+  const taxRefunded = Number(totals.tax_refunded) || 0;
+  const totalRefunds = Number(totals.refund_count) || 0;
+  const netSales = Number(totals.net_sales) || 0;
+
+  // Tax-exempt item lines on the same sale orders.
+  let exemptQuery = applySalePredicate(
     supabase
       .from("orders")
-      .select("id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal")
+      .select("id")
       .eq("merchant_id", merchantId)
   )
-    .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateToEOD.toISOString());
-
+    .lt("created_at", dateTo.toISOString());
   if (locationId && locationId !== "all") {
-    ordersQuery = ordersQuery.eq("location_id", locationId);
+    exemptQuery = exemptQuery.eq("location_id", locationId);
   }
+  const { data: saleOrders } = await exemptQuery;
+  const orderIds = (saleOrders ?? []).map((o) => o.id);
 
-  const { data: orders, error: ordersError } = await ordersQuery;
-  if (ordersError) {
-    console.error("[TaxReport] summary orders error:", ordersError);
-    return { error: ordersError.message };
-  }
-
-  const totalOrders = orders?.length ?? 0;
-  const grossTaxCollected = (orders ?? []).reduce(
-    (sum, o) => sum + resolveTaxAmount(o),
-    0
-  );
-
-  // Sum of all order subtotals — exempt amounts will be subtracted below
-  const totalOrderSubtotals = (orders ?? []).reduce(
-    (sum, o) => sum + (o.subtotal ?? 0),
-    0
-  );
-
-  const orderIds = (orders ?? []).map((o) => o.id);
-  let taxRefunded = 0;
-  let totalRefunds = 0;
   let taxExemptSales = 0;
-
   if (orderIds.length > 0) {
     const { data: exemptItems } = await supabase
       .from("order_items")
@@ -140,16 +139,10 @@ export async function GetTaxSummary(
       (sum, i) => sum + (i.subtotal ?? 0),
       0
     );
-
-    const refundsByOrder = await buildRefundsByOrderMap(supabase, orderIds);
-    taxRefunded = Object.values(refundsByOrder).reduce((s, v) => s + v, 0);
-    totalRefunds = Object.values(refundsByOrder).filter((v) => v > 0).length;
   }
 
-  // Fix: taxable sales = all order subtotals minus exempt item amounts.
-  // This ensures the "Taxable Sales" card and effectiveTaxRate use the
-  // correct denominator (genuinely taxable revenue only).
-  const taxableSales = Math.max(0, totalOrderSubtotals - taxExemptSales);
+  // Taxable sales = net sales (same figure as Financials) minus exempt lines.
+  const taxableSales = Math.max(0, netSales - taxExemptSales);
 
   const netTaxLiability = grossTaxCollected - taxRefunded;
   const effectiveTaxRate =
@@ -217,9 +210,8 @@ export async function GetTaxBreakdown(
     paymentFilteredIds = uniqueIds;
   }
 
-  // End of day so orders placed after page-load time are always included
-  const dateToEOD = new Date(dateTo);
-  dateToEOD.setHours(23, 59, 59, 999);
+  // `dateTo` is already the exclusive end of the last selected day
+  // (useReportingQueryRange); pushing it to 23:59:59 added an extra day.
 
   // Use DB-level sort for columns that map to real columns;
   // computed columns (taxRate, taxRefunded) fall back to created_at and
@@ -227,7 +219,7 @@ export async function GetTaxBreakdown(
   const dbSortCol = DB_SORT_COLS[sortBy] ?? "created_at";
   const dbSortAsc = sortDir === "asc";
 
-  let query = applyReportablePredicate(
+  let query = applySalePredicate(
     supabase
       .from("orders")
       .select(
@@ -238,7 +230,7 @@ export async function GetTaxBreakdown(
   )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateToEOD.toISOString())
+    .lt("created_at", dateTo.toISOString())
     .order(dbSortCol, { ascending: dbSortAsc })
     .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -317,13 +309,10 @@ export async function GetTaxByCategory(
 
   const supabase = createServerSupabaseClient();
 
-  const dateToEOD = new Date(dateTo);
-  dateToEOD.setHours(23, 59, 59, 999);
-
   // Fix: fetch pricing mode fields so we can resolve cash vs regular tax
   // at the item level — previously item.tax_amount was used directly for
   // all orders, which disagreed with the summary's resolveTaxAmount logic.
-  let ordersQuery = applyReportablePredicate(
+  let ordersQuery = applySalePredicate(
     supabase
       .from("orders")
       .select("id, payment_pricing_mode, tax_amount, cash_tax_amount")
@@ -331,7 +320,7 @@ export async function GetTaxByCategory(
   )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateToEOD.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     ordersQuery = ordersQuery.eq("location_id", locationId);
@@ -427,16 +416,13 @@ export async function GetTaxByLocation(
 
   const supabase = createServerSupabaseClient();
 
-  const dateToEOD = new Date(dateTo);
-  dateToEOD.setHours(23, 59, 59, 999);
-
   const [{ data: locations, error: locError }, { data: orders, error: ordersError }] =
     await Promise.all([
       supabase
         .from("locations")
         .select("id, name, sales_tax_rate")
         .eq("merchant_id", merchantId),
-      applyReportablePredicate(
+      applySalePredicate(
         supabase
           .from("orders")
           .select(
@@ -446,7 +432,7 @@ export async function GetTaxByLocation(
       )
         .is("voided_at", null)
         .gte("created_at", dateFrom.toISOString())
-        .lte("created_at", dateToEOD.toISOString()),
+        .lt("created_at", dateTo.toISOString()),
     ]);
 
   if (locError) return { error: locError.message };

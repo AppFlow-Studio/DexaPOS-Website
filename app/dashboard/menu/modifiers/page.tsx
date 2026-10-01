@@ -70,7 +70,6 @@ import {
   Panel,
   StatRow,
   StatTile,
-  LocationIndicator,
 } from "@/components/dashboard/shell";
 import {
   modifierScopeStyle,
@@ -1193,14 +1192,6 @@ const sensors = useSensors(
                 // unguarded renders the literal text "Viewing undefined.".
                 `Viewing ${selectedLocation.name}. Global groups are structural read-only — you can override price and availability.`
               : "Global groups are structural read-only in a location view — you can override price and availability."
-        }
-        indicator={
-          isSingleLocation ? undefined : (
-            <LocationIndicator
-              isAllLocations={isAllLocations}
-              locationName={selectedLocation?.name}
-            />
-          )
         }
         actions={
           <Button

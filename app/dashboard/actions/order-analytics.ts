@@ -647,7 +647,10 @@ export interface VoidItem {
 export interface RefundItem {
   order_number: string;
   order_id: string;
+  /** Money returned to the customer (sales + tax + service charge + tip). */
   amount: number;
+  /** Sales part of `amount` — what Financials subtracts to reach net sales. */
+  sales_amount?: number;
   reason: string;
   refunded_at: string;
   refunded_by: string;
@@ -753,6 +756,10 @@ export async function GetSalesByItemReport(
     quantity_sold: Number(r.quantity_sold ?? 0),
     // Newer prod function is net-only (no per-item gross); fall back to net.
     gross_sales: Number(r.gross_sales ?? r.net_sales ?? 0),
+    // Order discounts and refunds allocated to the item, so the item totals
+    // add up to Sales Overview (report_item_sales in the shared migration).
+    discounts: Number(r.discounts ?? 0),
+    refunds: Number(r.refunds ?? 0),
     net_sales: Number(r.net_sales ?? 0),
   })) as SalesByItemReportItem[];
 }
@@ -1091,16 +1098,29 @@ export async function GetRevenueByCategoryReport(
   };
 }
 
+/**
+ * Built by `get_financial_kpis` on the shared report definitions
+ * (supabase/migrations/20260930150000_report_number_consistency.sql):
+ * charged-lane money, refunded orders kept in gross, refunds dated by
+ * refunded_at, and gross_sales − discounts_total − refunds_total = net_sales.
+ */
 export interface FinancialKPIs {
   summary: {
     gross_sales: number;
     net_sales: number;
     discounts_total: number;
+    /** Sales portion of refunds (what is subtracted to reach net_sales). */
     refunds_total: number;
     tax_total: number;
+    tax_refunded?: number;
+    service_charge_total?: number;
     tip_total: number;
+    /** Money returned to customers (sales + tax + service charge + tip). */
+    refunds_money_total?: number;
     order_count: number;
+    /** net_sales / order_count */
     avg_order_value: number;
+    /** Everything collected on sale orders: net + tax + service charge + tips. */
     paid_in_total: number;
   };
   payment_methods: Array<{
@@ -1111,6 +1131,12 @@ export interface FinancialKPIs {
   daily_stats: Array<{
     date: string;
     net_sales: number;
+    gross_sales?: number;
+    discounts?: number;
+    refunds?: number;
+    tax?: number;
+    service_charge?: number;
+    tips?: number;
     order_count: number;
     guest_count: number;
   }>;
@@ -2024,90 +2050,42 @@ export async function GetSalesSummaryReport(
 
   const supabase = createServerSupabaseClient();
 
-  const { data: orders, error } = await fetchAllReportRows((from, to) => {
-    let query = applyReportablePredicate(
-      supabase
-        .from("orders")
-        .select(
-          "id, location_id, created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status, order_source"
-        )
-        .eq("merchant_id", merchantId)
-    )
-      .gte("created_at", dateFrom.toISOString())
-      .lt("created_at", dateTo.toISOString());
-
-    if (locationId && locationId !== "all") {
-      query = query.eq("location_id", locationId);
-    }
-
-    return query
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to);
-  });
-  if (error) {
-    console.error("[GetSalesSummaryReport] Error:", error);
+  // Same calculation as every other report (get_sales_report in
+  // supabase/migrations/20260930150000_report_number_consistency.sql):
+  // charged-lane money, refunded orders kept in gross, refunds (sales portion
+  // only — not tax or tips) subtracted on the day they happened, and days in
+  // each location's own timezone. Previously this summed raw columns in JS and
+  // subtracted whole refund amounts (tax + tip included) from pre-tax sales.
+  const rpcArgs = {
+    p_merchant_id: merchantId,
+    p_location_ids: locationId && locationId !== "all" ? [locationId] : null,
+    p_start: dateFrom.toISOString(),
+    p_end: dateTo.toISOString(),
+  };
+  const [byDaySource, bySource] = await Promise.all([
+    (supabase as any).rpc("get_sales_report", { ...rpcArgs, p_group_by: "day_source" }),
+    (supabase as any).rpc("get_sales_report", { ...rpcArgs, p_group_by: "source" }),
+  ]);
+  if (byDaySource.error || bySource.error) {
+    console.error(
+      "[GetSalesSummaryReport] Error:",
+      byDaySource.error ?? bySource.error
+    );
     return { rows: [], byChannel: emptyChannels };
   }
 
-  // Rows are keyed by the business day in each location's own timezone, not UTC:
-  // an 8:30 PM New York order belongs to that evening, not the next UTC day.
-  const locationTimezoneById = await getLocationTimezoneMap(
-    supabase,
-    merchantId,
-    locationId
-  );
-  const localDateKey = (
-    instant: string,
-    orderLocationId: string | null | undefined
-  ) =>
-    getLocalDateKey(
-      instant,
-      (orderLocationId && locationTimezoneById.get(orderLocationId)) ||
-        FALLBACK_REPORTING_TIMEZONE
-    );
-
-  // Refunds are netted from the dedicated refunds source (order_payments),
-  // NOT from the recognized-order gate — which excludes `refunded` orders.
-  // Without this separate query the refunds column would silently read 0.
-  const { data: refundRows } = await fetchAllReportRows((from, to) => {
-    let refundQuery = supabase
-      .from("order_payments")
-      .select(
-        "id, refunded_amount, refunded_at, orders!inner(merchant_id, location_id, order_source)"
-      )
-      .eq("orders.merchant_id", merchantId)
-      .in("status", ["refunded", "partially_refunded"])
-      .gte("refunded_at", dateFrom.toISOString())
-      .lt("refunded_at", dateTo.toISOString());
-
-    if (locationId && locationId !== "all") {
-      refundQuery = refundQuery.eq("orders.location_id", locationId);
-    }
-
-    return refundQuery
-      .order("refunded_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to);
-  });
-  const refundsByDate = new Map<string, number>();
-  const refundsByChannel = new Map<OrderSource, number>();
-  for (const r of refundRows || []) {
-    if (!r.refunded_at) continue;
-    const linkedOrder = Array.isArray(r.orders) ? r.orders[0] : r.orders;
-    const channel = normalizeOrderSource(linkedOrder?.order_source);
-    refundsByChannel.set(
-      channel,
-      (refundsByChannel.get(channel) || 0) + Number(r.refunded_amount || 0)
-    );
-    if (orderSource && channel !== orderSource) continue;
-
-    const date = localDateKey(r.refunded_at, linkedOrder?.location_id);
-    refundsByDate.set(
-      date,
-      (refundsByDate.get(date) || 0) + Number(r.refunded_amount || 0)
-    );
-  }
+  type ReportRow = {
+    day?: string;
+    source?: string;
+    gross_sales: number;
+    discounts: number;
+    refunds: number;
+    net_sales: number;
+    tax: number;
+    tips: number;
+    order_count: number;
+  };
+  const num = (v: unknown) => Number(v) || 0;
 
   const byDateMap = new Map<
     string,
@@ -2118,81 +2096,61 @@ export async function GetSalesSummaryReport(
       tax: number;
       tips: number;
       refunds: number;
+      netSales: number;
     }
   >();
-  const channelMap = new Map<
-    OrderSource,
-    { orders: number; gross: number; discounts: number }
-  >(
-    emptyChannels.map((channel) => [
-      channel.channel,
-      { orders: 0, gross: 0, discounts: 0 },
-    ])
-  );
-
-  for (const o of orders) {
-    const channel = normalizeOrderSource(o.order_source);
-    const channelData = channelMap.get(channel)!;
-    channelData.orders += 1;
-    channelData.gross += Number(o.subtotal || 0);
-    channelData.discounts += Number(o.discount_amount || 0);
-
-    if (orderSource && channel !== orderSource) continue;
-
-    const date = localDateKey(o.created_at, o.location_id);
-    const existing = byDateMap.get(date) || {
+  for (const r of (byDaySource.data as ReportRow[] | null) ?? []) {
+    if (!r.day) continue;
+    if (orderSource && normalizeOrderSource(r.source) !== orderSource) continue;
+    const existing = byDateMap.get(r.day) || {
       orderCount: 0,
       grossSales: 0,
       discounts: 0,
       tax: 0,
       tips: 0,
       refunds: 0,
+      netSales: 0,
     };
-
-    existing.orderCount++;
-    existing.grossSales += Number(o.subtotal || 0);
-    existing.discounts += Number(o.discount_amount || 0);
-    existing.tax += Number(o.tax_amount || 0);
-    existing.tips += Number(o.tip_amount || 0);
-
-    byDateMap.set(date, existing);
-  }
-
-  // Fold in refunds (keyed by refund date, which may differ from order date,
-  // so ensure those dates exist in the map).
-  for (const [date, amount] of refundsByDate.entries()) {
-    const existing = byDateMap.get(date) || {
-      orderCount: 0,
-      grossSales: 0,
-      discounts: 0,
-      tax: 0,
-      tips: 0,
-      refunds: 0,
-    };
-    existing.refunds += amount;
-    byDateMap.set(date, existing);
+    existing.orderCount += num(r.order_count);
+    existing.grossSales += num(r.gross_sales);
+    existing.discounts += num(r.discounts);
+    existing.tax += num(r.tax);
+    existing.tips += num(r.tips);
+    existing.refunds += num(r.refunds);
+    existing.netSales += num(r.net_sales);
+    byDateMap.set(r.day, existing);
   }
 
   const rows = Array.from(byDateMap.entries())
-    .map(([date, data]) => ({
-      date,
-      ...data,
-      netSales: data.grossSales - data.discounts - data.refunds,
-    }))
+    .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const byChannel = emptyChannels.map((channel) => {
-    const totals = channelMap.get(channel.channel)!;
-    const refunds = refundsByChannel.get(channel.channel) || 0;
-    const net = totals.gross - totals.discounts - refunds;
+  const channelTotals = new Map<
+    OrderSource,
+    { orders: number; gross: number; net: number }
+  >();
+  for (const r of (bySource.data as ReportRow[] | null) ?? []) {
+    const channel = normalizeOrderSource(r.source);
+    const t = channelTotals.get(channel) || { orders: 0, gross: 0, net: 0 };
+    t.orders += num(r.order_count);
+    t.gross += num(r.gross_sales);
+    t.net += num(r.net_sales);
+    channelTotals.set(channel, t);
+  }
 
+  const byChannel = emptyChannels.map((channel) => {
+    const totals = channelTotals.get(channel.channel) || {
+      orders: 0,
+      gross: 0,
+      net: 0,
+    };
     return {
       channel: channel.channel,
       label: channel.label,
       orders: totals.orders,
       gross: totals.gross,
-      net,
-      avgTicket: totals.orders > 0 ? net / totals.orders : 0,
+      net: totals.net,
+      avgTicket: totals.orders > 0 ? totals.net / totals.orders : 0,
     };
   });
 

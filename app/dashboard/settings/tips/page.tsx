@@ -46,7 +46,6 @@ import { PoolCard } from "./components/PoolCard";
 import { RuleCard } from "./components/RuleCard";
 import type { TipPoolConfigWithShares, TipOutRule, Role } from "@/app/dashboard/actions/tips";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -584,7 +583,6 @@ export default function TipsSettingsPage() {
         <PageHeader
           title="Tips"
           subtitle="Configure tip pools and tip-out rules."
-          indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
         <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-6 shadow-none">
           <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -625,12 +623,6 @@ export default function TipsSettingsPage() {
       <PageHeader
         title="Tips"
         subtitle="Configure tip pools, role distribution, and tip-out rules."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
       />
 
       {/* TIP POOLS */}

@@ -16,6 +16,7 @@ import {
   Flame,
   FolderOpen,
   GitBranch,
+  Layers,
   LayoutGrid,
   ListPlus,
   LogOut,
@@ -40,6 +41,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useAuditLogs } from "../hooks/useAuditLogs";
 import { useLocationStore } from "@/stores/location-store";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
@@ -49,6 +51,7 @@ import {
   formatRelativeTime,
   formatChangesForDisplay,
 } from "@/lib/audit/sentence-templates";
+import { describeSettlementActivity } from "@/lib/audit/settlement-activity";
 import {
   auditSeverityChip,
   auditSeverityLabel,
@@ -95,6 +98,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Flame,
   FolderOpen,
   GitBranch,
+  Layers,
   LayoutGrid,
   ListPlus,
   LogOut,
@@ -145,6 +149,14 @@ const CATEGORY_TABS = [
     id: "orders",
     label: "Orders & Payments",
     resourceTypes: ["order", "order_item", "payment"],
+  },
+  // Batch events span two resource types (settlement_batch, and the terminal
+  // for auto-settle alerts), so this tab filters on the category instead.
+  {
+    id: "batches",
+    label: "Batches",
+    resourceTypes: null,
+    category: "settlement",
   },
   {
     id: "kitchen",
@@ -206,6 +218,10 @@ function useCalendarMonths(): number {
 // ─── Category Label ───────────────────────────────────────────────────────────
 
 function getCategoryLabel(log: AuditLogWithLocation): string {
+  // Before the resource lookup: auto-settle alerts are terminal rows, which
+  // would otherwise read as "Settings".
+  if (log.action_category === "settlement") return "Batches";
+
   const tab = CATEGORY_TABS.find(
     (t) => t.resourceTypes && log.resource_type && (t.resourceTypes as readonly string[]).includes(log.resource_type)
   );
@@ -327,6 +343,8 @@ function AuditDetailModal({
   const { sentence, highlight, iconName } = buildAuditSentence(log);
   const changes = formatChangesForDisplay(log.changes);
   const categoryLabel = getCategoryLabel(log);
+  // Batch events keep their facts in metadata, which `changes` never holds.
+  const settlement = describeSettlementActivity(log);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -398,6 +416,35 @@ function AuditDetailModal({
             )}
           </div>
 
+          {settlement && settlement.details.length > 0 && (
+            <div>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Batch details
+              </p>
+              <dl className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-muted/20">
+                {settlement.details.map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex min-w-0 flex-col gap-0.5 px-4 py-3 text-sm sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                  >
+                    <dt className="shrink-0 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      {row.label}
+                    </dt>
+                    <dd className="min-w-0 break-words font-medium sm:text-right">
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {settlement.terminalSerial && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  The linked terminal is the card reader this batch belongs to. It
+                  doesn&apos;t show which device started the settlement.
+                </p>
+              )}
+            </div>
+          )}
+
           {changes.length > 0 && (
             <div>
               <p className="mb-3 text-sm text-muted-foreground">
@@ -443,7 +490,7 @@ function AuditDetailModal({
             </div>
           )}
 
-          {changes.length === 0 && (
+          {changes.length === 0 && !settlement && (
             <div className="rounded-2xl bg-muted/30 py-8 text-center text-sm text-muted-foreground">
               No detailed change data recorded for this action.
             </div>
@@ -496,9 +543,16 @@ export default function AuditLogsPage() {
   const tabRailRef = React.useRef<HTMLDivElement>(null);
   const activeTabRef = React.useRef<HTMLButtonElement>(null);
 
+  // `?category=<tab id>` lets other pages deep-link a tab (Batches → "batches").
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("category");
+
   // Filters
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<CategoryTabId>("all");
+  const [activeTab, setActiveTab] = useState<CategoryTabId>(
+    () =>
+      CATEGORY_TABS.find((tab) => tab.id === requestedTab)?.id ?? "all"
+  );
   const [actorUserId, setActorUserId] = useState("");
   const [datePreset, setDatePreset] = useState<number>(7);
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
@@ -544,9 +598,11 @@ export default function AuditLogsPage() {
     };
   }, [datePreset, customRange]);
 
-  // Active category tab → resource_types
+  // Active category tab → resource_types, or a category for tabs that span types
   const activeTabConfig = CATEGORY_TABS.find((t) => t.id === activeTab)!;
   const resourceTypes = activeTabConfig.resourceTypes as string[] | null;
+  const actionCategory =
+    "category" in activeTabConfig ? activeTabConfig.category : undefined;
 
   // Build filters
   const filters = useMemo(
@@ -554,11 +610,12 @@ export default function AuditLogsPage() {
       search: search.trim() || undefined,
       location_id: locationId,
       resource_types: resourceTypes ?? undefined,
+      action_category: actionCategory,
       actor_user_id: actorUserId || undefined,
       date_from: dateRange.from,
       date_to: dateRange.to,
     }),
-    [search, locationId, resourceTypes, actorUserId, dateRange]
+    [search, locationId, resourceTypes, actionCategory, actorUserId, dateRange]
   );
 
   const { data, isLoading, isFetching, isPlaceholderData, refetch } =

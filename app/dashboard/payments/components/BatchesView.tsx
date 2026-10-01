@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty } from "@/components/ui/empty";
@@ -696,6 +697,20 @@ export function BatchesView({ paymentFilters }: BatchesViewProps) {
   return (
     <div className="space-y-4">
       <BatchSummaryStats batches={summaryStats} isLoading={isLoading} />
+
+      {/* Closes, settlement reviews and failures are recorded per batch in the
+          Activity Log; payment-derived batches have no such history. */}
+      {hasDbBatches && (
+        <div className="flex justify-end">
+          <Link
+            href="/dashboard/audit-logs?category=batches"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Batch activity
+            <ChevronRight className="size-4" />
+          </Link>
+        </div>
+      )}
 
       {isLoading && !hasBatches ? (
         <div className="space-y-3">

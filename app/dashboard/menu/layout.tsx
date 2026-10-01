@@ -10,6 +10,7 @@ const sections = [
   { label: "Categories", href: "/dashboard/menu/categories" },
   { label: "Out of stock", href: "/dashboard/menu/out-of-stock" },
   { label: "Availability", href: "/dashboard/menu/availability" },
+  { label: "Schedules", href: "/dashboard/menu/schedules" },
 ] as const;
 
 export default function MenuLayout({ children }: { children: React.ReactNode }) {

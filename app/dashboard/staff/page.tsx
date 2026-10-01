@@ -7,7 +7,6 @@ import { InviteUserWizard } from "@/components/dashboard/staff/InviteUserWizard"
 import { PendingInvitesTable } from "@/components/dashboard/staff/PendingInvitesTable";
 import { StaffDataTable } from "@/components/dashboard/staff/StaffDataTable";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -16,16 +15,11 @@ import {
   StatTile,
 } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
-import {
-  useIsAllLocations,
-  useSelectedLocation,
-} from "@/stores/location-store";
+
 import { usePendingInvites } from "../hooks/useInvites";
 import { useUnifiedStaff } from "../hooks/useStaff";
 
 export default function MerchantStaffPage() {
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const { data: staffMembers, isLoading, refetch } = useUnifiedStaff();
   const { data: pendingInvites } = usePendingInvites();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -46,12 +40,6 @@ export default function MerchantStaffPage() {
         title="People"
         subtitle="Find staff, invite someone new, and manage their access."
         stackActionsBelowIndicatorOnMobile
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <>
             <InviteUserWizard

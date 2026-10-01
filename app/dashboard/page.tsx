@@ -5,7 +5,6 @@ import {
   ShoppingCart,
   Users,
   MapPin,
-  Building2,
   Utensils,
   CheckCircle,
   AlertCircle,
@@ -17,7 +16,6 @@ import {
 } from "lucide-react";
 import {
   useLocationStore,
-  useSelectedLocation,
   useIsAllLocations,
 } from "@/stores/location-store";
 import {
@@ -70,8 +68,7 @@ import {
 } from "./components/OverviewSection";
 
 export default function MerchantDashboardPage() {
-  const { selectedLocationId, locations } = useLocationStore();
-  const selectedLocation = useSelectedLocation();
+  const { locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
   const { data: menus, isLoading: menusLoading } = useLocationScopedMenus();
@@ -419,23 +416,7 @@ export default function MerchantDashboardPage() {
 
       {/* ================= OVERVIEW ================= */}
       <div>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold tracking-tight">Overview</h2>
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            {isAllLocations ? (
-              <>
-                <Building2 className="h-4 w-4" />
-                All {locations.length} location
-                {locations.length !== 1 ? "s" : ""}
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4" />
-                {selectedLocation?.name || "Unknown Location"}
-              </>
-            )}
-          </p>
-        </div>
+        <h2 className="mb-3 text-xl font-semibold tracking-tight">Overview</h2>
 
         {/* `overflow-clip` preserves sticky positioning while keeping the
             range bar's background inside the shell's rounded border. */}

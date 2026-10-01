@@ -1,5 +1,19 @@
 # All Tickets Reference
 
+## Menu + Category Scheduling on POS and Kiosk
+
+- POS plan, evidence and QA: `Dexa-POS/docs/features/menu-management/category-scheduling.md`
+- Shared migration owner: POS repository, `utils/supabase/migrations/20260924120000_pos_schedules_v3.sql`.
+  - The website copy is `supabase/migrations/20260930120100_pos_schedules_v3.sql`. It was renumbered on 2026-09-30 because the main-branch Migrations Guard only accepts migrations newer than main's latest (`20260930120000`). The SQL is byte-identical.
+  - The SQL is idempotent (`CREATE OR REPLACE` plus a NULL-only backfill), so running it under both versions is harmless.
+  - Staging ran it as `20260924120000`, so its ledger row must be renamed to `20260930120100`.
+  - `schedules_merchant_admin_update_policy` moved the same way, from `20260924130000` to `20260930120200`.
+- Website change: `AssignScheduleToCategory` (`app/dashboard/actions/schedules.ts`) writes `category_schedules.merchant_id`. Before this, the insert either failed RLS for merchant users or left a row the dashboard could not read. The migration backfills existing NULL rows.
+- Assigning existing schedules:
+  - The menu page schedules tab (`MenuSchedulesTab` + `app/dashboard/menu/[menuId]/page.tsx`) now has **Assign existing**, a picker of the location's schedules that leaves out ones already on the menu. It replaces the old paste-a-UUID sheet, which no button ever opened.
+  - `CategoryFormSheet` now assigns schedules picked while *creating* a category. They were dropped before.
+- Current status: code written. Staging migration, simulator QA and second-reviewer sign-off pending.
+
 ## Per-Location Menu Visibility by Platform
 
 - Website implementation and QA: `docs/features/menu-management/FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md`

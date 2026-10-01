@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { format, subDays, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
 import Papa from "papaparse";
@@ -1241,11 +1242,8 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CashDrawerReportsPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: startOfDay(new Date()),
-    to: endOfDay(new Date()),
-  });
-  const [preset, setPreset] = useState<DatePreset>("today");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [activeTab, setActiveTab] = useState("sessions");
   const queryDateRange = useReportingQueryRange(dateRange);
 
@@ -1253,7 +1251,7 @@ export default function CashDrawerReportsPage() {
     useCashDrawerSummaryStats(queryDateRange.from, queryDateRange.to);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
-    if (from && to) setDateRange({ from, to });
+    if (from && to) setDateRange(from, to);
   }
 
   return (
