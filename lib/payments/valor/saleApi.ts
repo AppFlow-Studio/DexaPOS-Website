@@ -76,7 +76,6 @@ export interface ValorSaleRequestBody {
   surchargeIndicator: ValorSurchargeIndicator;
   shipping_country: string;
   productIds?: ValorProductLine[];
-  tax_amount?: string;
   orderdescription?: string;
   phone?: string;
   address1?: string;
@@ -110,14 +109,18 @@ export interface ValorSaleResponseBody {
 }
 
 export interface ValorSaleParams {
+  /**
+   * Grand total - exactly what the card is charged. Tax and tip are already
+   * inside it. There is deliberately no tax param: Valor adds `tax_amount` on
+   * top of `amount`, which double-charged tax on storefront orders (2026-10-01).
+   */
   money: Money;
   /** Card token from Passage.js `onTokenReceived`. */
   token: string;
   /** Merchant-facing reference. Required by [V-DST] with order details. */
   invoiceNumber: string;
   productLines: ValorProductLine[];
-  taxMinor?: number;
-  /** Included in `money.amountMinor`; Valor's Passage.js Sale API has no tip field. */
+  /** Included in `money.amountMinor`; never sent as a separate field. */
   tipMinor?: number;
   orderDescription?: string;
   email?: string;
@@ -257,9 +260,6 @@ export function buildSaleRequestBody(
     surchargeIndicator,
     shipping_country: params.shippingCountry ?? "US",
     ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
-    ...(params.taxMinor !== undefined
-      ? { tax_amount: formatMinorUnits(params.taxMinor) }
-      : {}),
     ...(orderDescription ? { orderdescription: orderDescription } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),

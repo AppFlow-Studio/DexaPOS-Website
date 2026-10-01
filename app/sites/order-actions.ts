@@ -89,6 +89,9 @@ export interface PlaceOrderItem {
   price: number;
   quantity: number;
   notes?: string;
+  /** Where the item was displayed; the server prices the line from it. */
+  menu_id?: string;
+  category_id?: string;
   modifiers?: {
     id: string | null;
     name: string;

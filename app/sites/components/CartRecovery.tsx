@@ -43,6 +43,8 @@ export function CartRecovery({
           price: item.price || item.totalPrice || 0,
           cash_price: item.price || item.totalPrice || 0,
           delivery_price: item.price || item.totalPrice || 0,
+          menu_id: item.menu_id,
+          category_id: item.category_id,
           description: null,
           image: null,
           availability: true,
