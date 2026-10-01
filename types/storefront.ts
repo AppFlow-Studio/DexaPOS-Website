@@ -23,6 +23,13 @@ export interface StorefrontItem {
   price: number;
   cash_price: number;
   delivery_price: number;
+  /**
+   * The menu + category this item was displayed under. Sent with the order so
+   * the server charges the price shown for that placement (the same item can
+   * be priced differently per menu/category). Absent on reorders.
+   */
+  menu_id?: string;
+  category_id?: string;
   image: string | null;
   availability: boolean;
   modifier_groups?: StorefrontModifierGroup[];
