@@ -388,7 +388,7 @@ export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations 
             variant="outline"
             size="sm"
             onClick={handleExport}
-            disabled={isExporting || terminalLookupPending || logs.length === 0}
+            disabled={isExporting || logs.length === 0}
             className="h-9"
           >
             <Download className="h-4 w-4 mr-2" />

@@ -74,7 +74,6 @@ export const NAV_INDEX: NavSearchItem[] = [
   { label: "Menus", path: "/dashboard/menu", section: "Menus & Products", icon: Utensils },
   { label: "Items", path: "/dashboard/menu/items", section: "Menus & Products", icon: List, keywords: ["menu items", "products", "dishes"] },
   { label: "Categories", path: "/dashboard/menu/categories", section: "Menus & Products", icon: Tag, keywords: ["menu categories"] },
-  { label: "Menu availability", path: "/dashboard/menu/availability", section: "Menus & Products", icon: Calendar, keywords: ["menu schedules", "availability"] },
   { label: "Discounts", path: "/dashboard/discounts", section: "Menus & Products", icon: Banknote, keywords: ["promotions", "coupons", "deals"] },
   { label: "Modifiers", path: "/dashboard/menu/modifiers", section: "Menus & Products", icon: Layers, keywords: ["add ons", "options", "extras"] },
   { label: "Menu schedules", path: "/dashboard/menu/schedules", section: "Menus & Products", icon: Clock, keywords: ["menu availability", "menu hours", "dayparts", "brunch", "lunch hours"] },
