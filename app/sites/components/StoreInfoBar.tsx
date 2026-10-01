@@ -5,6 +5,7 @@ import { MapPin, Clock, Store, Truck, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo, useCallback, useState } from "react";
 import { StoreHoursModal } from "./StoreHoursModal";
+import { isScheduleDayOpen } from "../lib/business-hours";
 
 interface StoreInfoBarProps {
   site: Site | null;
@@ -85,7 +86,7 @@ export function getTodayHoursString(businessHours: any, timezone?: string | null
   const schedule = parsed[DAYS[dayIndex]];
   if (!schedule) return null;
 
-  const isEnabled = schedule.enabled ?? !schedule.closed;
+  const isEnabled = isScheduleDayOpen(schedule);
   if (!isEnabled) return "Closed today";
   if (schedule.is24Hours) return "Open 24 hours";
 
@@ -108,7 +109,7 @@ export function getOpenUntilString(businessHours: any, timezone?: string | null)
   const schedule = parsed[DAYS[dayIndex]];
   if (!schedule) return null;
 
-  const isEnabled = schedule.enabled ?? !schedule.closed;
+  const isEnabled = isScheduleDayOpen(schedule);
   if (!isEnabled) return null;
   if (schedule.is24Hours) return "Open 24 hours";
 
@@ -126,7 +127,7 @@ export function isStoreOpenNow(businessHours: any, timezone?: string | null): bo
   const schedule = parsed[DAYS[dayIndex]];
   if (!schedule) return null;
 
-  const isEnabled = schedule.enabled ?? !schedule.closed;
+  const isEnabled = isScheduleDayOpen(schedule);
   if (!isEnabled) return false;
   if (schedule.is24Hours) return true;
 
