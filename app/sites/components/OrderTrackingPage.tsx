@@ -21,6 +21,7 @@ import { getOrderTracking, cancelOnlineOrder, type OrderTrackingData } from "../
 import { useSession } from "../hooks/useSession";
 import { OrderStatusWatcher } from "./OrderStatusWatcher";
 import { CallServerCard } from "./CallServerCard";
+import { getTodayHoursString } from "./StoreInfoBar";
 import { formatScheduledTime } from "../lib/format-scheduled-time";
 import { getQrOrderStatus } from "../qr-actions";
 
@@ -39,56 +40,6 @@ interface OrderTrackingPageProps {
   storeHours?: unknown;
   storeTimezone?: string | null;
   taxRate?: number; // decimal e.g. 0.08875 — same value used by checkout
-}
-
-interface DaySchedule {
-  enabled?: boolean;
-  from?: string;
-  to?: string;
-  is24Hours?: boolean;
-}
-type WeekHours = Partial<Record<
-  "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday",
-  DaySchedule
->>;
-
-const DAY_KEYS: Array<keyof WeekHours> = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-];
-
-function todayKey(timezone: string | null): keyof WeekHours {
-  const now = new Date();
-  const dayName = now
-    .toLocaleDateString("en-US", { weekday: "long", timeZone: timezone ?? undefined })
-    .toLowerCase();
-  return (DAY_KEYS.find((d) => d === dayName) ?? "monday") as keyof WeekHours;
-}
-
-function formatHourLabel(time: string | undefined): string {
-  if (!time) return "";
-  const [hStr, mStr] = time.split(":");
-  const h = Number(hStr);
-  const m = Number(mStr ?? 0);
-  if (Number.isNaN(h)) return time;
-  const period = h >= 12 ? "PM" : "AM";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12} ${period}` : `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function todayHoursLabel(hours: unknown, timezone: string | null): string | null {
-  if (!hours || typeof hours !== "object") return null;
-  const week = hours as WeekHours;
-  const day = week[todayKey(timezone)];
-  if (!day || !day.enabled) return "Closed today";
-  if (day.is24Hours) return "Open 24 hours";
-  if (!day.from || !day.to) return null;
-  return `${formatHourLabel(day.from)} – ${formatHourLabel(day.to)}`;
 }
 
 const TERMINAL_STATUSES = ["completed", "cancelled", "void", "declined"];
@@ -403,7 +354,7 @@ export function OrderTrackingPage({
     (displayedTotal - (order.subtotal + displayedTax + order.tip)) * 100
   ) / 100;
 
-  const hoursLabel = todayHoursLabel(storeHours, storeTimezone ?? null);
+  const hoursLabel = getTodayHoursString(storeHours, storeTimezone);
   const directionsHref = storeLat && storeLng
     ? `https://www.google.com/maps/dir/?api=1&destination=${storeLat},${storeLng}`
     : storeAddress
