@@ -278,33 +278,9 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
         setIsLocationDetailsOpen(true)
     }
 
-    useEffect(() => {
-        const openLocationId = searchParams.get('openLocation')
-        if (!openLocationId || isLocationDetailsOpen || selectedLocationId) return
-
-        const exists = locationsList.some((location) => location.id === openLocationId)
-        if (!exists) return
-
-        setSelectedLocationId(openLocationId)
-        setIsLocationDetailsOpen(true)
-    }, [isLocationDetailsOpen, locationsList, searchParams, selectedLocationId])
-
     const handleLocationSheetOpenChange = (open: boolean) => {
         setIsLocationDetailsOpen(open)
-
-        if (!open) {
-            setSelectedLocationId(null)
-
-            if (searchParams.get('openLocation')) {
-                const next = new URLSearchParams(searchParams.toString())
-                next.delete('openLocation')
-                const query = next.toString()
-                router.replace(
-                    query ? `/manage/merchants/${merchantInfo.id}?${query}` : `/manage/merchants/${merchantInfo.id}`,
-                    { scroll: false }
-                )
-            }
-        }
+        if (!open) setSelectedLocationId(null)
     }
 
     return (
@@ -567,7 +543,8 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             </Empty>
                         ) : (
                             <>
-                            <Table variant="data" containerClassName="hidden lg:block">
+                            {/* Unbounded: paged at 10 rows, so the page scrolls, not the table. */}
+                            <Table variant="data" bounded={false} containerClassName="hidden lg:block">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>

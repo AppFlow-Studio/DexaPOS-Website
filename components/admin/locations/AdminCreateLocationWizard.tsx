@@ -417,17 +417,13 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
 
             // The merchant page reads its location list from the cached
             // merchant detail (10 min staleTime) — it must be refetched, or the
-            // new location is missing and `openLocation` finds nothing to open.
+            // new location is missing from the Business tab.
             await queryClient.invalidateQueries({ queryKey: adminKeys.merchants() })
             queryClient.invalidateQueries({ queryKey: ['merchant'] })
             queryClient.invalidateQueries({ queryKey: ['locations'] })
 
             setHasUnsavedChanges(false)
-            if (result.data?.id) {
-                router.push(`${backUrl}?tab=business-info&openLocation=${result.data.id}`)
-            } else {
-                router.push(`${backUrl}?tab=business-info`)
-            }
+            router.push(`${backUrl}?tab=business-info`)
         } catch (error) {
             toast.error('Creation Failed', {
                 description: 'An unexpected error occurred. Please try again.'

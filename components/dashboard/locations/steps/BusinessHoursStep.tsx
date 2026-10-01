@@ -75,8 +75,8 @@ function DayHoursRow({
 
     return (
         // Borderless tinted card (§5.8); a closed day is quieter, not coloured.
-        <div className={cn('rounded-2xl p-4', hours.is_closed ? 'bg-muted/25' : 'bg-muted/45')}>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className={cn('@container rounded-2xl p-4', hours.is_closed ? 'bg-muted/25' : 'bg-muted/45')}>
+            <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
 
                 {/* Left: day name + open/closed toggle */}
                 <div className="flex items-center gap-3">
@@ -101,14 +101,14 @@ function DayHoursRow({
 
                 {/* Right: time pickers + overnight toggle */}
                 {hours.is_closed ? (
-                    <span className="text-sm text-muted-foreground lg:text-right">Closed all day</span>
+                    <span className="text-sm text-muted-foreground @3xl:text-right">Closed all day</span>
                 ) : (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="flex flex-col gap-2 @md:flex-row @md:flex-wrap @md:items-center">
                         <Select
                             value={hours.open}
                             onValueChange={(value) => onChange({ ...hours, open: value })}
                         >
-                            <SelectTrigger className="w-full border-0 bg-background shadow-none sm:w-36">
+                            <SelectTrigger className="w-full border-0 bg-background shadow-none @md:w-36">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -118,14 +118,14 @@ function DayHoursRow({
                             </SelectContent>
                         </Select>
 
-                        <span className="text-sm text-muted-foreground text-center hidden sm:block">to</span>
+                        <span className="text-sm text-muted-foreground text-center hidden @md:block">to</span>
 
                         <Select
                             value={hours.close}
                             onValueChange={(value) => onChange({ ...hours, close: value })}
                         >
                             {/* w-48 ensures "12:00 AM (next day)" fits without truncation */}
-                            <SelectTrigger className="w-full border-0 bg-background shadow-none sm:w-48">
+                            <SelectTrigger className="w-full border-0 bg-background shadow-none @md:w-48">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

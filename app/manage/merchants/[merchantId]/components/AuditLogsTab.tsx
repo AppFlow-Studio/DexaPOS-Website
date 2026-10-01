@@ -196,12 +196,13 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     setPage(1);
   };
 
-  const { data, isLoading, isFetching } = useAuditLogs(
+  const { data, isLoading } = useAuditLogs(
     {
       search: filters.search,
       location_id: filters.location_id === "all" ? undefined : filters.location_id,
       action_category: filters.action_category || undefined,
       severity: filters.severity || undefined,
+      actor_user_id: filters.actor_user_id || undefined,
       date_from: dateRange?.from
         ? startOfDay(dateRange.from).toISOString()
         : undefined,
@@ -775,10 +776,15 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             )}
           </div>
 
+          {/* Only the first load locks the pager. Every query on this page is a
+              server action, and Next runs those one at a time, so a page fetch
+              can wait behind other tabs' refetches; `isFetching` would keep
+              Previous/Next disabled for all of it. The previous page's rows
+              stay on screen meanwhile (keepPreviousData). */}
           <PaginationBar
             pagination={pagination}
             onPageChange={setPage}
-            isLoading={isFetching}
+            isLoading={isLoading}
             itemLabel="logs"
           />
         </div>
