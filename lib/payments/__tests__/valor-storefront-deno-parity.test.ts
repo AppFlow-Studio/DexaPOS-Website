@@ -32,13 +32,12 @@ const CREDS = { appId: "app-123", appKey: "key-456", epi: "2000000001" };
 function cases() {
   return [
     {
-      name: "full order with tip + tax + contact + lines",
+      name: "full order with tip + contact + lines",
       amountMinor: 4599,
       shared: {
         token: "passage-tok",
         invoiceNumber: "dexa-abc-123",
         productLines: [{ product_id: "item-1", qty: 2 }],
-        taxMinor: 380,
         tipMinor: 700,
         orderDescription: "Online order dexa-abc-123",
         email: "jane@example.com",
@@ -49,7 +48,7 @@ function cases() {
       },
     },
     {
-      name: "minimal: no tip / tax / contact",
+      name: "minimal: no tip / contact",
       amountMinor: 1000,
       shared: {
         token: "tok-2",
@@ -58,7 +57,7 @@ function cases() {
       },
     },
     {
-      name: "tip present, tax absent",
+      name: "tip present",
       amountMinor: 2550,
       shared: {
         token: "tok-3",
