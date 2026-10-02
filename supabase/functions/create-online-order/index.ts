@@ -27,6 +27,11 @@ import {
   createSale,
 } from '../_shared/nmi.ts'
 import { createSale as valorCreateSale } from '../_shared/valor.ts'
+import {
+  indexStorefrontMenuPrices,
+  storefrontPriceKey,
+  type StorefrontLinePrice,
+} from '../_shared/storefront-menu-pricing.ts'
 import { sendOnlineOrderPaymentEmail } from '../_shared/payment-emails.ts'
 import { getAppBaseUrl } from '../_shared/app-url.ts'
 // ============================================================================
@@ -49,8 +54,8 @@ interface CreateOnlineOrderRequest {
     price: number        // effective unit price shown to customer (full cascade)
     quantity: number
     notes?: string
-    menu_id?: string     // optional — enables L5 server-side price verification
-    category_id?: string // optional — enables L3/L4/L5 server-side price verification
+    menu_id?: string     // where the item was displayed — prices the line exactly as shown
+    category_id?: string // (both required for that; absent on reorders → get_effective_price)
     modifiers?: Array<{
       id: string | null
       name: string
@@ -831,21 +836,78 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 6: Server-side price recalculation ----
-  // Use get_effective_price() — the canonical 5-level cascade (L5>L4>L3>L2>L1).
-  // menu_id and category_id are optional; when absent the function falls back to
-  // L2>L1, which still correctly applies L2 modifier math (add/percent).
+  // Charge exactly what the storefront showed. The menu page prices each item
+  // from get_menus_for_location() for the menu + category it sits in, while
+  // get_effective_price() runs a different cascade that can disagree with it
+  // (2026-10-01: shown $5.25, charged $7.25). So a line carrying its menu +
+  // category is priced from that same RPC, and must still be on the live online
+  // menu at the price its cart holds. Lines without that context (reorders,
+  // carts saved before it was sent) keep the get_effective_price() L2>L1 price.
+  type CartLine = CreateOnlineOrderRequest['items'][number]
+  const hasMenuContext = (line: CartLine) => Boolean(line.menu_id && line.category_id)
+
+  let storefrontPrices = new Map<string, StorefrontLinePrice>()
+  if (body.items.some(hasMenuContext)) {
+    const [menusResult, visibilityResult] = await Promise.all([
+      supabase.rpc('get_menus_for_location', {
+        p_merchant_id: merchantId,
+        p_location_id: locationId,
+      }),
+      supabase
+        .from('location_menus')
+        .select('menu_id, is_visible_online')
+        .eq('location_id', locationId),
+    ])
+    if (menusResult.error || visibilityResult.error) {
+      logError('PRICE', 'Could not load the storefront menu to price the cart', {
+        menusError: menusResult.error?.message,
+        visibilityError: visibilityResult.error?.message,
+      })
+      return errorResponse(
+        'We could not confirm menu prices right now. Please try again.',
+        'pricing_unavailable',
+        503
+      )
+    }
+    const hiddenMenuIds = new Set<string>(
+      (visibilityResult.data ?? [])
+        .filter((row: { is_visible_online: boolean | null }) => row.is_visible_online === false)
+        .map((row: { menu_id: string }) => row.menu_id)
+    )
+    storefrontPrices = indexStorefrontMenuPrices(menusResult.data, hiddenMenuIds)
+  }
+
   const effectivePrices = await Promise.all(
-    body.items.map(async (cartItem) => {
+    body.items.filter((line) => !hasMenuContext(line)).map(async (cartItem) => {
       const { data } = await supabase.rpc('get_effective_price', {
         p_item_id:     cartItem.id,
         p_location_id: locationId,
-        p_menu_id:     cartItem.menu_id     ?? null,
-        p_category_id: cartItem.category_id ?? null,
+        p_menu_id:     null,
+        p_category_id: null,
       })
       return { id: cartItem.id, prices: data as { effective_price: number; effective_cash_price: number; effective_delivery_price: number } | null }
     })
   )
   const effectivePriceMap = new Map(effectivePrices.map(({ id, prices }) => [id, prices]))
+
+  const linePrices = (cartItem: CartLine) => {
+    if (!hasMenuContext(cartItem)) return { prices: effectivePriceMap.get(cartItem.id) ?? null }
+    const shown = storefrontPrices.get(
+      storefrontPriceKey(cartItem.menu_id!, cartItem.category_id!, cartItem.id)
+    )
+    // Gone from the online menu, or repriced since it was added: charging any
+    // other price would not be what the customer saw, so stop before payment.
+    if (!shown || toCents(shown.price) !== toCents(cartItem.price)) {
+      return { changed: true as const }
+    }
+    return {
+      prices: {
+        effective_price: shown.price,
+        effective_cash_price: shown.cash_price,
+        effective_delivery_price: shown.delivery_price,
+      },
+    }
+  }
 
   // Fetch tax rate — prefer 'standard'/'default', fall back to any active rate
   let { data: taxRate } = await supabase
@@ -878,11 +940,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const recalculatedItems: Partial<OnlineOrderItem>[] = []
 
   for (const cartItem of body.items) {
-    const serverPrices = effectivePriceMap.get(cartItem.id)
+    const resolved = linePrices(cartItem)
+    if ('changed' in resolved) {
+      logEvent('PRICE', 'Cart line no longer matches the online menu', {
+        itemId: cartItem.id,
+        menuId: cartItem.menu_id,
+        categoryId: cartItem.category_id,
+        cartPrice: cartItem.price,
+      })
+      return errorResponse(
+        `${cartItem.name} has changed on the menu since you added it. Please remove it from your cart and add it again.`,
+        'cart_item_changed',
+        409
+      )
+    }
+    const serverPrices = resolved.prices
 
-    // Use the canonical DB price from get_effective_price() (full 5-level cascade).
-    // Falls back to the cart-submitted price only if the RPC returned nothing
-    // (item not found in DB — should not happen in practice).
+    // Use the server-resolved price (see Step 6). Falls back to the
+    // cart-submitted price only if get_effective_price() returned nothing for a
+    // context-less line (item not found in DB — should not happen in practice).
     //
     // delivery_pricing_enabled (default true) controls whether online orders
     // use the separate delivery price. When false, every online order — pickup
@@ -1281,15 +1357,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
       totalCents,
     })
 
-    // amount is the grand total (subtotal+tax+tip+delivery+fee); tip/tax ride
-    // along as breakdown. productLines are omitted (charge is amount-driven).
+    // amount is the grand total (subtotal+tax+tip+delivery+fee) and is exactly
+    // what Valor charges. Tax is NOT sent separately: Valor adds tax_amount on
+    // top of amount. productLines are omitted (charge is amount-driven).
     const chargeResult = await valorCreateSale(valorCredential, {
       amountMinor: Math.round(totalCents),
       token: effectivePaymentToken,
       invoiceNumber: transactionReferenceId,
       productLines: [],
       tipMinor: Math.round(tipCents),
-      taxMinor: Math.round(taxCents),
       email: customerEmail ?? undefined,
       phone: customerPhone ?? undefined,
       address1: normalizePaymentText(body.billing_address1, 200),
@@ -1319,6 +1395,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     chargedViaValor = true
+
+    // Valor reports what it actually charged as `netamt`. Anything other than our
+    // total means a request field was added on top of `amount` (as tax_amount
+    // once was). The card is already charged, so surface it loudly in the logs.
+    const valorChargedCents = Math.round(parseFloat(String(chargeResult.body.netamt)) * 100)
+    if (Number.isFinite(valorChargedCents) && valorChargedCents !== Math.round(totalCents)) {
+      logError('PAYMENT_AMOUNT_MISMATCH', 'Valor charged a different amount than the order total', {
+        referenceId: transactionReferenceId,
+        transactionId: chargeResult.details.transactionId,
+        expectedCents: Math.round(totalCents),
+        chargedCents: valorChargedCents,
+      })
+    }
+
     // Passage tokenizes the card in its own iframe, so the storefront never sees
     // the PAN/brand. Valor's sale response does: `pan` is masked (e.g. "XXXX3438")
     // and `card_brand` carries the network. Capture both so the receipt can show

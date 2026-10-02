@@ -246,14 +246,18 @@ export interface ValorProductLine {
 }
 
 export interface ValorSaleParams {
-  /** Grand-total charge amount in integer minor units. */
+  /**
+   * Grand-total charge amount in integer minor units - exactly what the card is
+   * charged. Tax and tip are already inside it. There is deliberately no tax
+   * param: Valor adds `tax_amount` on top of `amount`, which double-charged
+   * tax on storefront orders (2026-10-01).
+   */
   amountMinor: number
   /** Card token from Passage.js onTokenReceived. */
   token: string
   /** Merchant-facing reference; also aligns Valor's duplicate check with ours. */
   invoiceNumber: string
   productLines: ValorProductLine[]
-  taxMinor?: number
   tipMinor?: number
   orderDescription?: string
   email?: string
@@ -276,7 +280,6 @@ export interface ValorSaleRequestBody {
   surchargeIndicator: ValorSurchargeIndicator
   shipping_country: string
   productIds?: ValorProductLine[]
-  tax_amount?: string
   orderdescription?: string
   email?: string
   phone?: string
@@ -360,7 +363,6 @@ export function buildSaleRequestBody(
     surchargeIndicator,
     shipping_country: params.shippingCountry ?? 'US',
     ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
-    ...(params.taxMinor !== undefined ? { tax_amount: formatMinorUnits(params.taxMinor) } : {}),
     ...(orderDescription ? { orderdescription: orderDescription } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
