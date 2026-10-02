@@ -64,4 +64,4 @@ The page, its dialogs and every view were audited again against the rules added 
 - A default `Button` in a dialog renders violet, because portals sit outside `.dashboard-sidebar-theme` (C5). This affects every dialog in the app, so it belongs in `button.tsx` or `globals.css`, not in this page.
 - `SelectTrigger` is still bordered (§11), so `MutedSelectTrigger` stays.
 
-**Verification:** ESLint 0 problems. The §3.5, §5.5, §8, §4.10, §5.7 and C8 greps are clean. The one `max-h` hit is the dialog's own height. `tsc` results are in the handoff. The browser check is still open: the chrome-devtools MCP failed to connect.
+**Verification:** ESLint 0 problems. The §3.5, §5.5, §8, §4.10, §5.7 and C8 greps are clean. The one `max-h` hit is the dialog's own height. `tsc` on the eight touched entry files (a scoped tsconfig, since a full run now takes more than 10 minutes) exits 0 with no errors. The browser check is still open: the chrome-devtools MCP failed to connect.

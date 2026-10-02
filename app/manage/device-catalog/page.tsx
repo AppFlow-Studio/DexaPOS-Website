@@ -134,14 +134,22 @@ const STATUS_FILTER_OPTIONS = [
 const PAGE_SIZE = 10
 
 /*
- * Column tiers (§5.3, D-26). Model, unit cost, status and the actions menu are
- * the essentials and show from `md`; Monthly fee joins at `lg`, Category and
- * Specs at `xl`. The table is `table-fixed`, so Model takes whatever width is
- * left and truncates, and nothing scrolls sideways at 768px. The classes sit
- * on both the head and the cell.
+ * Column tiers (§5.3, D-26). The essentials are the phone card's fields: model,
+ * manufacturer, category, unit cost, monthly fee and status, plus the actions
+ * menu. The table is `table-fixed`, so Model takes whatever width is left and
+ * truncates, and nothing scrolls sideways at 768px.
+ *
+ * - `md` (a ~414px well): there is no room for Category and Monthly fee
+ *   columns, so they stack under the model and the unit cost as a muted
+ *   second line. These are the only two-line rows (§14.3 HQ-6).
+ * - `lg`: Category and Monthly fee get their own columns, and rows are one
+ *   line again.
+ * - `xl`: the product image plate. `2xl`: Specs.
+ *
+ * The classes sit on both the head and the cell.
  */
 const LG_UP = 'hidden lg:table-cell'
-const XL_UP = 'hidden xl:table-cell'
+const XXL_UP = 'hidden 2xl:table-cell'
 const TABLE_COLUMNS = 7
 
 /*
@@ -572,17 +580,22 @@ export default function DeviceCatalogPage() {
               </>
             ) : (
               <>
-                {/* The table from `md`, rows one line tall and paged at 10, with
-                    no scroll of its own (§5.3, §5.7). */}
+                {/* The table from `md`, paged at 10, with no scroll of its own
+                    (§5.3, §5.7). Rows are one line from `lg`; on a tablet they
+                    carry a second line instead of dropping fields (HQ-6). */}
                 <Table variant="data" bounded={false} containerClassName="hidden md:block" className="table-fixed">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Model</TableHead>
-                      <TableHead className={cn(XL_UP, 'w-[150px]')}>Category</TableHead>
-                      <TableHead className={cn(XL_UP, 'w-[220px]')}>Specs</TableHead>
-                      <TableHead className="w-[104px] text-right">Unit cost</TableHead>
+                      <TableHead className={cn(LG_UP, 'w-[140px]')}>Category</TableHead>
+                      <TableHead className={cn(XXL_UP, 'w-[240px]')}>Specs</TableHead>
+                      <TableHead className="w-[104px] text-right">
+                        {/* On a tablet the column holds both prices. */}
+                        <span className="lg:hidden">Price</span>
+                        <span className="hidden lg:inline">Unit cost</span>
+                      </TableHead>
                       <TableHead className={cn(LG_UP, 'w-[112px] text-right')}>Monthly fee</TableHead>
-                      <TableHead className="w-[132px]">Status</TableHead>
+                      <TableHead className="w-[128px]">Status</TableHead>
                       <TableHead className="w-[56px]">
                         <span className="sr-only">Actions</span>
                       </TableHead>
@@ -604,22 +617,34 @@ export default function DeviceCatalogPage() {
                             <TableCell>
                               <div className="flex min-w-0 items-center gap-3">
                                 {/* The image plate joins once the column has room for it. */}
-                                <DeviceThumbnail device={device} className="hidden lg:flex" />
-                                <p className="min-w-0 truncate" title={modelSubline(device) || undefined}>
-                                  <span className="font-medium">{device.model_name}</span>
-                                  <span className="text-sm text-muted-foreground"> · {device.manufacturer}</span>
-                                </p>
+                                <DeviceThumbnail device={device} className="hidden xl:flex" />
+                                <div className="min-w-0">
+                                  <p className="truncate" title={modelSubline(device) || undefined}>
+                                    <span className="font-medium">{device.model_name}</span>
+                                    <span className="text-sm text-muted-foreground"> · {device.manufacturer}</span>
+                                  </p>
+                                  {/* Tablet: the Category column joins at `lg` (HQ-6). */}
+                                  <p className="truncate text-xs text-muted-foreground lg:hidden">
+                                    {CATEGORY_SINGULAR[category] ?? category}
+                                  </p>
+                                </div>
                               </div>
                             </TableCell>
-                            <TableCell className={cn(XL_UP, 'truncate text-sm')}>
+                            <TableCell className={cn(LG_UP, 'truncate text-sm')}>
                               {CATEGORY_SINGULAR[category] ?? category}
                             </TableCell>
-                            <TableCell className={XL_UP}>
+                            <TableCell className={XXL_UP}>
                               <p className="truncate text-sm text-muted-foreground" title={specsSummary || undefined}>
                                 {specsSummary || '—'}
                               </p>
                             </TableCell>
-                            <TableCell className="text-right tabular-nums">{formatDollars(device.unit_cost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              <p className="truncate">{formatDollars(device.unit_cost)}</p>
+                              {/* Tablet: the Monthly fee column joins at `lg` (HQ-6). */}
+                              <p className="truncate text-xs text-muted-foreground lg:hidden">
+                                {formatDollars(device.monthly_fee)}/mo
+                              </p>
+                            </TableCell>
                             <TableCell className={cn(LG_UP, 'text-right tabular-nums')}>
                               {formatDollars(device.monthly_fee)}
                             </TableCell>

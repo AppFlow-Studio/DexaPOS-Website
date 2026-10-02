@@ -13,8 +13,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * The catalog list: a table well from `md` whose columns join at the same
- * tiers as the real table (Monthly fee at `lg`; Category and Specs at `xl`),
- * then record cards below `md` (§5.3).
+ * tiers as the real table, then record cards below `md` (§5.3). Below `lg` a
+ * row carries the category and monthly fee as a second line (HQ-6); from `lg`
+ * those are columns (Category, Monthly fee), the image plate joins at `xl` and
+ * Specs at `2xl`.
  */
 export function CatalogListSkeleton({ rows = 10 }: { rows?: number }) {
   return (
@@ -22,8 +24,8 @@ export function CatalogListSkeleton({ rows = 10 }: { rows?: number }) {
       <div className="hidden overflow-hidden rounded-2xl bg-muted/20 md:block">
         <div className="flex items-center gap-6 bg-muted/50 px-3 py-3">
           <Skeleton className="h-3.5 w-20" />
-          <Skeleton className="hidden h-3.5 w-16 xl:block" />
-          <Skeleton className="hidden h-3.5 w-12 xl:block" />
+          <Skeleton className="hidden h-3.5 w-16 lg:block" />
+          <Skeleton className="hidden h-3.5 w-12 2xl:block" />
           <Skeleton className="ml-auto h-3.5 w-16" />
           <Skeleton className="hidden h-3.5 w-20 lg:block" />
           <Skeleton className="h-3.5 w-14" />
@@ -33,12 +35,18 @@ export function CatalogListSkeleton({ rows = 10 }: { rows?: number }) {
           {Array.from({ length: rows }).map((_, row) => (
             <div key={row} className="flex items-center gap-6 bg-card/70 px-3 py-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <Skeleton className="hidden size-8 shrink-0 rounded-full lg:block" />
-                <Skeleton className="h-4 w-48 max-w-full" />
+                <Skeleton className="hidden size-8 shrink-0 rounded-full xl:block" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-48 max-w-full" />
+                  <Skeleton className="h-3 w-24 lg:hidden" />
+                </div>
               </div>
-              <Skeleton className="hidden h-4 w-24 xl:block" />
-              <Skeleton className="hidden h-4 w-40 xl:block" />
-              <Skeleton className="h-4 w-16" />
+              <Skeleton className="hidden h-4 w-24 lg:block" />
+              <Skeleton className="hidden h-4 w-40 2xl:block" />
+              <div className="flex flex-col items-end space-y-1.5">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-3 w-14 lg:hidden" />
+              </div>
               <Skeleton className="hidden h-4 w-16 lg:block" />
               <Skeleton className="h-5 w-20 rounded-full" />
               <Skeleton className="h-8 w-8 rounded-full" />

@@ -70,3 +70,31 @@ cards still use `DeviceRegistryMetricCard` (a `<Card>` with a bordered icon plat
   - the warranty `StatRow` inside the narrow `lg` column
   - the dialog going full-screen on phones
   - dark-mode `var(--brand)` bars
+
+## Re-audit against D-25–D-29 (2026-10-02)
+
+The 2026-09-29 conversion predates the table, card and loading rules added on 2026-09-30 and 2026-10-01. This pass brings every registry route, tab and dialog onto them.
+
+### Gaps found and fixed
+
+- [x] **Inventory table (§5.3, §5.7, D-25, D-26).** The table showed from `xl`, with an unprefixed `min-w-[900px]`, the default height cap and sticky header, and rows three lines tall. It now shows from `md` with `bounded={false}` and no `min-w`. Rows are one line, and the columns are tiered: Device, Status and Merchant are essential, Location joins at `lg`, Updated and Monthly fee at `xl`, and Model and Versions at `2xl`. The Landi action stays at every width.
+- [x] **Inventory rows open the device (§5.9).** The whole row navigates, with a `RowLink` on the serial. The separate "View" button is gone.
+- [x] **Phone cards (§5.3, D-27).** Cards carried 8 label/value pairs and a Landi button. They are now `RecordLinkCard`s: serial and status, then merchant · location. Everything else is on the device page.
+- [x] **List state in the URL (§5.9).** Search, status, category and page live in the query string. The device link carries them in `?back=`, so "Back to inventory" returns to the same page of 10 with the same filters.
+- [x] **Loading (§4.10, D-29).** Added a `loading.tsx` to `/manage/devices`, `…/overview` and `…/[deviceId]`. Each route's skeleton now lives in `components/skeletons.tsx`, and the route, the `Suspense` fallback and the in-page state all render it. Removed the "Loading devices…" table cell, the status dialog's `Loader2` spinner (the button now reads "Applying…"), and the palette's "Searching devices..." line (now skeleton rows). The dialog's merchant and location pickers show a skeleton while their options load. The overview skeleton gained its missing merchant-distribution row.
+- [x] **Section rail (§13.2).** It had a hand-copied `offsetLeft` effect and a visible `thin-scrollbar`. It now uses the shell's `useRailAutoScroll` with `no-scrollbar`, and `/manage/device-catalog` picks this up too.
+- [x] **Unknown money (§4.9).** `formatMoneyDollars` and `formatMoneyCents` returned `N/A`. They now return `—`. Only the registry calls them.
+- [x] **Palette.** It still used `|` separators. It now uses `·` and the neutral `<Badge variant="outline">` status pill.
+
+### Left as is
+
+- The "Open overview" / "Open catalog" header buttons still duplicate the section rail (Decision 3). Removing navigation was not requested.
+- `CommandDialog` (shared `components/ui/command.tsx`) still carries `shadow-lg` and does not go full-screen on phones. It is a shared primitive used outside the registry, so it is out of scope here.
+- `lib/constants/device-status.ts` still holds the unused hue maps (see "Found, not changed").
+
+### Verification (2026-10-02)
+
+- [x] `tsc --noEmit --incremental false`: 836 project errors, **0 in any changed file**
+- [x] ESLint: the same 5 pre-existing `set-state-in-effect` errors in the palette and the dialog, and nothing new
+- [x] §3.5, §4.6b, §4.10, §5.5, §5.7, §8 and `PageShell as="div"` greps over every registry file: every remaining hit is allowed. The hits are the dialog's `sm:max-h-[85vh]`, the activity feed's `max-h-[min(60vh,32rem)]` (a chronological feed), the palette list, and the tier classes in the skeleton.
+- [ ] Browser check at 1440/1024/768/375 px in both themes: not run, because the Chrome DevTools MCP failed to connect.

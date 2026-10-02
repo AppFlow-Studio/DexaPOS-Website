@@ -81,3 +81,28 @@ Decisions (confirmed with the user before implementation):
 - [x] §3.5, §5.5, §8, §12 greps on changed files: only allowed hits (section headings, destructive actions)
 - [x] Exactly one `PageShell`, `as="div"`, per render branch
 - [ ] **Browser check not done** (light + dark, 1440px + 375px): the Chrome DevTools MCP failed to connect this session. `/admin` and `/admin/pages/pricing` verified as real 307s to the new routes against the running dev server.
+
+## Re-audit — 2026-10-02
+
+The route was converted on 2026-09-29, before D-25–D-29 and the later §5.9 / §13.1 / §13.2 updates.
+Re-checked every screen, tab, dialog and the shared CMS editor components against the current
+doc. The §3.5 colour, §5.5 lines, §8 legacy and §12 sheet greps were already clean; these were
+the gaps:
+
+- [x] **Pages table (§5.3, D-26):** the table showed from `lg` with an unprefixed `min-w-[640px]`. It now shows from `md` (`table-fixed`, no `min-w`) with tiered columns: Page, Route and Status are essential, Updated joins at `lg` and Category at `xl`
+- [x] **Pages table (§5.7, D-25):** `bounded={false}`; rows are one line (the route moved from a second line in the Page cell to its own column)
+- [x] **Pages table (§5.9):** the whole row is a stretched link to the editor, not only the title text; the search, filters and page live in the URL (`replaceState`), and the editor gets them as `?back=` so Back and Cancel return to the same page of 10, renames included
+- [x] **Phone cards (§5.3, D-27):** the name and status word lead; one pair (Route). Category and the update time are dropped. The update time is now in the editor header ("Updated Sep 29, 2026"), so nothing is lost
+- [x] **Row count:** "N pages", or "N of M pages" with filters on, when everything fits on one page (§5.2)
+- [x] **Deletes (§13.1, §4.10):** page and category deletes moved from `AlertDialog` to the shell `ConfirmDialog`: centred on phones, with a "Deleting…" busy label
+- [x] **Section rail (§13.2):** the hand-rolled `offsetLeft` effect became `useRailAutoScroll`; `thin-scrollbar` became `no-scrollbar`
+- [x] **Skeletons (§4.10, D-29):** all four `loading.tsx` files used `DataPageSkeleton` variants that draw stat tiles, avatar rows, a breadcrumb and a logo plate the screens don't have. They now render `components/WebsiteEditorSkeletons.tsx`: one skeleton per screen, with the table well from `md`, cards below and columns by tier
+- [x] **TipTap (§12):** Link and Alt used `window.prompt`. Both open a small centred dialog (`ToolbarFieldsDialog`) that starts from the current values. Link gains "Remove link"; an emptied URL removes the link
+- [x] Dialog headers make room for the ✕ (`pr-10` / `pr-14`), as `ConfirmDialog` does
+
+Left as is:
+- **Categories** is an indented tree, not paged: paging would split parents from their children. It is a short list in practice.
+- **Touch targets (§13.6):** header and toolbar pills are `h-9` on phones, like the other converted HQ pages. No HQ page applies `max-sm:h-11` yet.
+- `MutedSelect` / `MutedTextarea` still spell out the muted material, until the §11 `select.tsx` item lands.
+
+Verification: `tsc` reports 0 errors across the route and `components/cms/**`. It ran on a scoped tsconfig listing the route's entry files (21 files, imports included), because the full-project run passed 10 minutes. A planted type error was caught, so the scoped check is real. ESLint is clean on the changed files; the colour, line, spinner, `window.prompt` and `min-w` greps are clean. Browser check not done: the Chrome DevTools MCP failed to connect this session.

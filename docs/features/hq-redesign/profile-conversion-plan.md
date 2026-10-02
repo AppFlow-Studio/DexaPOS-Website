@@ -38,3 +38,27 @@ The merchant page now renders through the same component, so it picks up two rul
 - [x] ESLint: no findings in any changed file (the `HEAD` merchant page had none either)
 - [x] §3.5, §5.5 and §8 greps return nothing for the changed files; `PageShell` on the HQ route carries `as="div"`
 - [ ] Browser check was **not run**, because the Chrome DevTools MCP would not connect. Look at: the Clerk widget in dark mode on `/manage/profile` (it had never had the theming), the role pill, 375px with no avatar, and one `<main>` on the HQ route
+
+## Re-audit — 2026-10-02
+
+A code-only re-audit against the current rules (Chrome DevTools MCP still would not connect). The changes are in the shared components, so `/dashboard/profile` gets them too.
+
+### Fixed
+
+- [x] **One skeleton (§4.10).** There were three copies: the route's `ProfileSkeleton` (neutral `bg-muted/70`, `rounded-2xl`), plus the identity panel's and the Clerk fallback's in-page states. The in-page ones used the bare `Skeleton`, which is `bg-accent`, a violet tint in light mode. The blocks changed colour and radius at handoff. Now `components/profile/ProfileSkeletons.tsx` (`ProfileIdentitySkeleton`, `AccountPanelSkeleton`, moved from `UserProfileFallback.tsx`) is rendered by `DataPageSkeleton variant="profile"` and by both panels. The blocks are `aria-hidden`, with one `role="status"` line per panel.
+- [x] **Role pill pop-in (§4.10).** The HQ role loads apart from `useUserInfo`. `ProfileIdentityPanel` takes `labelsLoading` and holds the pill row's place, so the panel no longer grows when the role lands.
+- [x] **Clerk Save button (§4).** `formButtonPrimary` gets `!rounded-full`, matching the pill Cancel beside it.
+- [x] **Clerk nav active state (§4.5).** Every item was forced to `!text-muted-foreground`, so the selected item had no cue except Clerk's theme-blind black tint. `navbarButton__active` now applies the DS-CTL-05 pill: `bg-background text-foreground shadow-sm ring-1 ring-border`. It uses `[&&]` so it outranks the base `!` colour, and the compiled output puts it after the hover rule.
+- [x] **Retry on phones (§13.6).** 44px below `sm`.
+- [x] A duplicate, stale docblock above `ProfileSkeleton` was removed.
+
+### Open — needs a browser
+
+Clerk loads its UI from its CDN, so none of this can be checked from the repo:
+
+- [ ] Do the `[&&]` active-pill classes reach the Clerk nav button? Does Clerk add `navbarButton__active`'s class in this version?
+- [ ] `AccountProfile.tsx` says Clerk honours `appearance.variables`. The `globals.css` `.clerk-themed` comment says a browser check showed it honours neither `baseTheme` nor `variables`. If `globals.css` is right, the raw hex dark palette is dead code: delete it.
+- [ ] §13.4: Clerk's Profile row shows an avatar beside the name, and Connected accounts shows provider logos. Hide both below `sm` (`userPreviewAvatarBox`, provider icons) if they show.
+- [ ] §4.10: Clerk shows its own spinner in a saving button. If it can't be swapped for a busy label, record it as an exception in §14.3.
+- [ ] Unthemed sub-views: OTP code boxes (`otpCodeFieldInput`), the phone country select, the "⋯" `menuList` radius (§4.6), Clerk's form `alert` surface (§3.5), and whether the narrow-width nav opens as a slide-in (§12).
+- [ ] Clerk's section titles render in plain foreground (`.clerk-themed` forces `inherit`). Decide whether they count as section headings, which take the brand blue.
