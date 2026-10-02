@@ -17,6 +17,7 @@ One standard for both dashboards: the **merchant dashboard** (`/dashboard/*`) an
 - large `tabular-nums` figures carry the emphasis
 - **tables are bounded:** own row, 10 rows a page, **no inner vertical scroll** on tablet and laptop; **cards on phones**
 - **every empty state says so in words**
+- **every page loads as a skeleton of itself, never a spinner**
 - **phones get the essentials only**
 
 | Working on | Read first |
@@ -587,8 +588,28 @@ The same material as the search field (§4.2) — borderless `bg-muted/60`, no s
 - **Sparse data needs a caption, not an empty state.** For example: "Median per day · 4 of 30 days have measurable data."
 - **Never `return null` from a section that has a place in the layout.** Render its empty text instead. The one exception: when two panels share a row, the *secondary* one may collapse to a one-line note while the other spans the row.
 - **Never hide the empty text on phones.** Stripping detail below `sm` (§13.4) never removes the sentence that explains a blank.
-- **Loading is not empty.** While fetching, show a skeleton in the final shape (§5.4). The empty sentence appears only once the data comes back empty.
+- **Loading is not empty.** While fetching, show a skeleton in the final shape (§4.10, §5.4). The empty sentence appears only once the data comes back empty.
 - **Errors are sentences too.** Use a neutral well that says what failed and offers Retry, e.g. `rounded-2xl bg-muted/30 px-4 py-20` with "We hit a snag loading organizations". Do not use red text (§3.5).
+
+### 4.10 Loading skeletons — `DS-CTL-16` <sup>D-29</sup>
+
+**Every page has a loading skeleton in the shape of its own content, at laptop width and at phone width.** When the data lands, nothing should move: the blocks are where the content will be, at its size.
+
+**What the skeleton mirrors:**
+- **The header:** back pill, title (with its badge), subtitle and action, in the same positions as `PageHeader`.
+- **The page's blocks, in order:** stat tiles, the tab rail with its number of pills, the toolbar (search and filter pills), panels and section headings.
+- **Lists by breakpoint (§5.3).** From `md` up, a table well: a header band, then rows with the table's column count. Below `md`, record cards with the card's lead line and its label/value pairs. A list that is cards at every width is cards in the skeleton too.
+- **Only what renders at that width.** No slot for a logo, avatar or column the layout drops there (§13.4, §5.4).
+
+**One skeleton per page, used everywhere it loads.** The route's `loading.tsx`, the page's `Suspense` fallback and its in-page loading state render the same component, so the shape never jumps between them. The same applies inside the page: a tab, panel or dialog that fetches on its own shows a skeleton of *its* content.
+
+**Never a spinner.** No `Loader2`, no `animate-spin`, no rotating icon, and no "Loading…" text standing in for content. A skeleton is pulsing blocks only: `Skeleton` from `@/components/ui/skeleton`.
+- **A busy button** changes its label ("Saving…", "Revoking…") and disables itself. No spinner icon inside it.
+- **For screen readers,** add one `<p role="status" className="sr-only">Loading the user profile</p>` line. Mark the skeleton blocks `aria-hidden`.
+
+**Where to start.** `DataPageSkeleton` is fine only when its shape matches the page. Its table body draws the same bars at every width, which is wrong for any list that becomes cards on phones. Otherwise, build the page's own skeleton from blocks. The reference is [`app/manage/users/components/skeletons.tsx`](../app/manage/users/components/skeletons.tsx): `RecordListSkeleton` (a table well from `md`, cards below, with a column count and card pairs) plus the `UsersDirectorySkeleton` and `UserProfileSkeleton` built on it.
+
+**Grep:** `rg -n 'Loader2|animate-spin' <your-file>` must return nothing. Baseline on 2026-10-01: 399 `animate-spin` uses in 244 files under `app/dashboard`, `app/manage` and `components`. They convert with their page.
 
 ---
 
@@ -946,6 +967,7 @@ Dialogs and sheets animate via real `@keyframes` (`panel-in`, `overlay-in`) in `
 | Green/red figures and trend arrows | `text-foreground`, plus arrow glyph and sign | §3.5, §6.2 |
 | `bg-[#0C4FD1] text-white` on a selected control | `bg-background text-foreground shadow-sm ring-1 ring-border` | §3.5 |
 | A bare `<Badge>` for a status | `<Badge variant="outline">` | §4.6b |
+| `Loader2`, `animate-spin`, or a "Loading…" line in place of content | A skeleton in the content's shape; a busy button changes its label | §4.10 |
 | `max-h-* overflow-auto` around a `<Table>` or on its container; a sticky `<TableHeader>` | Delete it; page the table at 10 with `PaginationBar`. Tables never scroll inside themselves. | §5.7 |
 | `rounded-xl` / `rounded-lg` on a popover | `rounded-2xl` | §4.6 |
 | `divide-y`, `border-t` between sections, `OverviewSection`'s default `divider` | Spacing (`PanelDivider` and `PanelSection`'s `divider` prop are deleted) | §5.5 |
@@ -1001,6 +1023,11 @@ Paste into your PR.
 - [ ] No coloured figures or arrows, and no brand blue on icons, links or active states
 - [ ] Status shown as a neutral pill with a word; no bare `<Badge>`
 - [ ] Alarm colour only on a glyph or figure, with words; healthy is neutral
+
+**Loading** (§4.10)
+- [ ] One skeleton component, shaped like the page at laptop and at phone width, used by `loading.tsx`, the `Suspense` fallback and the in-page loading state
+- [ ] Tabs, panels and dialogs that fetch on their own show a skeleton of their own content
+- [ ] No `Loader2` / `animate-spin`; busy buttons change their label instead
 
 **Empty states** (§4.9)
 - [ ] Every chart, table, grid, panel and tile has a sentence for empty. Tested with all-zero data too.
@@ -1073,6 +1100,7 @@ Paste into your PR.
 | **D-26** | Table vs. cards (2026-09-30) | **One breakpoint: cards below `md`, the table from `md` up.** Columns carry tiers (essential / `lg` / `xl` / `2xl`) so the table fits each width without sideways scroll (§5.3) | D-23's per-table fit breakpoint, which kept tablets and small laptops on cards; an unprefixed `min-w-*` | Open: tables switching at `lg`/`xl`/`2xl` (§11) |
 | **D-27** | Phone card content (2026-09-30) | **Essentials only:** identity + status, ≤ 4 label/value pairs, the primary action; the rest is one tap away in the detail view. The essential set is also the tablet table's column set (§5.3) | "No column is lost" — every column re-laid-out onto the card | Open: cards carrying every column (§11) |
 | **D-28** | Large row detail (2026-09-30) | **Recommended: its own detail page** (skeleton C), with the row and card linking to it and the list state kept in the URL. Expand in place only for short detail (§5.9) | Expanding rows into tables, tabs or forms, which pushes the page of 10 off screen | — (recommendation; applies as pages are converted) |
+| **D-29** | Loading states (2026-10-01) | **A skeleton of the page itself, at laptop and phone width**: one component for `loading.tsx`, the `Suspense` fallback and the in-page state; lists as a table well from `md` and cards below (§4.10) | Spinners (`Loader2`, `animate-spin`) anywhere, including in buttons; "Loading…" text; one generic bar skeleton at every width | `/manage/users` and its profile page; 399 `animate-spin` uses remain, converting with their pages |
 
 **Retracted during implementation.** Two findings from the initial audit did not survive verification:
 
@@ -1091,8 +1119,10 @@ Fix-once items. **Do not** re-solve these per page.
 | Retire status colour from the `BadgeStyle` modules — drop the `dot`/`text`/`bg` hues, keep the labels (D-12) | `table-status.ts` + `TableStatusBadge` (payment, menu and cascade are done) | Open, 1 of 4 left |
 | Convert `Sheet`-based panels to centred `Dialog`s (D-13) | `StaffDetailSheet`, `LocationAssignmentSheet`, `NewEditItemFormSheet`, + others | Open |
 | Add the mobile full-screen sizing to `DialogContent` as a variant, so it isn't retyped per call site (§13.1) | `dialog.tsx` | Open |
-| Extract the section-rail auto-scroll (§13.2) into one component rather than an effect per page. Start from the org-detail rail (D-24) and add `relative` to the rail. | new — `components/dashboard/shell` | Open |
+| Extract the section-rail auto-scroll (§13.2) into one component rather than an effect per page. Start from the org-detail rail (D-24) and add `relative` to the rail. | new — `components/dashboard/shell` | ✅ Done 2026-10-01: `useRailAutoScroll`, measuring with rects so no `relative` is needed. Org detail and the user profile use it; the merchant pages' `scrollIntoView` rails remain. |
+| Replace spinners with skeletons and busy labels (§4.10) | 399 `animate-spin` uses in 244 files | Open: converts with each page |
 | Add `data-slot="popover-content"` to `popover.tsx` so the global overlay-radius rule can reach it | `popover.tsx` | Open — select/dropdown already done in `globals.css` |
+| `CommandInput` drew a `border-b` rule under every combobox search (§5.5). Its wrapper is now the §4.2 search material, a muted `m-2 rounded-full bg-muted/60` pill, so all 16 callers lose the line. `ModifierRecipeManager`'s per-call-site copy of the same classes is now redundant but harmless. `CommandSeparator` (`h-px bg-border`) is still a line, used by `invoices/CustomerSearch.tsx:153` and `reports/comparison/LocationMultiSelector.tsx:150`; replace it with spacing when either is converted. | `command.tsx` | ✅ Done 2026-09-30 (input); separator open |
 | Table consolidation | 3 implementations | Open |
 | `hsl(var(...))` bug (C2) | `lib/orderout/platform.ts` + 9 more files | Open |
 | Move day-cell pill radius into `DateRangePicker`; delete both page `<style>` blocks | `DateRangePicker.tsx`, reports + analytics pages | Open |
@@ -1222,6 +1252,8 @@ card on mobile: blowing a two-line question up to full screen makes a trivial de
 like a destination. Keep those at their `sm:max-w-[425px]`-class sizing at every width, and
 keep the `rounded-3xl`.
 
+**Use [`ConfirmDialog`](../components/dashboard/shell/ConfirmDialog.tsx)** from the shell for a confirm/cancel question, and never `window.confirm`. For another short dialog that must stay a card, such as a one-time password, put `CENTRED_DIALOG` on its `DialogContent`.
+
 The dividing line is content, not component: **does the panel contain fields or a list the
 user works through?** Full screen. **Is it a question with two buttons?** Centred card.
 
@@ -1241,46 +1273,38 @@ A horizontal tab/section rail (§4.5) must never hide the active section off-scr
 - **The selected pill scrolls itself into view**, on mount and on every change, so the
   active section is always the one you can see. Scroll **the rail**, not the tab (D-24):
 
-```tsx
-const railRef = React.useRef<HTMLDivElement>(null)   // <div ref={railRef} className="relative … overflow-x-auto">
-const positioned = React.useRef(false)
+Use the shell hook. Do not copy the effect into the page:
 
-React.useEffect(() => {
-  const rail = railRef.current
-  if (!rail) return
-  let done = false
-  const align = () => {
-    const max = rail.scrollWidth - rail.clientWidth
-    const tab = rail.querySelector<HTMLElement>('[data-state="active"]')
-    if (done || !tab || max <= 0) return
-    const left = tab.offsetLeft - (rail.clientWidth - tab.offsetWidth) / 2
-    const smooth = positioned.current && !matchMedia('(prefers-reduced-motion: reduce)').matches
-    rail.scrollTo({ left: Math.max(0, Math.min(left, max)), behavior: smooth ? 'smooth' : 'auto' })
-    positioned.current = done = true
-  }
-  align()
-  const observer = new ResizeObserver(align)   // a cold rail has no width on the first run
-  observer.observe(rail)
-  return () => observer.disconnect()
-}, [activeTab])
+```tsx
+import { useRailAutoScroll } from '@/components/dashboard/shell'
+
+const railRef = useRailAutoScroll(activeTab)
+
+<div ref={railRef} className="no-scrollbar w-full min-w-0 overflow-x-auto">
+  <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+    {tabs.map((tab) => (
+      <TabsTrigger key={tab.value} value={tab.value} data-tab-value={tab.value} …>
 ```
+
+[`useRailAutoScroll`](../components/dashboard/shell/useRailAutoScroll.ts) returns a callback ref, so a rail that mounts after a loading state is still picked up. Each trigger carries `data-tab-value`.
 
 What the recipe does:
 - **Centres the active pill.** That reveals the sections on either side, which is the cue that tells the user the rail scrolls at all.
 - **Clamps the scroll**, so the first and last pills rest flush against the ends.
 - **Places the first positioning instantly**, so a deep-linked tab is already in place when the page appears.
 
-- **The rail must be `relative`.** `offsetLeft` is measured from the nearest positioned ancestor, so a static rail measures from somewhere further out.
+- **Respects reduced motion:** later changes animate only when the user has not asked for reduced motion.
+- **Works on any rail.** It measures with bounding rects plus the rail's scroll offset, so the rail does not need to be `relative`. The older `offsetLeft` recipe did need that.
 - **Why not `scrollIntoView`:** it walks every scrollable ancestor, not just the rail.
   - `block: "nearest"` stops the vertical jump.
   - But `inline: "center"` can still shift `#main-content` sideways when the page has clipped horizontal overflow, because an `overflow-x-hidden` element can still be scrolled by script.
   - The older `scrollIntoView({ inline: "center", block: "nearest" })` recipe is still in several merchant pages. It is acceptable where it has already shipped; new code scrolls the rail.
-  - Reference implementation: [`organizations/[organizationId]/page.tsx`](../app/manage/organizations/[organizationId]/page.tsx).
+  - Used by: org detail (`organizations/[organizationId]/page.tsx`) and the user profile (`users/[userId]/page.tsx`).
 
 - **Never** hide the overflow. `overflow-x-hidden` on a rail silently truncates the section
   list, and the sections past the cut become unreachable.
-- Scrollbar itself stays hidden (`.thin-scrollbar` or `scrollbar-none`) — the peeking pill is
-  the affordance, not a scrollbar.
+- Scrollbar itself stays hidden (`no-scrollbar`), at every width. The peeking pill is the
+  affordance, not a scrollbar.
 
 ### 13.3 Layout basics
 
@@ -1432,19 +1456,22 @@ distinct hand-rolled `<h1>` class strings**; all of them become `PageHeader`:
 | HQ-1 | **Operational density.** HQ tables may run tighter than the merchant recipe. | HQ is a command centre, and operators scan far more rows per session than a merchant does. Density is the feature. It is still bounded: every HQ table is paged at 10 with no inner scroll (§5.7). |
 | HQ-2 | **HQ alarms keep their colour** (§3.5, use 4), exactly where HQ raises alarms. The places are listed below. | These encode a real alarm state, so the colour is semantic, not decoration. Everywhere else in HQ, status is text-led and a row that needs attention is marked by weight. |
 | HQ-3 | **`/manage` keeps its command-centre composition:** status line, tabs, then a dashboard of paired panels (§14.6.1). | This preserves the information hierarchy of the Admin HQ Dashboard Overhaul. Only the canvas, header and card nesting changed. |
+| HQ-4 | **KDS send ledger and unsent items expand in place** (`/manage/support/kds-mirror`), against the §5.9 recommendation, because the detail holds a list. The list is capped at 5 items; the rest open in a centred dialog ("Show all N items", `CappedItemList`). The ledger's preview puts dropped and unrouted items first. Added 2026-09-30. | The detail is usually one line. Measured 2026-09-30: items per send median 1, p90 4, max 32 (536 sends); unsent items per order median 1, p90 2, max 25 (3,001 orders). A detail page would be a route for one line, and support reads the items beside the send they belong to. The cap keeps the rare long order from pushing the page of 10 and its pager off screen. |
+| HQ-5 | **The KDS device-truth timeline lanes reveal 100 more entries on demand** ("Show 100 more") inside their feed cap, instead of the 50-event server limit §5.7 sets for a chronological feed. Added 2026-09-30. | The lanes and the divergence list read the same truth-window `items`, so they cannot be capped on the server without breaking the divergence list. A cap in the client would make older events in the window unreachable, and this is a diagnostic tool: a hidden event can change the conclusion. |
 
 **Where HQ-2 applies.** The list is closed. Add to it before the PR that relies on the addition merges.
 
 | Surface | What is coloured |
 |---|---|
 | `/manage/health` and the Health tab on `/manage` (both render [`HealthDashboard`](../app/manage/components/HealthDashboard.tsx)) | The Healthy / Needs attention / Critical score tiers, in text and bars. The legend is a scale, so it is the one place where "healthy" keeps its green. |
-| `/manage/dlq` | Dead-letter failures: the Pending count figure when above 0 (meta "Failed, awaiting retry or triage"); the retry figure when retries are exhausted on a live entry (word "Exhausted" beneath); and the glyph beside "Failed — error message" in the detail panel. Resolved and abandoned entries stay neutral. |
+| `/manage/dlq` | Dead-letter failures: the retry figure when retries are exhausted on a live entry (word "Exhausted" beside it), and the glyph beside "Failed — error message" in the detail panel. The Pending count figure stays neutral (removed in `8b658018`): it is a queue total, and its meta "Failed, awaiting retry or triage" already says it in words. Resolved and abandoned entries stay neutral. |
 | `/manage` alerts panel | The severity **icon**: red for high, amber for medium ([`AlertsPanel`](../app/manage/components/AlertsPanel.tsx)) |
 | `/manage` platform pulse | The payment success rate figure, when below 95% |
 | `/manage` Analytics tab | The failure rate figure, when above 5%, with the meta line "Above 5% threshold" |
 | Device figures (fleet, analytics) | Battery at or below 20%, and RAM or storage past their limits, on the glyph or figure |
 | `/manage/transactions` and its shared sections (Chargebacks on `/manage/disputes`, batch reconciliation on merchant Settlements) | Chargeback defense deadline: a red glyph with "Overdue", an amber glyph with "{n}h left" / "{n}d left" inside 72 hours, and a red glyph on the "due within 72 hours" callout. Batch reconciliation discrepancy: an amber glyph beside the amount. TSYS sync failure: a red glyph with "Sync failed" in the connectivity line. Added 2026-09-28. |
 | `/manage/settings/integrations`, OrderOut menu-push panel | Unprocessed push_menu dead-letter entries: a red glyph beside "{n} unprocessed" when the live (pending or retrying) count is above 0, with a "Review in the dead-letter queue" link. Zero reads "None unprocessed · All clear"; a failed count reads "—". Added 2026-09-29. |
+| Impersonation banner ([`ImpersonationBanner`](../components/dashboard/ImpersonationBanner.tsx), on every `/manage` and `/dashboard` page during a "View as merchant" session) | The countdown figure under "Auto-exits in", red in its last five minutes only. The banner itself is neutral: an opaque `bg-muted` surface with no border or rule, a bare muted glyph, the words "Impersonating {merchant}", and an outline Exit button. Added 2026-09-30. |
 | `/manage/support/kds-mirror` (KDS), send failures only | Send ledger: a red glyph with "Partial send" or "Dropped", an amber glyph with "No route" / "No route recorded". Unsent items: a red glyph with "Partial fire". The Partial sends, With dropped items and Partial fires figures turn red only above zero. Device-truth verdicts, routing health, stale-ticket hints and the realtime state stay neutral. Added 2026-09-29. |
 
 HQ-2 never extends to a fill, a tinted row, a tinted pill, or a status that is not an alarm.
@@ -1457,8 +1484,8 @@ Six of the nine HQ `loading.tsx` files use `DataPageSkeleton` with
 `shell="plain"`. Three are hand-rolled and deliberately mirror the *legacy*
 card layout:
 
-- `app/manage/support/loading.tsx`
-- `app/manage/support/[ticketId]/loading.tsx` (via `SupportTicketSkeleton`)
+- ~~`app/manage/support/loading.tsx`~~ — rewritten 2026-09-29/30 with its page. Still hand-rolled, as a recorded exception: `DataPageSkeleton variant="table"` has no status rail and reserves an avatar slot the rows don't have
+- ~~`app/manage/support/[ticketId]/loading.tsx`~~ (via `SupportTicketSkeleton`) — rewritten 2026-09-30 with its page; hand-rolled because no shared skeleton has a thread-plus-rail layout
 - ~~`app/manage/users/loading.tsx`~~ — converted 2026-09-29 with its page; now `DataPageSkeleton variant="report"` (3 stats, 2 tabs, table body)
 
 `support/loading.tsx` says so in its own docblock: the page "is built from raw
@@ -1481,8 +1508,8 @@ Updated as each route family lands.
 | 2 — Merchant and org operations | `/manage/merchants`, `…/new`, `/manage/organizations`, `…/[organizationId]`, `…/create-organization` | ✅ Converted, including the org-detail dialog components (PR 2b). Reference: §14.6.2, §14.6.4. `/manage/create-merchant` is a bare `redirect()` and needs no change. |
 | 3 — Merchant detail workspace | `/manage/merchants/[merchantId]/**` | ✅ Converted in 3a–3g: all 51 reachable files. The 56 unreachable files are excluded; scope them with `scripts/hq-reachability.js`. |
 | 4 — Money movement | `/manage/transactions`, `/manage/disputes`, `/manage/platform-fees`, `/manage/subscriptions`, `/manage/cash-drawers`, `/manage/reports/tax` | `/manage/transactions` ✅ converted 2026-09-28 against the rules as they stand today, including §3.5, §4.9, §5.6–§5.8 and §13.4 ([plan and record](features/hq-redesign/transactions-conversion-plan.md)). Its Chargebacks section also renders on `/manage/disputes`. `/manage/disputes` and `/manage/platform-fees` (+ `…/[merchantId]`, and all of `components/platform-fees/**`) ✅ converted 2026-09-29 ([record](features/hq-redesign/disputes-platform-fees-conversion-plan.md)); no HQ-2 additions. The rest are pending PR 4. |
-| 5 — Internal operations | `/manage/users`, `/manage/roles-permissions`, `/manage/audit-logs`, `…/impersonation`, `/manage/support`, `/manage/dlq`, `/manage/profile` | `/manage/audit-logs/impersonation` ✅ converted 2026-09-29 against the current rules (§3.5, §4.9, §5.3, §5.7, §13.4): server-paged at 10 with `PaginationBar`, a card grid below `xl`, and end reasons as neutral words. `/manage/users` (list) ✅ converted 2026-09-29 with its skeleton ([record](features/hq-redesign/users-conversion-plan.md)); its `[userId]` detail page is still pending. `/manage/audit-logs` ✅ converted 2026-09-29 ([record](features/hq-redesign/audit-logs-conversion-plan.md)): pill-rail tabs, a muted toolbar, `variant="data"` from `2xl` with record cards below sharing one detail component, paged at 10, anomalies and failures marked by words and weight. `/manage/support/kds-mirror` (KDS) ✅ converted 2026-09-29 with its own `loading.tsx` ([record](features/hq-redesign/kds-conversion-plan.md)): one `Panel` per tab, a neutral station board, tables paged at 10 with record cards below their fit breakpoint, send failures the only colour (HQ-2); `/manage/support/kds-truth` is a bare `redirect()`. `/manage/dlq` ✅ converted 2026-09-29: a status `StatRow` that doubles as the filter, a §5.2 toolbar, a `variant="data"` table server-paged at 10 with record cards below `lg`, and the detail `Sheet` became a centred `Dialog`. It reuses the `/manage/transactions` `ledger-primitives`, and its alarms are listed under HQ-2. `/manage/support` (the inbox list) ✅ converted 2026-09-29 with its `loading.tsx`: a KPI `StatRow`, a pill status rail, a `FilterSelect` toolbar, `variant="data"` with record cards below `lg`, server-paged at 10 (it previously loaded 50 and dropped the rest), neutral status and priority pills, with unread, urgent and unassigned marked by weight. It also reuses `ledger-primitives`. Its `[ticketId]` thread (amber internal-note surfaces, green/red/amber action buttons, `<Separator>` and `border-t` dividers) and `support/new` (a blue callout) are still pending. `/manage/profile` ✅ converted 2026-09-29 with a new `loading.tsx` ([record](features/hq-redesign/profile-conversion-plan.md)): it now shares `ProfileIdentityPanel` and `ClerkAccountPanel` (`components/profile/AccountProfile.tsx`) with `/dashboard/profile`, so the Clerk theming exists once; the HQ role is a neutral pill. The rest are pending PR 5. Rewrite the hand-rolled skeletons in the same PR (§14.4). |
-| 6 — Devices and configuration | `/manage/devices`, `…/overview`, `/manage/device-catalog`, `/manage/nmi-integration`, `/manage/settings/integrations`, `/manage/settings/billing-catalog` | `/manage/devices`, `…/overview` and `…/[deviceId]` ✅ converted 2026-09-29 against the current rules ([plan and record](features/hq-redesign/devices-conversion-plan.md)). `/manage/device-catalog` ✅ converted 2026-09-29 ([record](features/hq-redesign/device-catalog-conversion-plan.md)): a `StatRow` panel, a neutral callout, a §5.2 toolbar on the `ledger-primitives` `FilterSelect`, and the collapsible grouped list became a `variant="data"` table sorted in category order, with record cards below `xl`, paged at 10. The form dialog goes full-screen on phones and carries no rules. `DeviceRegistryMetricCard` is deleted. The rest of PR 6 is pending. `/manage/nmi-integration` ✅ converted 2026-09-29: skeleton D (`width="narrow"`), one `Panel` with a status well (saved/not-set as words, no pills on the muted surface) and a credentials form, save feedback via toasts. `/manage/settings/integrations` ✅ converted 2026-09-29: skeleton D, one `Panel` per integration (Valor central SaaS rail, NMI billing, OrderOut menu-push), sharing `StatusWell` / `StatusItem` / `Field` from `settings/integrations/IntegrationPrimitives.tsx` with `/manage/nmi-integration`. The Valor cutover became its own `PanelSection` (the `border-t` rule is gone) with a `Checkbox` confirm, labelled dry-run vs live figures and a capped plan list; its only colour is the destructive button. The OrderOut dead-letter count is on HQ-2 and now counts only live entries. `/manage/settings/billing-catalog` ✅ converted 2026-09-29 ([record](features/hq-redesign/billing-catalog-conversion-plan.md)): the one `<Card>` of three inline forms became a read view. The station plan is a `StatRow`; services (inactive ones included) and device mappings (every category, with "Not mapped" said in words) are `variant="data"` tables paged at 10, with record cards below `xl` and `lg`. Every record opens a centred editor from `components/billing/catalog/`. Active and inactive are a status select, not a `Checkbox`, because a checked control fills with `--primary` and turns violet in a portal (C5). `/manage/website-editor` (+ `…/pages/[route]`, `…/categories`, `…/blocks`) ✅ moved from `/admin` and converted 2026-09-29 ([record](features/hq-redesign/website-editor-conversion-plan.md)): the marketing CMS left its own shell and ~1,430 lines of bespoke CSS for `PageShell as="div"` with a route pill rail; the pages list is a `variant="data"` table with record cards below `lg`, paged at 10; the section editor and TipTap were rebuilt on `Input` / `Select` / `Textarea` with tier-2 section cards and one shared `ImageLibraryDialog`; categories and blocks edit in centred dialogs. `/admin/**` redirects in `next.config.ts`. |
+| 5 — Internal operations | `/manage/users`, `/manage/roles-permissions`, `/manage/audit-logs`, `…/impersonation`, `/manage/support`, `/manage/dlq`, `/manage/profile` | `/manage/audit-logs/impersonation` ✅ converted 2026-09-29 against the current rules (§3.5, §4.9, §5.3, §5.7, §13.4): server-paged at 10 with `PaginationBar`, and end reasons as neutral words. Moved to D-25–D-27 on 2026-09-30: the table shows from `md` with tiered columns (started, admin, merchant and status from `md`; actions and duration from `lg`; reason from `xl`), `table-fixed` one-line rows, and phone cards that lead with merchant and status followed by four pairs. `/manage/users` (list) ✅ converted 2026-09-29 with its skeleton ([record](features/hq-redesign/users-conversion-plan.md)); its `[userId]` detail page ✅ converted 2026-09-30, and the list brought onto D-25–D-28 the same day ([record](features/hq-redesign/users-conversion-plan.md)): table from `md` with tiered columns, essential-only cards, list state in the URL, `ConfirmDialog` for every destructive action, and the Sessions and Events tabs wired to Clerk and the audit log. `/manage/audit-logs` ✅ converted 2026-09-29 ([record](features/hq-redesign/audit-logs-conversion-plan.md)): pill-rail tabs, a muted toolbar, paged at 10, anomalies and failures marked by words and weight. Moved onto D-25–D-28 on 2026-09-30, with a new `loading.tsx`. The table shows from `md` (`bounded={false}`, no `min-w`, one-line rows). When, what happened, who and status are essential; Organization joins at `lg`, Category and Severity at `xl`, Location at `2xl`. Phone cards are `RecordLinkCard`s. Each entry now has its own page, `/manage/audit-logs/[logId]` (skeleton C), in place of the in-place expand. It shares `app/manage/components/audit-detail-parts.tsx` with the merchant entry page, and the list's tab, pages and filters live in the URL so Back returns to the same page of 10. `/manage/support/kds-mirror` (KDS) ✅ converted 2026-09-29 with its own `loading.tsx` ([record](features/hq-redesign/kds-conversion-plan.md)): one `Panel` per tab, a neutral station board, tables paged at 10 with record cards below their fit breakpoint, send failures the only colour (HQ-2); `/manage/support/kds-truth` is a bare `redirect()`. `/manage/dlq` ✅ converted 2026-09-29: a status `StatRow` that doubles as the filter, a §5.2 toolbar, a `variant="data"` table server-paged at 10 with record cards below `lg`, and the detail `Sheet` became a centred `Dialog`. Moved onto D-25–D-27 on 2026-09-30: the table shows from `md` (`table-fixed`, no `min-w`, one-line rows; source/event, status, error and actions are essential, Retries joins at `lg` and Created at `xl`), and the phone card leads with identity and status, then Error and Retries (the exhausted count is alarm text, so it stays on phones). It reuses the `/manage/transactions` `ledger-primitives`, and its alarms are listed under HQ-2. `/manage/support` (the inbox list) ✅ converted 2026-09-29 with its `loading.tsx`: a KPI `StatRow`, a pill status rail, a `FilterSelect` toolbar, `variant="data"` with record cards below `lg`, server-paged at 10 (it previously loaded 50 and dropped the rest), neutral status and priority pills, with unread, urgent and unassigned marked by weight. It also reuses `ledger-primitives`. On 2026-09-30 the whole Support family was re-audited and finished ([record](features/hq-redesign/support-conversion-plan.md)): the inbox and KDS tables moved to D-25–D-28 (table from `md`, tiered `table-fixed` columns, one-line rows, `bounded={false}`), the inbox keeps its tab, filters, search and page in the URL, and every KDS view that fails now says so instead of showing its empty sentence. `support/[ticketId]` ✅ converted to skeleton C (controls panel first on phones, the thread scrolling itself from `lg`, not-found split from load error) with its skeleton rewritten, and `support/new` ✅ converted to skeleton D with its own `loading.tsx`. `/manage/profile` ✅ converted 2026-09-29 with a new `loading.tsx` ([record](features/hq-redesign/profile-conversion-plan.md)): it now shares `ProfileIdentityPanel` and `ClerkAccountPanel` (`components/profile/AccountProfile.tsx`) with `/dashboard/profile`, so the Clerk theming exists once; the HQ role is a neutral pill. The rest are pending PR 5. Rewrite the hand-rolled skeletons in the same PR (§14.4). |
+| 6 — Devices and configuration | `/manage/devices`, `…/overview`, `/manage/device-catalog`, `/manage/nmi-integration`, `/manage/settings/integrations`, `/manage/settings/billing-catalog` | `/manage/devices`, `…/overview` and `…/[deviceId]` ✅ converted 2026-09-29 against the current rules ([plan and record](features/hq-redesign/devices-conversion-plan.md)). `/manage/device-catalog` ✅ converted 2026-09-29 ([record](features/hq-redesign/device-catalog-conversion-plan.md)): a `StatRow` panel, a neutral callout, a §5.2 toolbar on the `ledger-primitives` `FilterSelect`, and the collapsible grouped list became a `variant="data"` table sorted in category order, with record cards below `xl`, paged at 10. The form dialog goes full-screen on phones and carries no rules. `DeviceRegistryMetricCard` is deleted. Moved onto D-25–D-29 on 2026-10-02. The table shows from `md` (`bounded={false}`, `table-fixed`, one-line rows): model, unit cost, status and actions are essential, Monthly fee joins at `lg`, and Category and Specs at `xl`. The phone card leads with model and status, then three pairs. The empty state sits in the table's or the card grid's footprint. A page skeleton backs a new `loading.tsx`, and its list skeleton is reused in the page. Delete is confirmed with `ConfirmDialog`. In the form dialog, "Active" became a status select (C5), and spec switches and checkboxes fill `bg-foreground` when on, so the portal never shows violet. The rest of PR 6 is pending. `/manage/nmi-integration` ✅ converted 2026-09-29: skeleton D (`width="narrow"`), one `Panel` with a status well (saved/not-set as words, no pills on the muted surface) and a credentials form, save feedback via toasts. `/manage/settings/integrations` ✅ converted 2026-09-29: skeleton D, one `Panel` per integration (Valor central SaaS rail, NMI billing, OrderOut menu-push), sharing `StatusWell` / `StatusItem` / `Field` from `settings/integrations/IntegrationPrimitives.tsx` with `/manage/nmi-integration`. The Valor cutover became its own `PanelSection` (the `border-t` rule is gone) with a `Checkbox` confirm, labelled dry-run vs live figures and a capped plan list; its only colour is the destructive button. The OrderOut dead-letter count is on HQ-2 and now counts only live entries. Re-audited 2026-10-02 against §4.10 and §13.6: both routes gained a `loading.tsx` (`settings/integrations/IntegrationsSkeleton.tsx`, panel-shaped, phone captions matching the page), the button spinners became busy labels ("Previewing…", "Running cutover…", "Registering…"), the action buttons are 44px on phones, the cutover plan list is paged at 10 instead of a `max-h-48` scroll well capped at 50, and a failed config load now renders that integration's panel with a neutral `LoadError` and Retry instead of throwing the page to the root error screen. `/manage/settings/billing-catalog` ✅ converted 2026-09-29 ([record](features/hq-redesign/billing-catalog-conversion-plan.md)): the one `<Card>` of three inline forms became a read view. The station plan is a `StatRow`; services (inactive ones included) and device mappings (every category, with "Not mapped" said in words) are `variant="data"` tables paged at 10. Moved onto D-25–D-29 on 2026-10-02: both tables show from `md` (`bounded={false}`, `table-fixed`, one-line rows, no `min-w`), with the service columns tiered from essential (service, monthly, status) up to `2xl` (category, code); phone cards carry the essentials only; and one `CatalogPanelsSkeleton` serves the new `loading.tsx` and the in-page state, with no spinners. Every record opens a centred editor from `components/billing/catalog/`. Active and inactive are a status select, not a `Checkbox`, because a checked control fills with `--primary` and turns violet in a portal (C5). `/manage/website-editor` (+ `…/pages/[route]`, `…/categories`, `…/blocks`) ✅ moved from `/admin` and converted 2026-09-29 ([record](features/hq-redesign/website-editor-conversion-plan.md)): the marketing CMS left its own shell and ~1,430 lines of bespoke CSS for `PageShell as="div"` with a route pill rail; the pages list is a `variant="data"` table with record cards below `lg`, paged at 10; the section editor and TipTap were rebuilt on `Input` / `Select` / `Textarea` with tier-2 section cards and one shared `ImageLibraryDialog`; categories and blocks edit in centred dialogs. `/admin/**` redirects in `next.config.ts`. |
 
 `/manage/settings` is a bare `redirect()` and `/manage/unauthorized` is a minimal error surface. Neither needs any change.
 
@@ -1638,6 +1665,7 @@ These are two surfaces that share nothing (§14.7):
    - The range bar was centred, then left-aligned again.
    - The fleet status went from dot to pill to glyph.
    - Trust the code, not the log.
+9. **A height class on a `SelectTrigger` does nothing.** The primitive sizes itself with `data-[size=default]:h-9`, an attribute selector that out-ranks a plain `h-8` or `h-11` on the call site. For a 44px phone target use `max-sm:min-h-11`, or pass `size` and style the `data-[size=…]` variant.
 
 ### 14.8 Known gaps in converted HQ pages
 

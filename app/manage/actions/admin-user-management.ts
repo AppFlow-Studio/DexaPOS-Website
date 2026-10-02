@@ -5,12 +5,14 @@ import { createClerkClient } from '@clerk/backend'
 import { revalidatePath } from 'next/cache'
 import { assertHQPermission, assertSuperAdmin } from '@/lib/admin/auth'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { ADMIN_ROLE_CODES, countActiveAdminsInOrg } from '@/lib/admin/org-admins'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { HQ_ROLES } from '@/types/admin'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
 const VALID_HQ_ROLE_CODES = new Set(Object.keys(HQ_ROLES))
+
 
 function roleLevel(roleCode: string | null | undefined): number {
   if (!roleCode) return 0
@@ -190,37 +192,6 @@ export async function changeAdminUserRole(params: {
   }
 }
 
-async function countActiveAdminsInOrg(
-  organizationId: string,
-  excludeUserId?: string
-): Promise<number> {
-  const supabase = createServiceRoleClient()
-  const { data, error } = await supabase
-    .from('members')
-    .select('user_id, role, users(public_metadata)')
-    .eq('organization_id', organizationId)
-
-  if (error || !data) {
-    return 0
-  }
-
-  const adminRoleCodes = new Set([
-    'hq.super_admin',
-    'hq.platform_admin',
-    'hq.manager',
-    'merchant.owner',
-    'merchant.admin',
-  ])
-
-  return data.filter((row: any) => {
-    if (excludeUserId && row.user_id === excludeUserId) return false
-    if (!row.role || !adminRoleCodes.has(row.role)) return false
-    const status =
-      (row.users?.public_metadata as Record<string, unknown> | null)?.status
-    return status !== 'Inactive'
-  }).length
-}
-
 export async function deactivateAdminUser(params: {
   userId: string
   organizationId?: string
@@ -253,14 +224,7 @@ export async function deactivateAdminUser(params: {
     }
 
     // Only-admin guard: never allow deactivating the last active admin of an org.
-    const adminRoleCodes = new Set([
-      'hq.super_admin',
-      'hq.platform_admin',
-      'hq.manager',
-      'merchant.owner',
-      'merchant.admin',
-    ])
-    if (target.role && adminRoleCodes.has(target.role)) {
+    if (target.role && ADMIN_ROLE_CODES.has(target.role)) {
       const remainingActiveAdmins = await countActiveAdminsInOrg(
         orgId,
         params.userId
@@ -629,6 +593,77 @@ export async function resetAdminUserPassword(params: {
     return {
       success: false,
       message: `Failed to reset password: ${(error as Error).message || 'Unknown error'}`,
+    }
+  }
+}
+
+/**
+ * Removes a user from one organization (their account stays). Goes through
+ * Clerk only: the `organizationMembership.deleted` webhook deletes the
+ * `members` row and deactivates location members and staff profiles. Deleting
+ * the row here first would make that webhook no-op and skip the cascade.
+ */
+export async function removeUserFromOrganization(params: {
+  userId: string
+  organizationId: string
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const authContext = await assertSuperAdmin()
+
+    if (!params.userId || !params.organizationId) {
+      return { success: false, message: 'User and organization are required.' }
+    }
+    if (params.userId === authContext.userId) {
+      return { success: false, message: 'You cannot remove yourself from an organization.' }
+    }
+
+    const target = await getTargetMemberAndUser(params.userId, params.organizationId)
+    if (!target) {
+      return { success: false, message: 'This user is not a member of that organization.' }
+    }
+
+    // Only-admin guard, as for deactivation: an org must keep an active admin.
+    if (target.role && ADMIN_ROLE_CODES.has(target.role)) {
+      const remainingActiveAdmins = await countActiveAdminsInOrg(params.organizationId, params.userId)
+      if (remainingActiveAdmins === 0) {
+        return {
+          success: false,
+          message:
+            'Cannot remove the only active admin of this organization. Promote another user to admin first.',
+        }
+      }
+    }
+
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+    await clerkClient.organizations.deleteOrganizationMembership({
+      organizationId: params.organizationId,
+      userId: params.userId,
+    })
+
+    await logAdminAction('ADMIN_MEMBERSHIP_REMOVED', {
+      clerkOrgId: params.organizationId,
+      resourceType: 'user',
+      resourceId: params.userId,
+      resourceName: target.users?.email || params.userId,
+      changes: {
+        before: { organization_id: params.organizationId, role: target.role || null },
+        after: { organization_id: null },
+      },
+      metadata: {
+        member_id: target.id,
+        target_user_id: params.userId,
+      },
+    })
+
+    revalidatePath('/manage/users')
+    revalidatePath(`/manage/users/${params.userId}`)
+
+    return { success: true, message: 'Removed from the organization.' }
+  } catch (error) {
+    console.error('[removeUserFromOrganization] Error:', error)
+    return {
+      success: false,
+      message: `Failed to remove membership: ${(error as Error).message || 'Unknown error'}`,
     }
   }
 }

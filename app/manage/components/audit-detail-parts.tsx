@@ -6,8 +6,9 @@ import { cn } from '@/lib/utils'
 
 /*
  * The body of an audit entry's page: the before/after diff and the request
- * context. These lived inline in the merchant audit tab's expandable row until
- * each entry got its own page.
+ * context. Shared by the merchant audit entry page
+ * (merchants/[merchantId]/audit/[logId]) and the platform one
+ * (audit-logs/[logId]). Rows are separated by spacing, never rules (§5.5).
  *
  * ⚠️ Classes are literal strings in this .tsx on purpose (C7).
  */
@@ -109,7 +110,7 @@ function NestedList({ data }: { data: Record<string, unknown> }) {
  */
 function FieldList({ entries, stacked = false }: { entries: [string, React.ReactNode][]; stacked?: boolean }) {
     return (
-        <dl className="min-w-0 divide-y divide-border/60">
+        <dl className="min-w-0">
             {entries.map(([key, node]) => (
                 <div
                     key={key}
@@ -209,13 +210,13 @@ function UpdateDiff({ before, after }: { before: Record<string, unknown>; after:
                 <span>Before</span>
                 <span>After</span>
             </div>
-            <div className="min-w-0 divide-y divide-border/60 sm:border-t sm:border-border/60">
+            <div className="min-w-0">
                 {rows.map((key) => {
                     const isChanged = changed.includes(key)
                     return (
                         <div
                             key={key}
-                            className="grid min-w-0 grid-cols-1 gap-1.5 py-3 first:pt-0 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_minmax(0,1fr)] sm:gap-4 sm:first:pt-3"
+                            className="grid min-w-0 grid-cols-1 gap-1.5 py-3 first:pt-0 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_minmax(0,1fr)] sm:gap-4"
                         >
                             <span className="text-sm font-medium sm:pt-0.5 sm:font-normal sm:text-muted-foreground">
                                 {formatKey(key)}

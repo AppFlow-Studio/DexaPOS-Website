@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Search, Store, MapPin, CheckCircle2, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Search } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
@@ -12,206 +12,194 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import type { MerchantSummary } from '@/types/merchant'
+import { useDebounce } from '@/lib/hooks/useDebounce'
+import { useMerchants } from '@/lib/queries/use-merchants'
+import { DEFAULT_MERCHANT_FILTERS } from '@/types/merchant'
+
+/** Matches shown per search. The search runs on the server, so every merchant is reachable. */
+const RESULT_LIMIT = 20
 
 interface GrantMerchantAccessDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     userName: string
-    availableMerchants: MerchantSummary[]
+    /** Merchants the user can already open; they are left out of the results. */
+    excludeMerchantIds: ReadonlySet<string>
     isPending: boolean
     onGrant: (merchantId: string) => void
 }
 
+/**
+ * Picks one merchant to grant access to. A list the user works through, so it
+ * goes full screen below `sm`; the dialog clips and only the list scrolls (§12).
+ */
 export function GrantMerchantAccessDialog({
     open,
     onOpenChange,
     userName,
-    availableMerchants,
+    excludeMerchantIds,
     isPending,
     onGrant,
 }: GrantMerchantAccessDialogProps) {
     const [search, setSearch] = useState('')
-    const [selected, setSelected] = useState<string>('')
-
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase()
-        if (!q) return availableMerchants
-        return availableMerchants.filter((m) => m.name.toLowerCase().includes(q))
-    }, [availableMerchants, search])
+    const [selected, setSelected] = useState<{ id: string; name: string } | null>(null)
 
     const handleOpenChange = (next: boolean) => {
         if (isPending) return
         if (!next) {
             setSearch('')
-            setSelected('')
+            setSelected(null)
         }
         onOpenChange(next)
     }
 
-    const handleGrant = () => {
-        if (!selected || isPending) return
-        onGrant(selected)
-    }
-
-    const selectedMerchant = availableMerchants.find((m) => m.id === selected)
-
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-[500px] gap-0 p-0 overflow-hidden">
-                {/* Header */}
-                <div className="px-6 pt-6 pb-4 border-b">
-                    <DialogHeader>
-                        <div className="flex items-center gap-3 mb-1">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0">
-                                <Store className="h-4 w-4 text-primary" />
-                            </div>
-                            <div>
-                                <DialogTitle className="text-base">Grant merchant access</DialogTitle>
-                                <DialogDescription className="text-xs mt-0.5">
-                                    Choose a merchant to grant{' '}
-                                    <span className="font-medium text-foreground">{userName}</span>{' '}
-                                    access to.
-                                </DialogDescription>
-                            </div>
-                        </div>
-                    </DialogHeader>
-
-                    {/* Search */}
+            <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[85vh] sm:max-w-lg">
+                <DialogHeader className="shrink-0 px-6 pb-4 pr-14 pt-6 text-left">
+                    <DialogTitle>Grant merchant access</DialogTitle>
+                    <DialogDescription>
+                        Choose a merchant <span className="font-medium text-foreground">{userName}</span> can open
+                        and manage.
+                    </DialogDescription>
                     <div className="relative mt-3">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                         <Input
-                            placeholder="Search merchants..."
+                            aria-label="Search merchants"
+                            placeholder="Search merchants by name"
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 h-9 text-sm"
+                            onChange={(event) => setSearch(event.target.value)}
+                            className="h-9 pl-9 text-[0.8125rem]"
                             autoComplete="off"
                         />
                     </div>
-                </div>
+                </DialogHeader>
 
-                {/* Merchant list */}
-                <div className="overflow-y-auto max-h-72 px-3 py-2">
-                    {filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <Store className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                            <p className="text-sm text-muted-foreground">
-                                {search ? 'No merchants match your search.' : 'No merchants available to grant.'}
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-1">
-                            {filtered.map((merchant) => {
-                                const isSelected = selected === merchant.id
-                                const initials = merchant.name.substring(0, 2).toUpperCase()
+                {/* Mounted only while open (Radix unmounts closed content), so the
+                    merchant query never runs for a closed dialog. */}
+                <MerchantResults
+                    search={search}
+                    excludeMerchantIds={excludeMerchantIds}
+                    selectedId={selected?.id ?? null}
+                    disabled={isPending}
+                    onSelect={setSelected}
+                />
 
-                                return (
-                                    <button
-                                        key={merchant.id}
-                                        type="button"
-                                        onClick={() => setSelected(isSelected ? '' : merchant.id)}
-                                        disabled={isPending}
-                                        className={cn(
-                                            'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
-                                            'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                                            'disabled:opacity-50 disabled:cursor-not-allowed',
-                                            isSelected
-                                                ? 'bg-primary/8 ring-1 ring-primary/30'
-                                                : 'hover:bg-muted/60'
-                                        )}
-                                    >
-                                        <Avatar className="h-9 w-9 shrink-0 rounded-lg">
-                                            <AvatarImage
-                                                src={merchant.logo_url ?? ''}
-                                                alt={merchant.name}
-                                                className="object-cover"
-                                            />
-                                            <AvatarFallback className="rounded-lg bg-orange-100 text-orange-700 text-xs font-semibold">
-                                                {initials}
-                                            </AvatarFallback>
-                                        </Avatar>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-sm font-medium truncate">
-                                                    {merchant.name}
-                                                </span>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={cn(
-                                                        'text-[10px] px-1.5 py-0 h-4 shrink-0',
-                                                        merchant.derived_status === 'active'
-                                                            ? 'bg-green-50 text-green-700 border-green-200'
-                                                            : merchant.derived_status === 'onboarding'
-                                                              ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                                              : 'bg-muted text-muted-foreground'
-                                                    )}
-                                                >
-                                                    {merchant.derived_status}
-                                                </Badge>
-                                            </div>
-                                            <div className="flex items-center gap-1 mt-0.5">
-                                                <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                                                <span className="text-xs text-muted-foreground">
-                                                    {merchant.active_locations}{' '}
-                                                    {merchant.active_locations === 1 ? 'location' : 'locations'}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            className={cn(
-                                                'h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors',
-                                                isSelected
-                                                    ? 'border-primary bg-primary'
-                                                    : 'border-muted-foreground/30'
-                                            )}
-                                        >
-                                            {isSelected && (
-                                                <CheckCircle2 className="h-3 w-3 text-white" />
-                                            )}
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div className="px-6 py-4 border-t bg-muted/20">
-                    {selectedMerchant && (
-                        <p className="text-xs text-muted-foreground mb-3">
-                            Granting access to{' '}
-                            <span className="font-medium text-foreground">
-                                {selectedMerchant.name}
-                            </span>
-                            .
-                        </p>
-                    )}
-                    <DialogFooter className="gap-2 sm:gap-2 justify-between sm:justify-between">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenChange(false)}
-                            disabled={isPending}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            size="sm"
-                            onClick={handleGrant}
-                            disabled={!selected || isPending}
-                        >
-                            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {isPending ? 'Granting...' : 'Grant access'}
-                        </Button>
-                    </DialogFooter>
-                </div>
+                <DialogFooter className="shrink-0 gap-2 px-6 pb-6 pt-4 sm:justify-between">
+                    <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
+                        Cancel
+                    </Button>
+                    <Button onClick={() => selected && onGrant(selected.id)} disabled={!selected || isPending}>
+                        {isPending ? 'Granting…' : selected ? `Grant access to ${selected.name}` : 'Grant access'}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
+    )
+}
+
+function MerchantResults({
+    search,
+    excludeMerchantIds,
+    selectedId,
+    disabled,
+    onSelect,
+}: {
+    search: string
+    excludeMerchantIds: ReadonlySet<string>
+    selectedId: string | null
+    disabled: boolean
+    onSelect: (merchant: { id: string; name: string } | null) => void
+}) {
+    const debouncedSearch = useDebounce(search.trim(), 250)
+    const { data, isLoading, isError } = useMerchants(
+        { ...DEFAULT_MERCHANT_FILTERS, search: debouncedSearch },
+        1,
+        undefined,
+        RESULT_LIMIT
+    )
+    const merchants = (data?.merchants ?? []).filter((merchant) => !excludeMerchantIds.has(merchant.id))
+    const total = data?.total ?? 0
+
+    return (
+        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pb-2" role="listbox" aria-label="Merchants">
+            {isLoading ? (
+                <div className="space-y-2">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton key={index} className="h-14 w-full rounded-2xl" />
+                    ))}
+                </div>
+            ) : isError ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                    Merchants could not be loaded. Close the dialog and try again.
+                </p>
+            ) : merchants.length === 0 ? (
+                // Granted merchants are dropped after the server returns its first
+                // matches, so "all shown are granted" is not "none are left".
+                <div className="py-10 text-center">
+                    <p className="text-sm font-medium">
+                        {total === 0
+                            ? debouncedSearch
+                                ? 'No merchants match this search'
+                                : 'No merchants yet'
+                            : total > RESULT_LIMIT
+                              ? `This user already has the first ${RESULT_LIMIT} matches`
+                              : 'This user already has every match'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {total > RESULT_LIMIT
+                            ? `${total} merchants match. Search by name to find one they don’t have yet.`
+                            : 'Try another name.'}
+                    </p>
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {merchants.map((merchant) => {
+                        const isSelected = selectedId === merchant.id
+                        return (
+                            <button
+                                key={merchant.id}
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => onSelect(isSelected ? null : { id: merchant.id, name: merchant.name })}
+                                disabled={disabled}
+                                className={cn(
+                                    'flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+                                    // Selected is a ring on a deeper fill, never a hue (§3.5).
+                                    isSelected ? 'bg-muted ring-1 ring-border' : 'bg-muted/45 hover:bg-muted'
+                                )}
+                            >
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{merchant.name}</p>
+                                    <p className="mt-0.5 text-xs capitalize text-muted-foreground tabular-nums">
+                                        {merchant.derived_status || 'Unknown'} · {merchant.active_locations}{' '}
+                                        {merchant.active_locations === 1 ? 'location' : 'locations'}
+                                    </p>
+                                </div>
+                                <span
+                                    aria-hidden
+                                    className={cn(
+                                        'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                                        isSelected
+                                            ? 'border-foreground bg-foreground text-background'
+                                            : 'border-muted-foreground/40'
+                                    )}
+                                >
+                                    {isSelected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                                </span>
+                            </button>
+                        )
+                    })}
+                    {total > RESULT_LIMIT && (
+                        <p className="px-1 pt-1 text-xs text-muted-foreground tabular-nums">
+                            Showing the first {RESULT_LIMIT} of {total} matches. Search to narrow them down.
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
     )
 }

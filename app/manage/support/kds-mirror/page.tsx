@@ -188,6 +188,23 @@ function KdsMirrorPageInner() {
   const selectedDisplay =
     (displays.data ?? []).find((d) => d.id === displayId) ?? null;
 
+  // "Unknown is not zero" (§4.9): a query that failed before it ever returned
+  // has no data to show, so its view says the load failed and nothing else.
+  // A later refetch failure keeps the last good data on screen under the error.
+  const boardFailed = liveBoard.isError && liveBoard.data === undefined;
+  const truthFailed = deviceTruth.isError && deviceTruth.data === undefined;
+  const healthFailed =
+    deviceHealth.isError && deviceHealth.data === undefined;
+
+  // The first failed scope query, said once under the pickers.
+  const scopeError = locations.isError
+    ? { title: "We couldn't load this merchant's locations", query: locations }
+    : displays.isError
+      ? { title: "We couldn't load this location's KDS displays", query: displays }
+      : health.isError
+        ? { title: "We couldn't load routing health", query: health }
+        : null;
+
   return (
     <PageShell as="div">
       <PageHeader
@@ -226,6 +243,20 @@ function KdsMirrorPageInner() {
           setParams({ display: value === "all" ? null : value });
         }}
         health={health.data ?? null}
+        locationsLoaded={locations.isSuccess}
+        loadError={
+          scopeError && (
+            <LoadError
+              title={scopeError.title}
+              detail={
+                scopeError.query.error instanceof Error
+                  ? scopeError.query.error.message
+                  : undefined
+              }
+              onRetry={() => void scopeError.query.refetch()}
+            />
+          )
+        }
       />
 
       <Tabs
@@ -283,27 +314,30 @@ function KdsMirrorPageInner() {
               <div className="space-y-5">
                 <MirrorBlindSpotNotice />
 
-                {liveBoard.isError && (
-                  <LoadError
-                    title="We couldn't load the board"
-                    detail={
-                      liveBoard.error instanceof Error
-                        ? liveBoard.error.message
-                        : undefined
-                    }
-                    onRetry={() => void liveBoard.refetch()}
-                  />
-                )}
-
                 {!locationId ? (
                   <PickScope hint="Then choose the KDS display the kitchen is complaining about." />
                 ) : (
-                  <KdsStationBoard
-                    tickets={liveBoard.data ?? []}
-                    display={selectedDisplay}
-                    isLoading={liveBoard.isLoading}
-                    highlightOrderId={highlightOrderId}
-                  />
+                  <>
+                    {liveBoard.isError && (
+                      <LoadError
+                        title="We couldn't load the board"
+                        detail={
+                          liveBoard.error instanceof Error
+                            ? liveBoard.error.message
+                            : undefined
+                        }
+                        onRetry={() => void liveBoard.refetch()}
+                      />
+                    )}
+                    {!boardFailed && (
+                      <KdsStationBoard
+                        tickets={liveBoard.data ?? []}
+                        display={selectedDisplay}
+                        isLoading={liveBoard.isLoading}
+                        highlightOrderId={highlightOrderId}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </PanelSection>
@@ -364,14 +398,29 @@ function KdsMirrorPageInner() {
                 {!locationId ? (
                   <PickScope hint="The health cards cover every KDS display at the location; the timeline and divergence list are per display." />
                 ) : (
-                  <KdsDisplayHealthCards
-                    rows={deviceHealth.data ?? []}
-                    selectedDisplayId={displayId}
-                    onSelectDisplay={(id) =>
-                      setParams({ display: id === null ? null : id })
-                    }
-                    isLoading={deviceHealth.isLoading}
-                  />
+                  <>
+                    {deviceHealth.isError && (
+                      <LoadError
+                        title="We couldn't load display health"
+                        detail={
+                          deviceHealth.error instanceof Error
+                            ? deviceHealth.error.message
+                            : undefined
+                        }
+                        onRetry={() => void deviceHealth.refetch()}
+                      />
+                    )}
+                    {!healthFailed && (
+                      <KdsDisplayHealthCards
+                        rows={deviceHealth.data ?? []}
+                        selectedDisplayId={displayId}
+                        onSelectDisplay={(id) =>
+                          setParams({ display: id === null ? null : id })
+                        }
+                        isLoading={deviceHealth.isLoading}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </PanelSection>
@@ -408,18 +457,27 @@ function KdsMirrorPageInner() {
                           onRetry={() => void deviceTruth.refetch()}
                         />
                       )}
-                      <KdsDeviceTruthTimeline
-                        window={deviceTruthWindow}
-                        isLoading={deviceTruth.isLoading}
-                      />
+                      {!truthFailed && (
+                        <KdsDeviceTruthTimeline
+                          window={deviceTruthWindow}
+                          isLoading={deviceTruth.isLoading}
+                        />
+                      )}
                     </div>
                   </PanelSection>
 
                   <PanelSection label="Divergences">
-                    <KdsDivergenceList
-                      items={deviceTruthWindow?.items ?? []}
-                      isLoading={deviceTruth.isLoading}
-                    />
+                    {truthFailed ? (
+                      <p className="text-[0.8125rem] text-muted-foreground">
+                        Divergences come from the same truth window, so they
+                        will show once it loads.
+                      </p>
+                    ) : (
+                      <KdsDivergenceList
+                        items={deviceTruthWindow?.items ?? []}
+                        isLoading={deviceTruth.isLoading}
+                      />
+                    )}
                   </PanelSection>
                 </>
               ) : (

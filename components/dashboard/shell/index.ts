@@ -18,6 +18,8 @@ export { Panel, PanelGrid } from './Panel'
 export { PanelSection, PanelRow, PanelSubLabel } from './PanelSection'
 export { StatTile, StatRow, InsetTile } from './StatTile'
 export { ChartEmpty, isEmptySeries } from './ChartEmpty'
+export { ConfirmDialog, CENTRED_DIALOG } from './ConfirmDialog'
+export { useRailAutoScroll } from './useRailAutoScroll'
 
 export * from './tokens'
 

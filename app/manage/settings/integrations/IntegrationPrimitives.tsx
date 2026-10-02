@@ -1,6 +1,9 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { Label } from '@/components/ui/label'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
+import { LoadError } from '@/app/manage/transactions/components/ledger-primitives'
 import { cn } from '@/lib/utils'
 
 /**
@@ -62,6 +65,30 @@ export function StatusItem({
       </dd>
       {note && <dd className="mt-0.5 text-[0.8125rem] text-muted-foreground">{note}</dd>}
     </div>
+  )
+}
+
+/**
+ * An integration whose configuration failed to load. Its panel keeps its place
+ * and says so, with Retry (§4.9), instead of the failure taking the whole page
+ * down to the root error screen.
+ */
+export function IntegrationLoadError({
+  label,
+  title,
+  detail,
+}: {
+  label: string
+  title: string
+  detail?: string
+}) {
+  const router = useRouter()
+  return (
+    <Panel>
+      <PanelSection label={label}>
+        <LoadError title={title} detail={detail} onRetry={() => router.refresh()} />
+      </PanelSection>
+    </Panel>
   )
 }
 

@@ -81,14 +81,33 @@ export function PageHeader({
           backHref && 'mt-2'
         )}
       >
-        {titleBadge ? (
-          <div className="flex min-w-0 items-center gap-3">
+        {/* Title and subtitle are one block. The subtitle used to render after
+            the whole row, so when the actions wrapped on a phone it landed
+            beneath the buttons, detached from the title it describes. */}
+        <div className="min-w-0">
+          {titleBadge ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
+              {titleBadge}
+            </div>
+          ) : (
             <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
-            {titleBadge}
-          </div>
-        ) : (
-          <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
-        )}
+          )}
+
+          {subtitle && (
+            <p
+              className={cn(
+                'mt-1 text-sm text-muted-foreground',
+                // `max-sm:hidden`, not `hidden sm:block`: it sets no display from
+                // `sm` up, so a caller's own `max-md:hidden` still holds.
+                !showSubtitleOnMobile && 'max-sm:hidden',
+                subtitleClassName
+              )}
+            >
+              {subtitle}
+            </p>
+          )}
+        </div>
 
         {/* `flex-wrap` + `min-w-0`, NOT `shrink-0`: a non-shrinking, non-wrapping
             action row overflows the viewport on narrow screens (two buttons here
@@ -113,20 +132,6 @@ export function PageHeader({
           </div>
         )}
       </div>
-
-      {subtitle && (
-        <p
-          className={cn(
-            'mt-1 text-sm text-muted-foreground',
-            // `max-sm:hidden`, not `hidden sm:block`: it sets no display from
-            // `sm` up, so a caller's own `max-md:hidden` still holds.
-            !showSubtitleOnMobile && 'max-sm:hidden',
-            subtitleClassName
-          )}
-        >
-          {subtitle}
-        </p>
-      )}
     </div>
   )
 }

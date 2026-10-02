@@ -3,13 +3,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * `/manage/support`: header, the KPI panel, then one panel holding the status
- * rail, the filter toolbar and the ticket table (cards below `lg`).
+ * rail, the filter toolbar and the ticket table (cards below `md`).
  *
  * Hand-rolled rather than `DataPageSkeleton variant="table"`: that variant
  * has no status rail and reserves an avatar slot in each row, so the page
  * would shift on arrival (§14.4, §5.4). The breakpoints below mirror the page
- * exactly — `hidden lg:block` table, `lg:hidden` cards, `grid-cols-2
- * sm:flex` filters.
+ * exactly — `hidden md:block` table with its tiered columns (priority and
+ * assignee from `lg`, merchant from `xl`), `md:hidden` cards, `grid-cols-2
+ * sm:flex` filters. The page also renders this as its Suspense fallback.
  */
 export default function RouteLoading() {
   return (
@@ -62,42 +63,44 @@ export default function RouteLoading() {
         </div>
 
         <div className="mt-5 min-w-0">
-          {/* Table well, `lg` and up. */}
-          <div className="hidden space-y-1 overflow-hidden rounded-2xl bg-muted/20 lg:block">
-            <div className="flex gap-6 bg-muted/50 px-3 py-3">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="ml-auto h-3 w-16" />
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-3 w-20" />
+          {/* Table well, `md` and up. Rows touch, as the real ones do; the
+              column widths follow the page's tiers. */}
+          <div className="hidden overflow-hidden rounded-2xl bg-muted/20 md:block">
+            <div className="flex min-w-0 items-center bg-muted/50 py-3">
+              <div className="min-w-0 flex-1 px-3"><Skeleton className="h-3 w-14" /></div>
+              <div className="hidden w-44 shrink-0 px-3 xl:block"><Skeleton className="h-3 w-16" /></div>
+              <div className="w-32 shrink-0 px-3"><Skeleton className="h-3 w-12" /></div>
+              <div className="hidden w-24 shrink-0 px-3 lg:block"><Skeleton className="h-3 w-12" /></div>
+              <div className="hidden w-32 shrink-0 px-3 lg:block xl:w-40"><Skeleton className="h-3 w-14" /></div>
+              <div className="w-32 shrink-0 px-3"><Skeleton className="ml-auto h-3 w-20" /></div>
             </div>
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex min-w-0 items-center gap-6 bg-card/70 px-3 py-3">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-4 w-64 max-w-full" />
-                  <Skeleton className="h-3 w-48 max-w-full" />
-                </div>
-                <Skeleton className="h-5 w-20 rounded-full" />
-                <Skeleton className="h-5 w-14 rounded-full" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-20" />
+              <div key={i} className="flex min-w-0 items-center bg-card/70 py-3">
+                <div className="min-w-0 flex-1 px-3"><Skeleton className="h-4 w-3/4" /></div>
+                <div className="hidden w-44 shrink-0 px-3 xl:block"><Skeleton className="h-4 w-24" /></div>
+                <div className="w-32 shrink-0 px-3"><Skeleton className="h-5 w-16 rounded-full" /></div>
+                <div className="hidden w-24 shrink-0 px-3 lg:block"><Skeleton className="h-5 w-14 rounded-full" /></div>
+                <div className="hidden w-32 shrink-0 px-3 lg:block xl:w-40"><Skeleton className="h-4 w-20" /></div>
+                <div className="w-32 shrink-0 px-3"><Skeleton className="ml-auto h-4 w-20" /></div>
               </div>
             ))}
           </div>
 
-          {/* Record cards below `lg`. */}
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+          {/* Record cards below `md`: subject and status, then four pairs. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="min-w-0 rounded-2xl bg-muted/45 p-4">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="mt-2 h-4 w-2/3" />
-                <Skeleton className="mt-2 h-3 w-1/2" />
-                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
-                  <Skeleton className="h-8 w-full" />
-                  <Skeleton className="h-8 w-full" />
-                  <Skeleton className="h-8 w-full" />
-                  <Skeleton className="h-8 w-full" />
+                <div className="flex h-6 items-center justify-between gap-3">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-14" />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                  {Array.from({ length: 4 }).map((_, j) => (
+                    <div key={j} className="min-w-0">
+                      <Skeleton className="my-0.5 h-3 w-14" />
+                      <Skeleton className="my-0.5 h-4 w-20 max-w-full" />
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

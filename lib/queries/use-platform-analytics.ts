@@ -84,6 +84,7 @@ export const platformKeys = {
   paymentAuditEventDetail: (eventId: string) => [...platformKeys.all, 'payment-audit-event-detail', eventId] as const,
   auditLogs: (filters?: PlatformAuditLogFilters, limit: number = 50, offset: number = 0) =>
     [...platformKeys.all, 'audit-logs', filters, limit, offset] as const,
+  auditLogDetail: (logId: string) => [...platformKeys.all, 'audit-log-detail', logId] as const,
 }
 
 export function usePlatformKPIs() {
@@ -252,6 +253,17 @@ export function usePlatformAuditLogs(filters?: PlatformAuditLogFilters, limit: n
         m.getPlatformAuditLogs(filters, limit, offset)
       ),
     placeholderData: keepPreviousData,
+  })
+}
+
+/** One platform audit entry, for its page under /manage/audit-logs. */
+export function usePlatformAuditLog(logId: string) {
+  return useQuery({
+    queryKey: platformKeys.auditLogDetail(logId),
+    queryFn: () =>
+      import('@/app/manage/actions/hq-platform/analytics').then((m) => m.getPlatformAuditLogById(logId)),
+    enabled: !!logId,
+    staleTime: 30_000,
   })
 }
 

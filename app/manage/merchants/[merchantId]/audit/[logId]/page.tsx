@@ -12,7 +12,7 @@ import {
     FactGrid,
 } from '@/app/manage/transactions/components/detail-primitives'
 import { merchantAuditTabHref } from '../routes'
-import { AuditChanges, AuditMetadata, describeChanges, formatKey, readChanges } from './audit-detail-parts'
+import { AuditChanges, AuditMetadata, describeChanges, formatKey, readChanges } from '@/app/manage/components/audit-detail-parts'
 
 const BACK_LABEL = 'Back to audit log'
 

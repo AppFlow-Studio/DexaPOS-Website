@@ -191,6 +191,26 @@ export function RecordCardSkeletons({ count = 4 }: { count?: number }) {
     )
 }
 
+/** Loading shape for a grid of `RecordLinkCard`s: two lines, as the card has (§5.4). */
+export function RecordLinkCardSkeletons({ count = 4 }: { count?: number }) {
+    return (
+        <>
+            {Array.from({ length: count }).map((_, index) => (
+                <div key={index} className="min-w-0 rounded-2xl bg-muted/45 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-4 w-14" />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                        <Skeleton className="h-3 w-1/3" />
+                        <Skeleton className="h-3 w-16" />
+                    </div>
+                </div>
+            ))}
+        </>
+    )
+}
+
 /** Empty sentence filling a card grid (§4.9). Never hidden on phones. */
 export function CardGridEmpty({ title, hint }: { title: string; hint?: string }) {
     return (

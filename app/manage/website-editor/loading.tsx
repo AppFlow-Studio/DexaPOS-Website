@@ -1,7 +1,5 @@
-import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
+import { PagesListSkeleton } from './components/WebsiteEditorSkeletons'
 
 export default function RouteLoading() {
-  return (
-    <DataPageSkeleton variant="table" shell="plain" label="Loading pages" />
-  )
+  return <PagesListSkeleton />
 }

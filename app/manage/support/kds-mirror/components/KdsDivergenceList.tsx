@@ -6,6 +6,7 @@ import { ListFilter } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -54,19 +55,22 @@ function serverFiredLabel(item: KdsDeviceTruthItem): string {
     : "—";
 }
 
+/**
+ * What the device reported. A NEVER_SHOWED item has no device events by
+ * definition, so its cell says whether the device was online when it fired,
+ * which is the fact support needs to read the verdict.
+ */
 function deviceLabel(item: KdsDeviceTruthItem): string {
   const parts = [item.arrived && "arrived", item.acked && "acked"].filter(
     Boolean
   );
-  return parts.length > 0 ? parts.join(", ") : "—";
-}
-
-/** "device was online/offline" — only said for a NEVER_SHOWED verdict. */
-function onlineNote(item: KdsDeviceTruthItem): string | null {
-  if (item.verdict !== "NEVER_SHOWED") return null;
-  return item.device_online_at_fire === false
-    ? "device was offline"
-    : "device was online";
+  if (parts.length > 0) return parts.join(", ");
+  if (item.verdict === "NEVER_SHOWED") {
+    return item.device_online_at_fire === false
+      ? "Offline when fired"
+      : "Online when fired";
+  }
+  return "—";
 }
 
 /**
@@ -113,11 +117,19 @@ export function KdsDivergenceList({
     setPage(1);
   };
 
+  // Skeletons match the breakpoint (§5.4): table rows from `md`, cards below.
   if (isLoading && items.length === 0) {
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-        <RecordCardSkeletons count={2} />
-      </div>
+      <>
+        <div className="hidden space-y-2 md:block">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-2xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
+          <RecordCardSkeletons count={2} />
+        </div>
+      </>
     );
   }
 
@@ -167,76 +179,81 @@ export function KdsDivergenceList({
           size="sm"
           aria-pressed={showAll}
           onClick={toggleShowAll}
-          className="h-9 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+          className="h-11 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:h-9"
         >
           <ListFilter className="h-3.5 w-3.5" />
           {showAll ? "Divergences only" : "Show all items"}
         </Button>
       </div>
 
+      {/*
+        §5.3 (D-26): the table from `md`, cards below. Columns are tiered so
+        nothing scrolls sideways inside the panel: item, order and verdict
+        from `md`; server routed and device from `lg`; kitchen status from
+        `xl`. `table-fixed` lets every cell truncate to one line (§5.7).
+      */}
       <Table
         variant="data"
-        containerClassName="hidden lg:block"
-        className="min-w-[720px]"
+        bounded={false}
+        containerClassName="hidden md:block"
+        className="table-fixed"
       >
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead>Item</TableHead>
-            <TableHead>Order</TableHead>
-            <TableHead>Kitchen status</TableHead>
-            <TableHead>Server routed</TableHead>
-            <TableHead>Device</TableHead>
-            <TableHead>Verdict</TableHead>
+            <TableHead className="w-20">Order</TableHead>
+            <TableHead className="hidden w-32 xl:table-cell">
+              Kitchen status
+            </TableHead>
+            <TableHead className="hidden w-32 lg:table-cell">
+              Server routed
+            </TableHead>
+            <TableHead className="hidden w-40 lg:table-cell">Device</TableHead>
+            <TableHead className="w-36">Verdict</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {pageRows.map((item) => {
             const meta = VERDICT_META[item.verdict];
-            const note = onlineNote(item);
-            const isNeverShowed = item.verdict === "NEVER_SHOWED";
             return (
               <TableRow
                 key={item.order_item_id}
                 className={cn(
-                  "align-top",
                   // Attention by weight, not a tinted row (§3.5).
-                  isNeverShowed
+                  meta.needsAttention
                     ? "font-medium text-foreground"
                     : "text-muted-foreground"
                 )}
               >
-                <TableCell className="max-w-[220px]">
-                  <span className="line-clamp-2 font-medium text-foreground">
-                    {item.item_name ?? "—"}
-                  </span>
+                <TableCell
+                  className="truncate font-medium text-foreground"
+                  title={item.item_name ?? undefined}
+                >
+                  {item.item_name ?? "—"}
                 </TableCell>
-                <TableCell className="tabular-nums">
+                <TableCell className="truncate tabular-nums">
                   {item.order_number ?? "—"}
                 </TableCell>
-                <TableCell>{item.kitchen_status ?? "—"}</TableCell>
-                <TableCell className="tabular-nums">
+                <TableCell className="hidden truncate xl:table-cell">
+                  {item.kitchen_status ?? "—"}
+                </TableCell>
+                <TableCell className="hidden truncate tabular-nums lg:table-cell">
                   {serverFiredLabel(item)}
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden truncate lg:table-cell">
                   {item.arrived || item.acked ? (
                     <span className="flex gap-1">
                       {item.arrived && <Pill>arrived</Pill>}
                       {item.acked && <Pill>acked</Pill>}
                     </span>
                   ) : (
-                    "—"
+                    deviceLabel(item)
                   )}
                 </TableCell>
-                <TableCell>
-                  <div className="flex flex-col items-start gap-1">
-                    <Pill
-                      title={meta.description}
-                      className="text-foreground"
-                    >
-                      {meta.label}
-                    </Pill>
-                    {note && <span className="text-xs">{note}</span>}
-                  </div>
+                <TableCell className="truncate">
+                  <Pill title={meta.description} className="text-foreground">
+                    {meta.label}
+                  </Pill>
                 </TableCell>
               </TableRow>
             );
@@ -244,10 +261,13 @@ export function KdsDivergenceList({
         </TableBody>
       </Table>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+      {/*
+        §5.3 (D-27): item and verdict lead, then four pairs. There is no
+        per-item detail view, so the card keeps its four.
+      */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {pageRows.map((item) => {
           const meta = VERDICT_META[item.verdict];
-          const note = onlineNote(item);
           return (
             <RecordCard key={item.order_item_id}>
               <div className="flex items-start justify-between gap-3">
@@ -266,9 +286,6 @@ export function KdsDivergenceList({
                   {meta.label}
                 </span>
               </div>
-              {note && (
-                <p className="mt-0.5 text-xs text-muted-foreground">{note}</p>
-              )}
               <CardFields>
                 <CardField label="Order" value={item.order_number ?? "—"} />
                 <CardField

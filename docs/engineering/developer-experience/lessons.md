@@ -504,3 +504,28 @@ fixing the doc never invalidates the cached CSS and every restart reloads the sa
 the dev server, delete `.next/dev/cache`, then start it again. To prove the sources are clean
 first, run Tailwind's own scanner (`Scanner` from `@tailwindcss/oxide`) over the repo and
 `compile().build()` the candidates — no generated line should contain `…`.
+
+## "Laptop view almost done" ≠ "the finished pages are laptop-only" (2026-10-01)
+
+Context: writing a Notion status update and a PR summary for the HQ `/manage` redesign. The
+user said the laptop view of the whole route was almost done, and that a named list of pages
+was "completely finished and submitted" with videos.
+Mistake: I read the route-wide "laptop view" status onto the finished pages too, labelled them
+"Done (laptop view)" and listed "tablet and phone for the whole route" as next. The finished
+pages already had their tablet and phone views done.
+Rule: when the user gives a route-wide status and a separate list of pages that are completely
+finished, keep them as two scopes. "Completely finished" means every breakpoint unless the user
+says otherwise. Narrow it only on the pages the user didn't name, and if it's unclear, ask
+before writing a status update or PR text, since those go to other people.
+
+## Overriding a primitive's cap with an unverified arbitrary class removes the cap (2026-10-02)
+
+Context: making the add-location wizard's time dropdowns smaller.
+Mistake: I passed `max-h-[min(14rem,var(--radix-select-content-available-height))]` to
+`SelectContent`. It did not take effect, but tailwind-merge still treated it as a `max-h` and
+dropped the primitive's own `max-h-(--radix-select-content-available-height)`. The menu lost
+every height limit and got taller, not shorter, and I reported it done without seeing it.
+Rule: to shrink or cap a shadcn primitive, use a plain scale class that is already used
+elsewhere in the repo (`max-h-48`, `max-h-60`), not a nested `min()`/`var()` arbitrary value.
+If an arbitrary value is truly needed, confirm the rule exists in the compiled CSS before
+calling it fixed, because a class that does not compile still displaces the default it replaces.

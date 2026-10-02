@@ -12,7 +12,9 @@ import { usePathname, useRouter } from 'next/navigation'
 import { BarChart3, Boxes, Monitor, Search } from 'lucide-react'
 
 import { useDeviceRegistryCommandSearch } from '@/app/manage/hooks/useDeviceRegistry'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   CommandDialog,
   CommandEmpty,
@@ -139,7 +141,7 @@ export function DeviceRegistryCommandPaletteProvider({
         <CommandInput
           value={query}
           onValueChange={setQuery}
-          placeholder="Search registry devices or jump to a page..."
+          placeholder="Search registry devices or jump to a page…"
         />
         <CommandList className="max-h-[60vh]">
           <CommandEmpty>
@@ -168,7 +170,19 @@ export function DeviceRegistryCommandPaletteProvider({
 
           <CommandGroup heading="Devices">
             {searchQuery.isLoading && debouncedQuery.trim() ? (
-              <div className="px-2 py-3 text-sm text-muted-foreground">Searching devices...</div>
+              // Result rows in their own shape while the search runs, not a "Searching…" line (§4.10).
+              <div className="space-y-1 px-2 py-1">
+                <p role="status" className="sr-only">Searching devices</p>
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 py-2" aria-hidden>
+                    <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-56 max-w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : deviceResults.length > 0 ? (
               deviceResults.map((device) => {
                 const CategoryIcon = getDeviceCategoryIcon(device.device_category)
@@ -195,19 +209,19 @@ export function DeviceRegistryCommandPaletteProvider({
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium">{device.serial_number}</span>
                         {/* Neutral pill: the word carries the status (§4.6b). */}
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <Badge variant="outline" className="shrink-0 whitespace-nowrap">
                           {formatDeviceStatus(device.status)}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {device.manufacturer} {device.model_name}
-                        {device.model_sku ? ` | ${device.model_sku}` : ''}
-                        {device.pos_id ? ` | POS ID ${device.pos_id}` : ''}
+                        {device.model_sku ? ` · ${device.model_sku}` : ''}
+                        {device.pos_id ? ` · POS ID ${device.pos_id}` : ''}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {formatDeviceCategory(device.device_category)}
-                        {device.merchant_name ? ` | ${device.merchant_name}` : ' | DEXA HQ'}
-                        {device.location_name ? ` | ${device.location_name}` : ''}
+                        {device.merchant_name ? ` · ${device.merchant_name}` : ' · DEXA HQ'}
+                        {device.location_name ? ` · ${device.location_name}` : ''}
                       </div>
                     </div>
                     <CommandShortcut>Open</CommandShortcut>

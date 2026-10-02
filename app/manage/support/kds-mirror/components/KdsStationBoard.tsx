@@ -25,8 +25,8 @@ import { PillRail } from "./kds-primitives";
 //
 // Everything in this file is ported from the tablet's own KDS screen
 // (app/(main)/kds.tsx in the Dexa-POS repo) so HQ sees the board arranged the
-// way the kitchen sees it, rather than the analytical four-column view in
-// KdsMirrorBoard. Where the two repos disagree, the tablet wins.
+// way the kitchen sees it, not re-arranged into an analytical per-status
+// view. Where the two repos disagree, the tablet wins.
 //
 // Ported deliberately, with the tablet as the source of truth:
 //   STATUS_TABS       - note `ready` is labelled "Served", not "Ready".
@@ -105,9 +105,10 @@ function detectAllergen(modifierName: string | null | undefined) {
 }
 
 function elapsed(fromIso: string | null, now: number): string {
-  if (!fromIso) return "--";
+  // Unknown is not zero (§4.9): an em dash, never "--" or "0m".
+  if (!fromIso) return "—";
   const ms = now - new Date(fromIso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "--";
+  if (!Number.isFinite(ms) || ms < 0) return "—";
 
   const totalMinutes = Math.floor(ms / 60000);
   if (totalMinutes < 60) return `${totalMinutes}m`;
@@ -258,6 +259,7 @@ export function StationTicketCard({
 }) {
   const isRush = ticket.any_rush || ticket.prioritized;
   const hint = showStaleHint ? stalenessHint(ticket, now) : null;
+  const ticketNumber = ticket.display_number ?? ticket.order_number;
 
   return (
     <div
@@ -272,7 +274,7 @@ export function StationTicketCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2">
             <span className="truncate font-semibold tabular-nums">
-              #{ticket.display_number ?? ticket.order_number ?? "--"}
+              {ticketNumber != null ? `#${ticketNumber}` : "—"}
             </span>
             {isRush && (
               <span className="inline-flex items-center gap-0.5">
@@ -363,11 +365,10 @@ export function KdsStationBoard({
   const [activeType, setActiveType] = React.useState<OrderTypeFilter>("all");
 
   // The tablet does the same reset when workflow mode changes under it.
-  React.useEffect(() => {
-    if (isTwoStep && activeStatus === "pending") {
-      setActiveStatus("cooking");
-    }
-  }, [isTwoStep, activeStatus]);
+  // Adjusted during render, not in an effect, so there is no cascading render.
+  if (isTwoStep && activeStatus === "pending") {
+    setActiveStatus("cooking");
+  }
 
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {

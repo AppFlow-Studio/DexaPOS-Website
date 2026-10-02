@@ -155,6 +155,8 @@ export function KdsMirrorControls({
   onLocationChange,
   onDisplayChange,
   health,
+  locationsLoaded,
+  loadError,
 }: {
   locations: SupportLocationOption[];
   displays: KdsDisplaySummary[];
@@ -165,6 +167,10 @@ export function KdsMirrorControls({
   onLocationChange: (value: string) => void;
   onDisplayChange: (value: string) => void;
   health: KdsRoutingHealth | null;
+  /** The merchant's locations came back, so an empty list is a real "none". */
+  locationsLoaded: boolean;
+  /** A failed scope query, said once under the pickers (§4.9). */
+  loadError?: React.ReactNode;
 }) {
   const selectedDisplay = displays.find((d) => d.id === displayId) ?? null;
 
@@ -186,9 +192,15 @@ export function KdsMirrorControls({
         >
           <SelectTrigger
             aria-label="Location"
-            className="h-9 w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none dark:bg-muted/60 sm:w-52"
+            className="w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none data-[size=default]:h-11 dark:bg-muted/60 sm:data-[size=default]:h-9 sm:w-52"
           >
-            <SelectValue placeholder="Select location" />
+            <SelectValue
+              placeholder={
+                merchantId && locationsLoaded && locations.length === 0
+                  ? "No locations for this merchant"
+                  : "Select location"
+              }
+            />
           </SelectTrigger>
           <SelectContent>
             {locations.map((location) => (
@@ -207,7 +219,7 @@ export function KdsMirrorControls({
         >
           <SelectTrigger
             aria-label="KDS display"
-            className="h-9 w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none dark:bg-muted/60 sm:w-60"
+            className="w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none data-[size=default]:h-11 dark:bg-muted/60 sm:data-[size=default]:h-9 sm:w-60"
           >
             <SelectValue placeholder="Select KDS display" />
           </SelectTrigger>
@@ -222,6 +234,8 @@ export function KdsMirrorControls({
           </SelectContent>
         </Select>
       </div>
+
+      {loadError}
 
       {displayId === null && locationId && (
         <p className="text-[0.8125rem] text-muted-foreground">

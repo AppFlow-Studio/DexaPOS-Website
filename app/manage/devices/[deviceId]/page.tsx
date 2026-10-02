@@ -1,17 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { Boxes, Link2, Package } from 'lucide-react'
 
 import { useAdminDeviceActivity, useAdminDeviceDetail } from '@/app/manage/hooks/useDeviceRegistry'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
 import { DeviceStatusTransitionDialog } from '@/app/manage/devices/components/DeviceStatusTransitionDialog'
 import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
+import { ActivityFeedSkeleton, DeviceDetailSkeleton } from '@/app/manage/devices/components/skeletons'
 import { PageHeader, PageShell, Panel, PanelSection, PanelSubLabel } from '@/components/dashboard/shell'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   formatDeviceCategory,
   formatDeviceStatus,
@@ -47,8 +48,23 @@ function capitalize(value: string) {
 }
 
 export default function DeviceDetailPage() {
+  // useSearchParams needs a Suspense boundary; the fallback is the route skeleton.
+  return (
+    <Suspense fallback={<DeviceDetailSkeleton />}>
+      <DeviceDetailPageInner />
+    </Suspense>
+  )
+}
+
+function DeviceDetailPageInner() {
   const params = useParams<{ deviceId: string }>()
   const deviceId = params?.deviceId ?? ''
+  const searchParams = useSearchParams()
+
+  // The list passes its own state in `back`, so "Back to inventory" returns to
+  // the same page and filters (§5.9). It is only ever a query on the list's path.
+  const back = searchParams.get('back')
+  const backHref = back ? `/manage/devices?${back.replace(/^\?/, '')}` : '/manage/devices'
 
   const detailQuery = useAdminDeviceDetail(deviceId)
   const activityQuery = useAdminDeviceActivity(deviceId)
@@ -63,7 +79,7 @@ export default function DeviceDetailPage() {
   if (detailQuery.isError || !device) {
     return (
       <PageShell as="div">
-        <PageHeader title="Device unavailable" backHref="/manage/devices" backLabel="Back to inventory" />
+        <PageHeader title="Device unavailable" backHref={backHref} backLabel="Back to inventory" />
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-muted/30 px-4 py-20 text-center">
           <p className="text-sm font-medium">We couldn&apos;t load this device</p>
           <p className="max-w-md text-xs text-muted-foreground">
@@ -76,7 +92,7 @@ export default function DeviceDetailPage() {
               </Button>
             ) : null}
             <Button asChild variant="outline" size="sm">
-              <Link href="/manage/devices">Back to inventory</Link>
+              <Link href={backHref}>Back to inventory</Link>
             </Button>
           </div>
         </div>
@@ -92,7 +108,7 @@ export default function DeviceDetailPage() {
     <PageShell as="div">
       <DeviceRegistryPageHeader
         title={device.serial_number}
-        backHref="/manage/devices"
+        backHref={backHref}
         backLabel="Back to inventory"
         actions={
           <>
@@ -169,17 +185,10 @@ export default function DeviceDetailPage() {
           caption="Status transitions, configuration changes, and support notes, newest first."
         >
           {activityQuery.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="flex gap-3 rounded-2xl bg-muted/40 px-4 py-3">
-                  <Skeleton className="mt-0.5 h-4 w-4 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-48" />
-                    <Skeleton className="h-3 w-32" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <>
+              <p role="status" className="sr-only">Loading device activity</p>
+              <ActivityFeedSkeleton />
+            </>
           ) : activityQuery.isError ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-muted/30 px-4 py-12 text-center">
               <p className="text-sm font-medium">We hit a snag loading this device&apos;s activity</p>
@@ -293,24 +302,5 @@ function LinkageRow({
         )}
       </div>
     </li>
-  )
-}
-
-/** Shaped like the loaded page so nothing jumps when data lands (§4.9). */
-function DeviceDetailSkeleton() {
-  return (
-    <PageShell as="div">
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-40 rounded-full" />
-        <Skeleton className="h-9 w-64" />
-        <Skeleton className="h-5 w-80 max-w-full" />
-        <Skeleton className="h-11 w-72 max-w-full rounded-full" />
-      </div>
-      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-3">
-        <Skeleton className="h-[300px] w-full rounded-2xl lg:col-span-2" />
-        <Skeleton className="h-[300px] w-full rounded-2xl" />
-      </div>
-      <Skeleton className="h-[360px] w-full rounded-3xl" />
-    </PageShell>
   )
 }

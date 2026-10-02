@@ -37,7 +37,13 @@ import {
   TableEmptyRow,
 } from "@/app/manage/transactions/components/ledger-primitives";
 import { useKdsUnsentItems } from "../hooks/useKdsMirror";
-import { KdsNotice, NoticeLead, Pill, WindowSelect } from "./kds-primitives";
+import {
+  CappedItemList,
+  KdsNotice,
+  NoticeLead,
+  Pill,
+  WindowSelect,
+} from "./kds-primitives";
 
 export const UNSENT_WINDOWS = [
   { key: "24h", label: "Last 24 hours", ms: 24 * 60 * 60 * 1000 },
@@ -136,6 +142,7 @@ function Coverage({
 function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
   const [expanded, setExpanded] = React.useState(false);
   const toggle = () => setExpanded((v) => !v);
+  const createdAt = new Date(order.order_created_at);
 
   return (
     <React.Fragment>
@@ -144,7 +151,7 @@ function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
         data-state={expanded ? "selected" : undefined}
         onClick={toggle}
       >
-        <TableCell className="w-10 pr-0">
+        <TableCell className="pr-0">
           <button
             type="button"
             aria-expanded={expanded}
@@ -163,45 +170,45 @@ function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
             />
           </button>
         </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-2">
-            <span className="font-medium tabular-nums">{orderLabel(order)}</span>
-            {order.order_type && <Pill>{order.order_type}</Pill>}
-          </div>
+        <TableCell className="truncate">
+          <span className="font-medium tabular-nums">{orderLabel(order)}</span>
+          {order.order_type && (
+            <Pill className="ml-2 align-middle">{order.order_type}</Pill>
+          )}
         </TableCell>
-        <TableCell>
+        <TableCell className="hidden truncate lg:table-cell">
           <Pill>{orderStatusLabel(order.order_status)}</Pill>
         </TableCell>
-        <TableCell className="whitespace-nowrap">
-          <p className="text-sm tabular-nums" title={order.order_created_at}>
-            {format(new Date(order.order_created_at), "MMM d, h:mm a")}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(order.order_created_at), {
-              addSuffix: true,
-            })}
-          </p>
+        <TableCell
+          className="hidden truncate text-sm tabular-nums xl:table-cell"
+          title={`${formatDistanceToNow(createdAt, { addSuffix: true })} · ${order.order_created_at}`}
+        >
+          {format(createdAt, "MMM d, h:mm a")}
         </TableCell>
-        <TableCell className="whitespace-nowrap">
-          <span className="font-mono text-sm font-medium tabular-nums">
-            {order.unsent_item_count}
-          </span>
-          <span className="ml-1.5 text-xs text-muted-foreground">
-            unsent of{" "}
-            <span className="tabular-nums">{order.total_item_count}</span>
+        <TableCell
+          className="truncate text-right tabular-nums"
+          title={`${order.unsent_item_count} unsent of ${order.total_item_count} items`}
+        >
+          <span className="font-medium">{order.unsent_item_count}</span>
+          <span className="text-muted-foreground">
+            {" "}
+            of {order.total_item_count}
           </span>
         </TableCell>
-        <TableCell className="font-mono text-sm tabular-nums text-muted-foreground">
+        <TableCell className="hidden truncate text-right tabular-nums text-muted-foreground xl:table-cell">
           {order.sent_item_count}
         </TableCell>
-        <TableCell>
+        <TableCell className="truncate">
           <Coverage order={order} />
         </TableCell>
       </TableRow>
       {expanded && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={UNSENT_COLUMNS} className="bg-muted/30 px-6 py-3">
-            <UnsentItemList items={order.items} />
+          <TableCell
+            colSpan={UNSENT_COLUMNS}
+            className="whitespace-normal bg-muted/30 px-6 py-3"
+          >
+            <UnsentItemList items={order.items} label={orderLabel(order)} />
           </TableCell>
         </TableRow>
       )}
@@ -209,7 +216,10 @@ function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
   );
 }
 
-/** The same order as a record card, below the table's fit breakpoint (§5.3). */
+/**
+ * The same order as a record card, below `md` (§5.3, D-27): order and status
+ * lead, then the unsent and sent counts; the items are one tap away.
+ */
 function UnsentOrderCard({ order }: { order: KdsUnsentOrder }) {
   const [expanded, setExpanded] = React.useState(false);
 
@@ -267,7 +277,7 @@ function UnsentOrderCard({ order }: { order: KdsUnsentOrder }) {
 
       {expanded && (
         <div className="mt-3">
-          <UnsentItemList items={order.items} />
+          <UnsentItemList items={order.items} label={orderLabel(order)} />
         </div>
       )}
     </RecordCard>
@@ -275,10 +285,17 @@ function UnsentOrderCard({ order }: { order: KdsUnsentOrder }) {
 }
 
 /**
- * The unsent items on one order. The table's expanded row and the record card
- * render this same component, so the two views cannot drift.
+ * The unsent items on one order, capped with the rest in a dialog
+ * (`CappedItemList`). The table's expanded row and the record card render
+ * this same component, so the two views cannot drift.
  */
-function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
+function UnsentItemList({
+  items,
+  label,
+}: {
+  items: KdsUnsentItem[];
+  label: string;
+}) {
   if (items.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -288,12 +305,13 @@ function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
   }
 
   return (
-    <ul className="space-y-1.5">
-      {items.map((item) => (
-        <li
-          key={item.order_item_id}
-          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-background/70 px-3 py-2"
-        >
+    <CappedItemList
+      items={items}
+      getKey={(item) => item.order_item_id}
+      dialogTitle={`Unsent items on ${label}`}
+      dialogDescription="Every item on this order that never fired to the kitchen."
+      renderItem={(item) => (
+        <>
           <span className="min-w-0 flex-1 basis-40 text-sm font-medium">
             {item.item_name}
             {item.quantity > 1 && (
@@ -319,9 +337,9 @@ function UnsentItemList({ items }: { items: KdsUnsentItem[] }) {
               addSuffix: true,
             })}
           </span>
-        </li>
-      ))}
-    </ul>
+        </>
+      )}
+    />
   );
 }
 
@@ -488,22 +506,32 @@ export const KdsUnsentItems = React.forwardRef<
 
       {!failedWithoutData && (
         <div className="min-w-0">
+          {/*
+            §5.3 (D-26): the table from `md`, cards below. Columns are tiered
+            so nothing scrolls sideways inside the panel. Order takes what the
+            fixed columns leave: md ~414px - 284 = 130; lg adds status
+            (670 - 428) = 242; xl adds created + sent (926 - 652) = 274, and
+            2xl gives order the rest. `table-fixed` keeps every row one line (§5.7).
+          */}
           <Table
             variant="data"
-            containerClassName="hidden xl:block"
-            className="min-w-[820px]"
+            bounded={false}
+            containerClassName="hidden md:block"
+            className="table-fixed"
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10">
+                <TableHead className="w-11">
                   <span className="sr-only">Expand</span>
                 </TableHead>
                 <TableHead>Order</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Unsent</TableHead>
-                <TableHead>Sent</TableHead>
-                <TableHead>Coverage</TableHead>
+                <TableHead className="hidden w-36 lg:table-cell">Status</TableHead>
+                <TableHead className="hidden w-36 xl:table-cell">Created</TableHead>
+                <TableHead className="w-24 text-right">Unsent</TableHead>
+                <TableHead className="hidden w-20 text-right xl:table-cell">
+                  Sent
+                </TableHead>
+                <TableHead className="w-36">Coverage</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -530,7 +558,7 @@ export const KdsUnsentItems = React.forwardRef<
             </TableBody>
           </Table>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
             {unsent.isLoading ? (
               <RecordCardSkeletons count={4} />
             ) : pageRows.length === 0 ? (

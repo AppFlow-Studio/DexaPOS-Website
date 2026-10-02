@@ -5,6 +5,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
   ChevronRight,
+  ListFilter,
   ListOrdered,
   Monitor,
   Repeat,
@@ -12,7 +13,6 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -38,7 +38,13 @@ import {
   TableEmptyRow,
 } from "@/app/manage/transactions/components/ledger-primitives";
 import { useKdsSendLedger } from "../hooks/useKdsMirror";
-import { KdsNotice, NoticeLead, Pill, WindowSelect } from "./kds-primitives";
+import {
+  CappedItemList,
+  KdsNotice,
+  NoticeLead,
+  Pill,
+  WindowSelect,
+} from "./kds-primitives";
 
 export const SEND_LEDGER_WINDOWS = [
   { key: "1h", label: "Last hour", ms: 60 * 60 * 1000 },
@@ -53,7 +59,7 @@ export type SendLedgerWindowKey = (typeof SEND_LEDGER_WINDOWS)[number]["key"];
 const LEDGER_PAGE_SIZE = 10;
 
 /** The table's column count, for the full-width loading and empty cells. */
-const LEDGER_COLUMNS = 7;
+const LEDGER_COLUMNS = 8;
 
 function windowMsForKey(key: SendLedgerWindowKey): number {
   return (
@@ -120,17 +126,8 @@ function NoRouteGlyph() {
   );
 }
 
-/**
- * The anomaly flags for one send. Pills in a table cell; plain words on a
- * record card, where a pill would be a box inside a box (§5.3).
- */
-function SendFlags({
-  entry,
-  plain = false,
-}: {
-  entry: KdsSendLedgerEntry;
-  plain?: boolean;
-}) {
+/** Every anomaly flag a send carries, alarms (red, then amber) first. */
+function sendFlags(entry: KdsSendLedgerEntry) {
   const flags: {
     key: string;
     icon: React.ReactNode;
@@ -170,6 +167,23 @@ function SendFlags({
       title: "The POS retried this send with the same idempotency key.",
     });
   }
+  return flags;
+}
+
+/**
+ * The anomaly flags for one send. In a table cell the row stays one line
+ * (§5.7): the first flag as a pill, then "+N" naming the rest in its title.
+ * On a record card they are plain words, where a pill would be a box inside
+ * a box (§5.3).
+ */
+function SendFlags({
+  entry,
+  plain = false,
+}: {
+  entry: KdsSendLedgerEntry;
+  plain?: boolean;
+}) {
+  const flags = sendFlags(entry);
 
   if (flags.length === 0) {
     return plain ? null : <span className="text-muted-foreground">—</span>;
@@ -192,15 +206,31 @@ function SendFlags({
     );
   }
 
+  const [first, ...rest] = flags;
   return (
-    <div className="flex flex-wrap gap-1">
-      {flags.map((flag) => (
-        <Pill key={flag.key} icon={flag.icon} title={flag.title}>
-          {flag.label}
-        </Pill>
-      ))}
+    <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+      <Pill icon={first.icon} title={first.title}>
+        {first.label}
+      </Pill>
+      {rest.length > 0 && (
+        <span
+          className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground"
+          title={rest.map((flag) => flag.label).join(", ")}
+        >
+          +{rest.length}
+        </span>
+      )}
     </div>
   );
+}
+
+/** "Sep 30, 2:14 PM", with the relative age and raw timestamp for a title. */
+function sentAt(entry: KdsSendLedgerEntry) {
+  const date = new Date(entry.created_at);
+  return {
+    label: format(date, "MMM d, h:mm a"),
+    relative: formatDistanceToNow(date, { addSuffix: true }),
+  };
 }
 
 function SendRow({
@@ -212,6 +242,7 @@ function SendRow({
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const toggle = () => setExpanded((v) => !v);
+  const time = sentAt(entry);
 
   return (
     <React.Fragment>
@@ -220,7 +251,7 @@ function SendRow({
         data-state={expanded ? "selected" : undefined}
         onClick={toggle}
       >
-        <TableCell className="w-10 pr-0">
+        <TableCell className="pr-0">
           <button
             type="button"
             aria-expanded={expanded}
@@ -239,69 +270,52 @@ function SendRow({
             />
           </button>
         </TableCell>
-        <TableCell className="whitespace-nowrap">
-          <p className="text-sm font-medium tabular-nums" title={entry.created_at}>
-            {format(new Date(entry.created_at), "MMM d, h:mm a")}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(entry.created_at), {
-              addSuffix: true,
-            })}
-          </p>
+        <TableCell
+          className="hidden truncate text-sm font-medium tabular-nums lg:table-cell"
+          title={`${time.relative} · ${entry.created_at}`}
+        >
+          {time.label}
         </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-2">
-            <span className="font-medium tabular-nums">{orderLabel(entry)}</span>
-            {entry.order_type && <Pill>{entry.order_type}</Pill>}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            <span className="tabular-nums">{entry.order_item_count}</span> item
-            {entry.order_item_count === 1 ? "" : "s"} on the order
-          </p>
-          {onShowOnBoard && (
-            <button
-              type="button"
-              className="mt-0.5 text-xs font-medium text-foreground underline-offset-2 hover:underline"
-              onClick={(event) => {
-                event.stopPropagation();
-                onShowOnBoard(entry.order_id);
-              }}
-            >
-              Show on board
-            </button>
+        <TableCell className="truncate">
+          <span className="font-medium tabular-nums">{orderLabel(entry)}</span>
+          {entry.order_type && (
+            <Pill className="ml-2 align-middle">{entry.order_type}</Pill>
           )}
         </TableCell>
-        <TableCell className="whitespace-nowrap">
-          <span className="font-mono text-sm tabular-nums">
-            {entry.actually_updated_count} / {entry.requested_count}
-          </span>
-          <span className="ml-1.5 text-xs text-muted-foreground">
-            applied / requested
-          </span>
+        <TableCell
+          className="truncate text-right tabular-nums"
+          title={`${entry.actually_updated_count} applied of ${entry.requested_count} requested`}
+        >
+          {entry.actually_updated_count} / {entry.requested_count}
         </TableCell>
-        <TableCell>
+        <TableCell className="hidden truncate lg:table-cell">
           <Pill>{ITEM_STATUS_LABEL[entry.item_status] ?? entry.item_status}</Pill>
         </TableCell>
-        <TableCell className="max-w-55">
-          <p className="truncate text-sm">
-            {entry.station_name ?? (
-              <span className="text-muted-foreground">Unknown station</span>
-            )}
-          </p>
-          {entry.device_id && (
-            <p className="truncate font-mono text-xs text-muted-foreground">
-              {entry.device_id}
-            </p>
+        <TableCell
+          className="hidden truncate text-sm xl:table-cell"
+          title={entry.station_name ?? undefined}
+        >
+          {entry.station_name ?? (
+            <span className="text-muted-foreground">Unknown station</span>
           )}
         </TableCell>
-        <TableCell>
+        <TableCell
+          className="hidden truncate font-mono text-xs text-muted-foreground 2xl:table-cell"
+          title={entry.device_id ?? undefined}
+        >
+          {entry.device_id ?? "—"}
+        </TableCell>
+        <TableCell className="truncate">
           <SendFlags entry={entry} />
         </TableCell>
       </TableRow>
       {expanded && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={LEDGER_COLUMNS} className="bg-muted/30 px-6 py-3">
-            <SendItemList items={entry.items} />
+          <TableCell
+            colSpan={LEDGER_COLUMNS}
+            className="whitespace-normal bg-muted/30 px-6 py-3"
+          >
+            <SendDetail entry={entry} onShowOnBoard={onShowOnBoard} />
           </TableCell>
         </TableRow>
       )}
@@ -309,7 +323,11 @@ function SendRow({
   );
 }
 
-/** The same send as a record card, below the table's fit breakpoint (§5.3). */
+/**
+ * The same send as a record card, below `md` (§5.3, D-27). Order and send
+ * status lead; the pairs are what support acts on. Items on the order and the
+ * device id are one tap away in the expanded detail.
+ */
 function SendCard({
   entry,
   onShowOnBoard,
@@ -350,14 +368,9 @@ function SendCard({
           value={`${entry.actually_updated_count} / ${entry.requested_count}`}
         />
         <CardField
-          label="Items on order"
-          value={entry.order_item_count}
-        />
-        <CardField
           label="Station"
           value={entry.station_name ?? "Unknown station"}
         />
-        <CardField label="Device" value={entry.device_id ?? "—"} mono />
       </CardFields>
 
       <div className="mt-3">
@@ -391,7 +404,7 @@ function SendCard({
 
       {expanded && (
         <div className="mt-3">
-          <SendItemList items={entry.items} />
+          <SendDetail entry={entry} />
         </div>
       )}
     </RecordCard>
@@ -399,10 +412,66 @@ function SendCard({
 }
 
 /**
- * Per-item routing outcome for one send. The table's expanded row and the
- * record card render this same component, so the two views cannot drift.
+ * The expanded detail of one send: the fields the one-line row and the phone
+ * card leave out (items on the order, origin station and device), then the
+ * per-item routing outcome. The table's expanded row and the record card
+ * render this same component, so the two views cannot drift. Only the row
+ * passes `onShowOnBoard` (its cell has no room for the link); the card has
+ * the action in its footer.
  */
-function SendItemList({ items }: { items: KdsSendLedgerItem[] }) {
+function SendDetail({
+  entry,
+  onShowOnBoard,
+}: {
+  entry: KdsSendLedgerEntry;
+  onShowOnBoard?: (orderId: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>
+          <span className="tabular-nums">{entry.order_item_count}</span> item
+          {entry.order_item_count === 1 ? "" : "s"} on the order
+        </span>
+        <span className="min-w-0 break-all">
+          {entry.station_name ?? "Unknown station"}
+          {entry.device_id && (
+            <span className="font-mono"> · {entry.device_id}</span>
+          )}
+        </span>
+        {onShowOnBoard && (
+          <button
+            type="button"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+            onClick={() => onShowOnBoard(entry.order_id)}
+          >
+            Show on board
+          </button>
+        )}
+      </div>
+      <SendItemList items={entry.items} label={orderLabel(entry)} />
+    </div>
+  );
+}
+
+/** Dropped first, then no routing decision, then routed (§5.7 rank-then-slice). */
+function sendItemRank(item: KdsSendLedgerItem): number {
+  if (item.dropped) return 0;
+  return item.routed_to.length === 0 ? 1 : 2;
+}
+
+/**
+ * Per-item routing outcome for one send, capped with the rest in a dialog
+ * (`CappedItemList`). The table's expanded row and the record card render
+ * this same component, so the two views cannot drift.
+ */
+function SendItemList({
+  items,
+  label,
+}: {
+  items: KdsSendLedgerItem[];
+  label: string;
+}) {
   if (items.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -412,14 +481,17 @@ function SendItemList({ items }: { items: KdsSendLedgerItem[] }) {
   }
 
   return (
-    <ol className="space-y-1.5">
-      {items.map((item, index) => {
+    <CappedItemList
+      ordered
+      items={items}
+      getKey={(item) => item.order_item_id}
+      rank={sendItemRank}
+      dialogTitle={`Items in the send for ${label}`}
+      dialogDescription="Every requested item and the display it routed to, in the order the POS sent them."
+      renderItem={(item, index) => {
         const routed = item.routed_to.length > 0;
         return (
-          <li
-            key={item.order_item_id}
-            className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-background/70 px-3 py-2"
-          >
+          <>
             <span className="w-6 text-xs tabular-nums text-muted-foreground">
               {index + 1}
             </span>
@@ -464,10 +536,10 @@ function SendItemList({ items }: { items: KdsSendLedgerItem[] }) {
                 No route recorded
               </Pill>
             )}
-          </li>
+          </>
         );
-      })}
-    </ol>
+      }}
+    />
   );
 }
 
@@ -604,16 +676,23 @@ export const KdsSendLedger = React.forwardRef<
           onValueChange={handleWindowChange}
           options={SEND_LEDGER_WINDOWS}
         />
-        <label className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
-          <Switch
-            checked={anomaliesOnly}
-            onCheckedChange={(value) => {
-              setAnomaliesOnly(value);
-              setPage(1);
-            }}
-          />
+        {/* A filter chip (DS-CTL-03), not a Switch: a Switch fills
+            `--primary` when on (§3.5). Tinted and borderless; the pressed
+            state is said by aria-pressed and a neutral fill, never a hue. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-pressed={anomaliesOnly}
+          onClick={() => {
+            setAnomaliesOnly((v) => !v);
+            setPage(1);
+          }}
+          className="h-11 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:h-9 aria-pressed:bg-muted aria-pressed:text-foreground"
+        >
+          <ListFilter className="h-3.5 w-3.5" />
           Anomalies only
-        </label>
+        </Button>
       </div>
 
       <StatRow columns={4}>
@@ -662,22 +741,36 @@ export const KdsSendLedger = React.forwardRef<
 
       {!failedWithoutData && (
         <div className="min-w-0">
+          {/*
+            §5.3 (D-26): the table from `md`, cards below. Columns are tiered
+            so nothing scrolls sideways inside the panel. Order takes what the
+            fixed columns leave: md ~414px - 284 = 130; lg adds time + status
+            (256 of the extra 256) = 130; xl adds station = 210; 2xl adds the
+            device id = 242. `table-fixed` keeps every row one line (§5.7).
+          */}
           <Table
             variant="data"
-            containerClassName="hidden xl:block"
-            className="min-w-[900px]"
+            bounded={false}
+            containerClassName="hidden md:block"
+            className="table-fixed"
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10">
+                <TableHead className="w-11">
                   <span className="sr-only">Expand</span>
                 </TableHead>
-                <TableHead>Time</TableHead>
+                <TableHead className="hidden w-36 lg:table-cell">Time</TableHead>
                 <TableHead>Order</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Origin</TableHead>
-                <TableHead>Flags</TableHead>
+                <TableHead
+                  className="w-20 text-right"
+                  title="Items applied / requested"
+                >
+                  Applied
+                </TableHead>
+                <TableHead className="hidden w-28 lg:table-cell">Status</TableHead>
+                <TableHead className="hidden w-44 xl:table-cell">Station</TableHead>
+                <TableHead className="hidden w-56 2xl:table-cell">Device</TableHead>
+                <TableHead className="w-40">Flags</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -708,7 +801,7 @@ export const KdsSendLedger = React.forwardRef<
             </TableBody>
           </Table>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
             {ledger.isLoading ? (
               <RecordCardSkeletons count={4} />
             ) : pageRows.length === 0 ? (

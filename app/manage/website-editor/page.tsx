@@ -6,9 +6,17 @@ import { NewPageDialog } from "./components/NewPageDialog";
 import { PagesTable, type CategoryOption, type PageRow } from "./components/PagesTable";
 import { WebsiteEditorHeader } from "./components/WebsiteEditorHeader";
 
-export default async function WebsiteEditorPages() {
+export default async function WebsiteEditorPages({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { userId, supabase } = await requireHqUser();
   if (!userId) redirect("/dashboard");
+
+  // The list's search, filters and page live in the URL (§5.9).
+  const query = await searchParams;
+  const param = (key: string) => (typeof query[key] === "string" ? (query[key] as string) : undefined);
 
   const [{ data: pages }, { data: cats }] = await Promise.all([
     supabase
@@ -25,6 +33,12 @@ export default async function WebsiteEditorPages() {
         <PagesTable
           pages={(pages as PageRow[] | null) || []}
           categories={(cats as CategoryOption[] | null) || []}
+          initialState={{
+            q: param("q") ?? "",
+            category: param("category") ?? "all",
+            status: param("status") ?? "all",
+            page: Number(param("page")) || 1,
+          }}
         />
       </Panel>
     </PageShell>

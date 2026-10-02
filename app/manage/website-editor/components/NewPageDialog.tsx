@@ -62,7 +62,7 @@ export function NewPageDialog() {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="space-y-6">
-          <DialogHeader className="text-left">
+          <DialogHeader className="pr-10 text-left">
             <DialogTitle>New page</DialogTitle>
             <DialogDescription>Choose its URL. The page is created when you first save it.</DialogDescription>
           </DialogHeader>

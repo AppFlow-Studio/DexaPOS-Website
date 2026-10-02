@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Mail } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
@@ -39,12 +39,15 @@ export function EditUserDetailsDialog({
     const [lastName, setLastName] = useState(initialLastName)
     const [isSaving, setIsSaving] = useState(false)
 
-    useEffect(() => {
+    // Each opening starts from the saved name.
+    const [wasOpen, setWasOpen] = useState(open)
+    if (open !== wasOpen) {
+        setWasOpen(open)
         if (open) {
             setFirstName(initialFirstName)
             setLastName(initialLastName)
         }
-    }, [open, initialFirstName, initialLastName])
+    }
 
     const trimmedFirst = firstName.trim()
     const trimmedLast = lastName.trim()
@@ -148,7 +151,6 @@ export function EditUserDetailsDialog({
                         onClick={() => void handleSave()}
                         disabled={isSaving || isEmpty || isUnchanged}
                     >
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isSaving ? 'Saving...' : 'Save changes'}
                     </Button>
                 </DialogFooter>

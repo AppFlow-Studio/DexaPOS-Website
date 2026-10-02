@@ -105,6 +105,21 @@ export const ADMIN_ACTIONS = {
     category: 'user_management',
     severity: 'warning',
   },
+  ADMIN_DELETED: {
+    action: 'admin.deleted',
+    category: 'user_management',
+    severity: 'critical',
+  },
+  ADMIN_MEMBERSHIP_REMOVED: {
+    action: 'admin.membership_removed',
+    category: 'user_management',
+    severity: 'warning',
+  },
+  ADMIN_SESSION_REVOKED: {
+    action: 'admin.session_revoked',
+    category: 'user_management',
+    severity: 'warning',
+  },
 
   // Device / terminal management
   DEVICE_REBOOTED: {

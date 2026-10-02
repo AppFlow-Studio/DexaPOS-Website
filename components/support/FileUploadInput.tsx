@@ -691,6 +691,7 @@ export default function FileUploadInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             disabled={disabled || !canAddMore}
+            aria-label={canAddMore ? "Attach a file" : `Attachment limit reached (${MAX_FILES})`}
             title={
               canAddMore
                 ? `Attach a file (${files.length}/${MAX_FILES} used)`

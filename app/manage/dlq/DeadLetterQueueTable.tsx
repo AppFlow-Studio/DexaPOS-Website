@@ -28,7 +28,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -73,7 +72,16 @@ import { RetryFigure, STATUS_LABELS, dlqRowState } from './dlq-row'
 
 /** Every table pages 10 at a time, server-paged lists included (§5.7). */
 const PAGE_SIZE = 10
-const TABLE_COLUMNS = 6
+
+/*
+ * Column tiers (§5.3). The essential columns (source/event, status, error,
+ * actions) carry no class and show from `md`; Retries joins at `lg`, Created
+ * at `xl`. The table is `table-fixed`, so Error takes whatever width is left
+ * and truncates, and nothing scrolls sideways at 768px.
+ */
+const LG_ONLY = 'hidden lg:table-cell'
+const XL_ONLY = 'hidden xl:table-cell'
+const COLUMN_CLASSES = [XL_ONLY, '', '', '', LG_ONLY, '']
 
 interface Props {
   canMutate: boolean
@@ -306,7 +314,6 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
             <Eye className="mr-2 h-4 w-4" />
             View details
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={!canMutate || !canRetry || retryMutation.isPending}
             onSelect={() => retryMutation.mutate(row.id)}
@@ -365,7 +372,7 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
         </PanelSection>
       </Panel>
 
-      {/* The queue: toolbar, table from `lg`, record cards below (§5.3). */}
+      {/* The queue: toolbar, table from `md`, record cards below (§5.3). */}
       <Panel>
         <PanelSection
           label="Failed deliveries"
@@ -420,14 +427,14 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
               />
             ) : (
               <>
-                <Table variant="data" bounded={false} containerClassName="hidden lg:block" className="min-w-[680px]">
+                <Table variant="data" bounded={false} containerClassName="hidden md:block" className="table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[140px]">Created</TableHead>
-                      <TableHead className="w-[170px]">Source / event</TableHead>
-                      <TableHead className="w-[110px]">Status</TableHead>
+                      <TableHead className={cn(XL_ONLY, 'w-[150px]')}>Created</TableHead>
+                      <TableHead className="w-[140px]">Source / event</TableHead>
+                      <TableHead className="w-[112px]">Status</TableHead>
                       <TableHead>Error</TableHead>
-                      <TableHead className="w-[90px] text-right">Retries</TableHead>
+                      <TableHead className={cn(LG_ONLY, 'w-[120px] text-right')}>Retries</TableHead>
                       <TableHead className="w-[56px]">
                         <span className="sr-only">Actions</span>
                       </TableHead>
@@ -435,44 +442,51 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
-                      Array.from({ length: 6 }).map((_, i) => (
+                      Array.from({ length: PAGE_SIZE }).map((_, i) => (
                         <TableRow key={`loading-${i}`}>
-                          {Array.from({ length: TABLE_COLUMNS }).map((_, j) => (
-                            <TableCell key={j}>
+                          {COLUMN_CLASSES.map((className, j) => (
+                            <TableCell key={j} className={className}>
                               <Skeleton className="h-4 w-full" />
                             </TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : rows.length === 0 ? (
-                      <TableEmptyRow colSpan={TABLE_COLUMNS} title={emptyTitle} hint={emptyHint} />
+                      <TableEmptyRow colSpan={COLUMN_CLASSES.length} title={emptyTitle} hint={emptyHint} />
                     ) : (
+                      // Every cell is one line, so a page of 10 fits a laptop
+                      // screen (§5.7); the full values are in `title` and the
+                      // detail panel.
                       rows.map((row) => {
                         const { isTerminal } = dlqRowState(row)
                         return (
                           <TableRow key={row.id}>
-                            <TableCell>
-                              <div className="flex flex-col gap-0.5 tabular-nums" title={absoluteTime(row.created_at)}>
-                                <span className="text-sm font-medium">{relativeTime(row.created_at)}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {format(new Date(row.created_at), 'MMM d, yyyy')}
-                                </span>
-                              </div>
+                            <TableCell
+                              className={cn(XL_ONLY, 'truncate text-sm tabular-nums')}
+                              title={absoluteTime(row.created_at)}
+                            >
+                              {relativeTime(row.created_at)}
                             </TableCell>
                             <TableCell>
-                              <div className="flex min-w-0 flex-col gap-0.5">
-                                <span className="truncate text-sm font-medium">{row.source}</span>
-                                <span className="truncate font-mono text-xs text-muted-foreground">
-                                  {row.event_type || '—'}
-                                </span>
-                              </div>
+                              <p
+                                className="truncate text-sm"
+                                title={`${row.source}${row.event_type ? ` · ${row.event_type}` : ''}`}
+                              >
+                                <span className="font-medium">{row.source}</span>
+                                {row.event_type && (
+                                  <span className="font-mono text-xs text-muted-foreground">
+                                    {' · '}
+                                    {row.event_type}
+                                  </span>
+                                )}
+                              </p>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
                                 {STATUS_LABELS[row.status] ?? row.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="max-w-[420px]">
+                            <TableCell>
                               {/* A live entry needs attention: marked by weight, not colour (§3.5). */}
                               <p
                                 className={cn(
@@ -484,7 +498,7 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                                 {row.error_message || '—'}
                               </p>
                             </TableCell>
-                            <TableCell className="text-right text-sm">
+                            <TableCell className={cn(LG_ONLY, 'text-right text-sm')}>
                               <RetryFigure row={row} />
                             </TableCell>
                             <TableCell>{renderRowActions(row)}</TableCell>
@@ -495,9 +509,12 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                   </TableBody>
                 </Table>
 
-                {/* Below `lg` each entry is a card (§5.3). Card and row open the
-                    same detail panel. */}
-                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                {/* Below `md` each entry is a card with the essentials only
+                    (§5.3): identity and status lead, then the error and the
+                    retry count. Retries stays because an exhausted count is
+                    alarm text, which a phone never drops (§13.4). Card and row
+                    open the same detail panel, which carries every field. */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                   {isLoading ? (
                     <RecordCardSkeletons count={4} />
                   ) : rows.length === 0 ? (
@@ -507,43 +524,39 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                       const { isTerminal } = dlqRowState(row)
                       const label = `${row.source}${row.event_type ? ` · ${row.event_type}` : ''}`
                       return (
-                        <RecordCard key={row.id}>
-                          {/* A stretched button makes the summary the control,
-                              while the actions menu stays its own button above
-                              it — never a div with onClick. */}
-                          <div className="relative">
-                            <button
-                              type="button"
-                              aria-label={`View details for ${label} entry`}
-                              onClick={() => setDetailId(row.id)}
-                              className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                            <div className="pointer-events-none relative flex items-start gap-2">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold">{label}</p>
-                                <p
-                                  className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums"
-                                  title={absoluteTime(row.created_at)}
-                                >
-                                  {relativeTime(row.created_at)}
-                                </p>
-                                <p
-                                  className={cn(
-                                    'mt-3 line-clamp-2 break-words text-sm',
-                                    isTerminal ? 'text-muted-foreground' : 'font-medium text-foreground'
-                                  )}
-                                >
-                                  {row.error_message || '—'}
-                                </p>
-                                <CardFields>
-                                  <CardField label="Status" value={STATUS_LABELS[row.status] ?? row.status} />
-                                  <CardField label="Retries" value={<RetryFigure row={row} />} />
-                                </CardFields>
-                              </div>
-                              <div className="pointer-events-auto -mr-1 -mt-1 shrink-0">
+                        <RecordCard key={row.id} className="relative">
+                          {/* A stretched button makes the whole card the
+                              control, while the actions menu stays its own
+                              button above it — never a div with onClick. */}
+                          <button
+                            type="button"
+                            aria-label={`View details for ${label} entry`}
+                            onClick={() => setDetailId(row.id)}
+                            className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                          <div className="pointer-events-none relative">
+                            <div className="flex items-center gap-2">
+                              <p className="min-w-0 flex-1 truncate font-semibold">{label}</p>
+                              {/* Plain text on the muted card, not a pill (§3.5). */}
+                              <span className="shrink-0 text-sm text-muted-foreground">
+                                {STATUS_LABELS[row.status] ?? row.status}
+                              </span>
+                              <div className="pointer-events-auto -my-1 -mr-1 shrink-0">
                                 {renderRowActions(row)}
                               </div>
                             </div>
+                            <CardFields>
+                              <CardField
+                                label="Error"
+                                className="col-span-2"
+                                value={
+                                  <span className={cn(isTerminal && 'font-normal text-muted-foreground')}>
+                                    {row.error_message || '—'}
+                                  </span>
+                                }
+                              />
+                              <CardField label="Retries" value={<RetryFigure row={row} />} />
+                            </CardFields>
                           </div>
                         </RecordCard>
                       )
@@ -603,11 +616,12 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeAbandon}>
+            <Button variant="outline" className="h-11 sm:h-9" onClick={closeAbandon}>
               Cancel
             </Button>
             <Button
               variant="destructive"
+              className="h-11 sm:h-9"
               disabled={!abandonReason.trim() || abandonMutation.isPending}
               onClick={submitAbandon}
             >

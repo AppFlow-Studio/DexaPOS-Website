@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
+import { PaginationBar } from '@/components/dashboard/PaginationBar'
+import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { Field, StatusItem, StatusWell, formatTimestamp } from './IntegrationPrimitives'
 import type { PlatformValorSaasConfigSummary } from '@/app/manage/actions/platform-billing-config'
 import {
@@ -16,9 +17,6 @@ import {
 } from '@/app/manage/actions/merchant-billing'
 
 type CutoverResult = Awaited<ReturnType<typeof cutoverSubscriptionRailsToCentral>>
-
-/** The per-item plan can run to hundreds of lines; the well shows the head. */
-const DETAIL_LIMIT = 50
 
 interface Props {
   config: PlatformValorSaasConfigSummary
@@ -141,8 +139,12 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
 
           {/* Centred on a phone, right-aligned from `sm` up (create-organization). */}
           <div className="flex items-center justify-center sm:justify-end md:col-span-2">
-            <Button type="submit" disabled={isSaving || !canEdit} className="w-full sm:w-auto">
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {/* 44px on phones (§13.6); busy is said by the label, not a spinner (§4.10). */}
+            <Button
+              type="submit"
+              disabled={isSaving || !canEdit}
+              className="h-11 w-full sm:h-9 sm:w-auto"
+            >
               {isSaving ? 'Saving…' : 'Save central rail'}
             </Button>
           </div>
@@ -170,6 +172,8 @@ export function SubscriptionRailCutoverCard({
   const [confirmed, setConfirmed] = useState(false)
   const [runningDry, setRunningDry] = useState(true)
   const [result, setResult] = useState<CutoverResult | null>(null)
+  // Keys the result well, so each new run opens its plan on page 1.
+  const [runCount, setRunCount] = useState(0)
 
   const runCutover = (dryRun: boolean) => {
     setRunningDry(dryRun)
@@ -177,6 +181,7 @@ export function SubscriptionRailCutoverCard({
       try {
         const res = await cutoverSubscriptionRailsToCentral({ dryRun })
         setResult(res)
+        setRunCount((count) => count + 1)
         if (!res.success) {
           toast.error(res.error ?? 'Cutover failed.')
           return
@@ -204,7 +209,7 @@ export function SubscriptionRailCutoverCard({
         showCaptionOnMobile
       >
         <div className="space-y-5">
-          {result && <CutoverResultWell result={result} />}
+          {result && <CutoverResultWell key={runCount} result={result} />}
 
           <div className="flex items-start gap-3">
             <Checkbox
@@ -229,26 +234,25 @@ export function SubscriptionRailCutoverCard({
             </p>
           )}
 
+          {/* 44px on phones (§13.6); busy is said by the label, not a spinner (§4.10). */}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              className="w-full sm:w-auto"
+              className="h-11 w-full sm:h-9 sm:w-auto"
               onClick={() => runCutover(true)}
               disabled={cutoverBlocked}
             >
-              {isCutting && runningDry && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Preview (dry run)
+              {isCutting && runningDry ? 'Previewing…' : 'Preview (dry run)'}
             </Button>
             <Button
               type="button"
               variant="destructive"
-              className="w-full sm:w-auto"
+              className="h-11 w-full sm:h-9 sm:w-auto"
               onClick={() => runCutover(false)}
               disabled={cutoverBlocked || !confirmed}
             >
-              {isCutting && !runningDry && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Run cutover
+              {isCutting && !runningDry ? 'Running cutover…' : 'Run cutover'}
             </Button>
           </div>
         </div>
@@ -265,7 +269,10 @@ function CutoverResultWell({ result }: { result: CutoverResult }) {
     : result.success
       ? 'Cutover complete'
       : 'Cutover stopped part-way'
-  const shown = result.details.slice(0, DETAIL_LIMIT)
+  // The plan can run to hundreds of lines. Paged at 10, never an inner scroll
+  // well (§5.7), so every line stays reachable.
+  const { pageRows, pagination, setPage } = useClientPagination(result.details, 10)
+  const firstIndex = (pagination.page - 1) * pagination.pageSize
 
   return (
     <div className="rounded-2xl bg-muted/60 px-4 py-4" aria-live="polite">
@@ -284,11 +291,11 @@ function CutoverResultWell({ result }: { result: CutoverResult }) {
         />
       </dl>
 
-      {shown.length > 0 ? (
+      {pageRows.length > 0 ? (
         <>
-          <ul className="thin-scrollbar mt-4 max-h-48 space-y-1 overflow-y-auto text-xs text-muted-foreground">
-            {shown.map((detail, index) => (
-              <li key={index} className="break-words">
+          <ul className="mt-4 space-y-1 text-xs text-muted-foreground">
+            {pageRows.map((detail, index) => (
+              <li key={firstIndex + index} className="break-words">
                 {detail.action}
                 {detail.locationId && (
                   <span className="font-mono"> · loc {detail.locationId.slice(0, 8)}</span>
@@ -296,11 +303,12 @@ function CutoverResultWell({ result }: { result: CutoverResult }) {
               </li>
             ))}
           </ul>
-          {result.details.length > DETAIL_LIMIT && (
-            <p className="mt-2 text-xs tabular-nums text-muted-foreground">
-              Showing the first {DETAIL_LIMIT} of {result.details.length} items.
-            </p>
-          )}
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            itemLabel="plan items"
+            className="mt-4"
+          />
         </>
       ) : (
         result.success && (

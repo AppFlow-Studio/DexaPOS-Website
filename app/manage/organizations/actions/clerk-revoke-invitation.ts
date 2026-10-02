@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClerkClient } from '@clerk/backend'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { auth } from '@clerk/nextjs/server'
+import { assertCanManageOrgInvites } from '@/lib/admin/auth'
 export async function ClerkRevokeInvitation(invitationId: string) {
     try {
 
@@ -29,6 +30,9 @@ export async function ClerkRevokeInvitation(invitationId: string) {
                 message: 'Missing organization id for invitation',
             }
         }
+
+        // A server action is a public endpoint: check the caller before touching Clerk.
+        await assertCanManageOrgInvites(organizationId)
 
         const { userId } = await auth()
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })

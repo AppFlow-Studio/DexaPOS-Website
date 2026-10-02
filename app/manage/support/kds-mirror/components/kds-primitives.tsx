@@ -3,6 +3,15 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -105,7 +114,7 @@ export function WindowSelect<K extends string>({
     >
       <SelectTrigger
         aria-label={ariaLabel}
-        className="h-9 w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none dark:bg-muted/60 sm:w-40"
+        className="w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none data-[size=default]:h-11 dark:bg-muted/60 sm:data-[size=default]:h-9 sm:w-40"
       >
         <SelectValue />
       </SelectTrigger>
@@ -117,6 +126,108 @@ export function WindowSelect<K extends string>({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/** How many items an expanded row or card shows before the rest move to a dialog. */
+export const EXPANDED_ITEM_CAP = 5;
+
+/**
+ * The item list inside an expanded send or order, capped at
+ * `EXPANDED_ITEM_CAP` with the full list one tap away in a centred dialog.
+ *
+ * Expanding in place is a recorded exception to §5.9 (§14.3): most sends and
+ * unsent orders hold 1–3 items (measured 2026-09-30: median 1, p90 4), so a
+ * detail page would be a route for one line, and support reads the items
+ * beside the send they belong to. The cap stops the rare 25–30-item order from
+ * pushing the page of 10 and its pager a screen away.
+ *
+ * `rank` orders the preview ("rank before you slice", §5.7), so problem items
+ * are never the ones hidden; the dialog keeps the original order.
+ * `renderItem` gets each item's original index.
+ */
+export function CappedItemList<T>({
+  items,
+  getKey,
+  renderItem,
+  rank,
+  ordered = false,
+  dialogTitle,
+  dialogDescription,
+}: {
+  items: T[];
+  getKey: (item: T) => string;
+  renderItem: (item: T, index: number) => React.ReactNode;
+  rank?: (item: T) => number;
+  ordered?: boolean;
+  dialogTitle: string;
+  dialogDescription: string;
+}) {
+  const List = ordered ? "ol" : "ul";
+  const indexed = items.map((item, index) => ({ item, index }));
+  const preview = (
+    rank ? [...indexed].sort((a, b) => rank(a.item) - rank(b.item)) : indexed
+  ).slice(0, EXPANDED_ITEM_CAP);
+  const hiddenCount = items.length - preview.length;
+  // Only say "problems first" when the ranking actually moved something up.
+  const reordered = preview.some((row, position) => row.index !== position);
+
+  // The row fill is `bg-background/70` on the expanded row's muted cell; on
+  // the dialog's own background that would vanish, so it takes the muted card.
+  const renderRows = (
+    rows: { item: T; index: number }[],
+    surface: "row" | "dialog"
+  ) =>
+    rows.map(({ item, index }) => (
+      <li
+        key={getKey(item)}
+        className={cn(
+          "flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl px-3 py-2",
+          surface === "row" ? "bg-background/70" : "bg-muted/45"
+        )}
+      >
+        {renderItem(item, index)}
+      </li>
+    ));
+
+  return (
+    <div>
+      <List className="space-y-1.5">{renderRows(preview, "row")}</List>
+      {hiddenCount > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 px-3 text-[0.8125rem]"
+              >
+                Show all <span className="tabular-nums">{items.length}</span>{" "}
+                items
+              </Button>
+            </DialogTrigger>
+            {/* A list the user works through: full screen on phones (§13.1).
+                The dialog clips; only the body scrolls (§12). */}
+            <DialogContent className="h-dvh max-h-dvh w-screen max-w-none grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+              <DialogHeader className="shrink-0 px-6 pt-6">
+                <DialogTitle>{dialogTitle}</DialogTitle>
+                <DialogDescription>{dialogDescription}</DialogDescription>
+              </DialogHeader>
+              <div className="thin-scrollbar min-h-0 overflow-y-auto px-6 pb-6">
+                <List className="space-y-1.5">
+                  {renderRows(indexed, "dialog")}
+                </List>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <span className="text-xs text-muted-foreground">
+            <span className="tabular-nums">{preview.length}</span> of{" "}
+            <span className="tabular-nums">{items.length}</span> shown
+            {reordered ? ", problems first" : ""}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 

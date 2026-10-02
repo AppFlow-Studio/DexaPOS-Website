@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Section } from "@/lib/cms/cms-sections";
-import { WEBSITE_EDITOR_HOME, pageEditorHref, pagePreviewHref, routeToSlug } from "../../lib/paths";
+import { pageEditorHref, pagePreviewHref, pagesListHref, routeToSlug } from "../../lib/paths";
 
 export interface EditorCategory {
   id: string;
@@ -29,16 +29,25 @@ interface PageData {
   category: string;
   sections: Section[];
   published: boolean;
+  updated_at?: string | null;
   isNew?: boolean;
+}
+
+function formatSavedDay(value: string) {
+  return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 export function PageEditorClient({
   data: initial,
   categories,
+  back,
 }: {
   data: PageData;
   categories: EditorCategory[];
+  /** The pages list's query, carried so Back returns to the same page of 10 (§5.9). */
+  back?: string;
 }) {
+  const backHref = pagesListHref(back);
   const [data, setData] = useState<PageData>(initial);
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null);
   const [routeError, setRouteError] = useState("");
@@ -85,7 +94,7 @@ export function PageEditorClient({
       if (isNewRef.current || newRoute !== originalRouteRef.current) {
         isNewRef.current = false;
         originalRouteRef.current = newRoute;
-        router.push(pageEditorHref(newRoute));
+        router.push(pageEditorHref(newRoute, back));
         router.refresh();
       }
 
@@ -101,7 +110,7 @@ export function PageEditorClient({
     } finally {
       setSaving(null);
     }
-  }, [router]);
+  }, [router, back]);
 
   const update = <K extends keyof PageData>(key: K, value: PageData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -136,15 +145,23 @@ export function PageEditorClient({
         subtitle={data.route}
         showSubtitleOnMobile
         subtitleClassName="font-mono"
-        backHref={WEBSITE_EDITOR_HOME}
+        backHref={backHref}
         backLabel="Back to Pages"
         stackActionsBelowIndicatorOnMobile
         indicator={
           <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="outline" className="rounded-full border-0 px-2.5 text-xs font-medium">
+            <Badge variant="outline">
               {data.isNew ? "Not saved yet" : data.published ? "Published" : "Draft"}
             </Badge>
-            {lastSaved && <span className="tabular-nums">Saved {lastSaved}</span>}
+            {lastSaved ? (
+              <span className="tabular-nums">Saved {lastSaved}</span>
+            ) : (
+              initial.updated_at && (
+                <span className="tabular-nums" suppressHydrationWarning>
+                  Updated {formatSavedDay(initial.updated_at)}
+                </span>
+              )
+            )}
           </span>
         }
         actions={
@@ -247,7 +264,7 @@ export function PageEditorClient({
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button variant="ghost" className="h-9 px-4 text-[0.8125rem] font-medium" asChild>
-          <Link href={WEBSITE_EDITOR_HOME}>Cancel</Link>
+          <Link href={backHref}>Cancel</Link>
         </Button>
         {saveActions}
       </div>

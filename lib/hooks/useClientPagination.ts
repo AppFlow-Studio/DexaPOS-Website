@@ -9,9 +9,12 @@ import type { PaginationMeta } from '@/types/pagination'
  * The page is clamped against the current row count, so a list that shrinks
  * (a filter, a period change, a refetch) never strands the view on an empty
  * page past the end.
+ *
+ * `initialPage` restores a page kept in the URL, so "back" from a detail page
+ * lands where the user left the list (UI-DESIGN-SYSTEM §5.9).
  */
-export function useClientPagination<T>(rows: readonly T[], pageSize = 10) {
-  const [requestedPage, setPage] = useState(1)
+export function useClientPagination<T>(rows: readonly T[], pageSize = 10, initialPage = 1) {
+  const [requestedPage, setPage] = useState(() => Math.max(1, Math.floor(initialPage) || 1))
   const total = rows.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const page = Math.min(requestedPage, totalPages)

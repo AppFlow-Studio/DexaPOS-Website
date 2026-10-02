@@ -158,7 +158,7 @@ export function BlocksClient({ initialBlocks }: { initialBlocks: Block[] }) {
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-h-[85vh] sm:max-w-3xl">
-          <DialogHeader className="px-6 pt-6 pb-4 text-left">
+          <DialogHeader className="px-6 pt-6 pr-14 pb-4 text-left">
             <DialogTitle className={isNew ? undefined : "font-mono"}>
               {isNew ? "New content block" : editing?.key}
             </DialogTitle>

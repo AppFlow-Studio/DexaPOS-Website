@@ -1,7 +1,9 @@
 'use client'
 
-import { useMemo, useState, type SyntheticEvent } from 'react'
+import { Suspense, useMemo, useState, type SyntheticEvent } from 'react'
 import Link from 'next/link'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +20,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -44,42 +45,53 @@ import {
     Users,
     KeyRound,
     Copy,
-    Check,
     AlertCircle,
+    Link2,
+    RotateCw,
+    Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
-import { useRouter } from 'next/navigation'
 import { AdminInviteWizard } from '../organizations/[organizationId]/components/AdminInviteWizard'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { ClerkResendInvitationAdmin } from '../organizations/actions/clerk-resend-invitation-admin'
 import { ClerkRevokeInvitation } from '../organizations/actions/clerk-revoke-invitation'
+import {
+    getOrgInvitationLink,
+    getOrgMemberInvites,
+    resendOrgMemberInvite,
+    revokeOrgMemberInvite,
+} from '../actions/org-invitations'
 import { toast } from 'sonner'
 import {
     activateAdminUser,
-    changeAdminUserRole,
     deactivateAdminUser,
     resetAdminUserPassword,
 } from '../actions/admin-user-management'
 import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
-import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
-import { PageHeader, PageShell, Panel, StatRow, StatTile } from '@/components/dashboard/shell'
+import {
+    CENTRED_DIALOG,
+    ConfirmDialog,
+    PageHeader,
+    PageShell,
+    Panel,
+    StatRow,
+    StatTile,
+} from '@/components/dashboard/shell'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
+import { EditRoleDialog, HQ_ROLES_BY_LEVEL } from './components/EditRoleDialog'
+import { UsersDirectorySkeleton } from './components/skeletons'
 
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 
 /** Account states as stored in Clerk `public_metadata.status`. A missing value reads as Active. */
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Pending'] as const
 
-/**
- * HQ roles, highest level first. `members.role` holds the role *code*
- * (`hq.super_admin` …), so the filter matches on codes — the old options
- * ("Admin", "Manager", …) matched no row at all.
- */
-const ROLES_BY_LEVEL = Object.values(HQ_ROLES).sort((a, b) => b.level - a.level)
+/** List state kept in the URL (§5.9), and the value each key takes when absent. */
+const URL_DEFAULTS = { tab: 'users', q: '', role: 'all', status: 'all', page: '1' } as const
 
 const USER_TABS = [
     { value: 'users', label: 'Users' },
@@ -90,6 +102,8 @@ const USER_TABS = [
    itself (§11): a bare trigger still renders bordered. */
 const FILTER_TRIGGER =
     'h-9 w-full min-w-0 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none dark:bg-muted/60 sm:w-44'
+
+const USERS_LOADING = <UsersDirectorySkeleton />
 
 function roleName(code?: string | null) {
     if (!code) return '—'
@@ -143,38 +157,78 @@ function inviteStatusLabel(status?: string | null) {
         .join(' ')
 }
 
+/** An invite the menu acts on: admin invites live in Supabase, member invites only in Clerk. */
+type InviteTarget = { kind: 'admin' | 'member'; id: string; organizationId: string; email: string }
+
+/** `useSearchParams` needs a Suspense boundary above it. */
 export default function UsersPage() {
-    const router = useRouter()
+    return (
+        <Suspense fallback={USERS_LOADING}>
+            <UsersDirectory />
+        </Suspense>
+    )
+}
+
+function UsersDirectory() {
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
     const { orgId } = useAuth()
     const { role_level, isSuperAdmin, isAtLeast, isLoading: permissionsLoading } = useAdminPermissions()
     // Any HQ admin may view this list; role, password, activation and invite
     // actions need super admin or level 8+.
     const canManage = isSuperAdmin || isAtLeast(8)
-    const [searchTerm, setSearchTerm] = useState('')
-    const [roleFilter, setRoleFilter] = useState('all')
-    const [statusFilter, setStatusFilter] = useState('all')
+
+    // The tab, search, filters and page live in the URL, so "back" from a user
+    // lands on the same page of the same filtered list (§5.9).
+    const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? '')
+    const [roleFilter, setRoleFilter] = useState(() => searchParams.get('role') ?? 'all')
+    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') ?? 'all')
+    const [activeTab, setActiveTab] = useState(() =>
+        searchParams.get('tab') === 'invites' ? 'invites' : 'users'
+    )
     const [inviteSearch, setInviteSearch] = useState('')
-    const [activeTab, setActiveTab] = useState('users')
+
+    const writeParams = (updates: Partial<Record<keyof typeof URL_DEFAULTS, string | number | null>>) => {
+        const next = new URLSearchParams(searchParams.toString())
+        for (const [key, value] of Object.entries(updates)) {
+            // Defaults stay out of the URL, so a plain visit keeps a clean address.
+            const isDefault = value === null || value === '' || String(value) === URL_DEFAULTS[key as keyof typeof URL_DEFAULTS]
+            if (isDefault) next.delete(key)
+            else next.set(key, String(value))
+        }
+        const query = next.toString()
+        // `replaceState` is tracked by the Next router (useSearchParams stays in
+        // sync) but, unlike router.replace, never round-trips to the server, so
+        // typing in the search box costs nothing.
+        window.history.replaceState(null, '', query ? `${pathname}?${query}` : pathname)
+    }
+
     const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
     const [inviteActionId, setInviteActionId] = useState<string | null>(null)
-    const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false)
-    const [selectedMemberForRoleEdit, setSelectedMemberForRoleEdit] = useState<any | null>(null)
-    const [selectedRoleCode, setSelectedRoleCode] = useState<HQRoleCode>('hq.manager')
+    const [revokeTarget, setRevokeTarget] = useState<InviteTarget | null>(null)
+    const [roleEditMember, setRoleEditMember] = useState<any | null>(null)
+    const [deactivateMember, setDeactivateMember] = useState<any | null>(null)
     const [userActionId, setUserActionId] = useState<string | null>(null)
     const [resetPasswordResult, setResetPasswordResult] = useState<{
         userName: string
         userEmail: string
         tempPassword: string
     } | null>(null)
-    const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false)
     const { user } = useUser()
     const fallbackOrgId = user?.publicMetadata?.organizationId as string | undefined
     const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
     const { data: users, isLoading, error, refetch: refetchUsers } = useOrganizationUsers(resolvedOrganizationId as string)
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
+    const memberInvitesQuery = useQuery({
+        queryKey: ['hq-member-invites', resolvedOrganizationId],
+        queryFn: () => getOrgMemberInvites(resolvedOrganizationId),
+        enabled: !!resolvedOrganizationId,
+    })
 
     // The action returns an `Error` instead of throwing, so it arrives as data.
-    const usersData = users instanceof Error ? null : users
+    const usersData = !users || users instanceof Error
+        ? null
+        : (users as { members?: any[]; pending_org_admin_invites?: any[] })
     const loadError = error ?? (users instanceof Error ? users : null)
 
     const members: any[] = useMemo(() => usersData?.members ?? [], [usersData])
@@ -194,31 +248,27 @@ export default function UsersPage() {
     }, [members, searchTerm, roleFilter, statusFilter])
 
     const inviteQuery = inviteSearch.trim().toLowerCase()
-    const matchesInvite = (invite: any) =>
+    const matchesInvite = (email?: string | null, ...labels: string[]) =>
         !inviteQuery ||
-        invite?.email?.toLowerCase().includes(inviteQuery) ||
-        inviteDisplayName(invite).toLowerCase().includes(inviteQuery) ||
-        roleName(invite?.role).toLowerCase().includes(inviteQuery)
-    const allAdminInvites: any[] = organizationInfo?.pending_org_admin_invites ?? []
-    const allMemberInvites: any[] = organizationInfo?.pending_org_member_invites ?? []
-    const filteredAdminInvites = allAdminInvites.filter(matchesInvite)
-    const filteredMemberInvites = allMemberInvites.filter(matchesInvite)
+        !!email?.toLowerCase().includes(inviteQuery) ||
+        labels.some((label) => label.toLowerCase().includes(inviteQuery))
+    const orgInfo = organizationInfo instanceof Error ? null : organizationInfo
+    const allAdminInvites: any[] = orgInfo?.pending_org_admin_invites ?? []
+    const allMemberInvites = memberInvitesQuery.data?.data ?? []
+    const filteredAdminInvites = allAdminInvites.filter((invite) =>
+        matchesInvite(invite?.email, inviteDisplayName(invite), roleName(invite?.role))
+    )
+    const filteredMemberInvites = allMemberInvites.filter((invite) =>
+        matchesInvite(invite.email, roleName(invite.role))
+    )
 
     // §5.7: 10 per page, table and card grid alike. Called above the early
     // returns so the hook order is fixed.
-    const userPage = useClientPagination(filteredUsers, 10)
+    const userPage = useClientPagination(filteredUsers, 10, Number(searchParams.get('page')) || 1)
     const adminInvitePage = useClientPagination(filteredAdminInvites, 10)
     const memberInvitePage = useClientPagination(filteredMemberInvites, 10)
 
-    if (permissionsLoading || isLoading)
-        return (
-            <DataPageSkeleton
-                variant="report"
-                report={{ stats: 3, tabs: 2, body: 'table' }}
-                shell="plain"
-                label="Loading the HQ user directory"
-            />
-        )
+    if (permissionsLoading || isLoading) return USERS_LOADING
 
     if (loadError)
         return (
@@ -237,113 +287,85 @@ export default function UsersPage() {
         )
 
     const activeCount = members.filter((member) => memberStatus(member) === 'Active').length
-    const pendingInviteCount = (usersData?.pending_org_admin_invites ?? []).filter(
-        (invite: any) => invite.status === 'pending'
-    ).length
+    // Pending invites only, from the same two sources the Invites tab lists. The
+    // tab also shows accepted and revoked admin invites; the tile does not count them.
+    const pendingInviteCount =
+        allAdminInvites.filter((invite) => invite.status === 'pending').length + allMemberInvites.length
     const filtersActive = searchTerm.trim() !== '' || roleFilter !== 'all' || statusFilter !== 'all'
 
-    const resetUserPage = () => userPage.setPage(1)
+    // A user's page links back here with this exact list state (§5.9).
+    const listQuery = searchParams.toString()
+    const userHref = (id?: string) =>
+        `/manage/users/${id}${listQuery ? `?back=${encodeURIComponent(listQuery)}` : ''}`
+
+    const setUserPage = (page: number) => {
+        userPage.setPage(page)
+        writeParams({ page })
+    }
     const clearFilters = () => {
         setSearchTerm('')
         setRoleFilter('all')
         setStatusFilter('all')
-        resetUserPage()
+        userPage.setPage(1)
+        writeParams({ q: null, role: null, status: null, page: null })
     }
 
-    const openEditRoleDialog = (member: any) => {
-        const currentRole = member?.role as HQRoleCode | undefined
-        setSelectedMemberForRoleEdit(member)
-        setSelectedRoleCode(
-            currentRole && HQ_ROLES[currentRole] ? currentRole : 'hq.manager'
+    const refetchInvites = () => {
+        void refetchOrganizationInfo()
+        void memberInvitesQuery.refetch()
+    }
+
+    /** Runs a user action with its busy flag, toast and refetch. */
+    const runUserAction = async (
+        actionId: string,
+        action: () => Promise<{ success: boolean; message?: string }>,
+        fallbackError: string
+    ) => {
+        setUserActionId(actionId)
+        try {
+            const result = await action()
+            if (!result.success) {
+                toast.error(result.message || fallbackError)
+                return false
+            }
+            toast.success(result.message || 'Done')
+            await refetchUsers()
+            return true
+        } catch (error) {
+            console.error(`[UsersPage] ${fallbackError}:`, error)
+            toast.error(fallbackError)
+            return false
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleDeactivateUser = async () => {
+        const id = deactivateMember?.users?.id as string | undefined
+        if (!id) return
+        const done = await runUserAction(
+            `deactivate:${id}`,
+            () => deactivateAdminUser({ userId: id, organizationId: resolvedOrganizationId }),
+            'Failed to deactivate user'
         )
-        setIsEditRoleDialogOpen(true)
+        if (done) setDeactivateMember(null)
     }
 
-    const handleSaveRole = async () => {
-        if (!selectedMemberForRoleEdit?.users?.id) return
-        const actionId = `role:${selectedMemberForRoleEdit.users.id}`
-        setUserActionId(actionId)
-        try {
-            const result = await changeAdminUserRole({
-                userId: selectedMemberForRoleEdit.users.id,
-                roleCode: selectedRoleCode,
-                organizationId: resolvedOrganizationId,
-            })
-            if (!result.success) {
-                toast.error(result.message || 'Failed to update role')
-                return
-            }
-            toast.success('Role updated successfully')
-            setIsEditRoleDialogOpen(false)
-            setSelectedMemberForRoleEdit(null)
-            await refetchUsers()
-        } catch (error) {
-            console.error('[UsersPage] Failed to update role:', error)
-            toast.error('Failed to update role')
-        } finally {
-            setUserActionId(null)
-        }
-    }
-
-    const handleDeactivateUser = async (member: any) => {
-        const userIdToDeactivate = member?.users?.id as string | undefined
-        if (!userIdToDeactivate) return
-
-        const confirmed = window.confirm(`Deactivate ${memberName(member)}? They will no longer be able to sign in.`)
-        if (!confirmed) return
-
-        const actionId = `deactivate:${userIdToDeactivate}`
-        setUserActionId(actionId)
-        try {
-            const result = await deactivateAdminUser({
-                userId: userIdToDeactivate,
-                organizationId: resolvedOrganizationId,
-            })
-            if (!result.success) {
-                toast.error(result.message || 'Failed to deactivate user')
-                return
-            }
-            toast.success('User deactivated')
-            await refetchUsers()
-        } catch (error) {
-            console.error('[UsersPage] Failed to deactivate user:', error)
-            toast.error('Failed to deactivate user')
-        } finally {
-            setUserActionId(null)
-        }
-    }
-
-    const handleActivateUser = async (member: any) => {
-        const userIdToActivate = member?.users?.id as string | undefined
-        if (!userIdToActivate) return
-
-        const actionId = `activate:${userIdToActivate}`
-        setUserActionId(actionId)
-        try {
-            const result = await activateAdminUser({
-                userId: userIdToActivate,
-                organizationId: resolvedOrganizationId,
-            })
-            if (!result.success) {
-                toast.error(result.message || 'Failed to activate user')
-                return
-            }
-            toast.success(result.message || 'User activated')
-            await refetchUsers()
-        } catch (error) {
-            console.error('[UsersPage] Failed to activate user:', error)
-            toast.error('Failed to activate user')
-        } finally {
-            setUserActionId(null)
-        }
+    const handleActivateUser = (member: any) => {
+        const id = member?.users?.id as string | undefined
+        if (!id) return
+        void runUserAction(
+            `activate:${id}`,
+            () => activateAdminUser({ userId: id, organizationId: resolvedOrganizationId }),
+            'Failed to activate user'
+        )
     }
 
     const handleResetPassword = async (member: any) => {
         const userIdToReset = member?.users?.id as string | undefined
         if (!userIdToReset) return
 
-        const actionId = `reset:${userIdToReset}`
-        setUserActionId(actionId)
+        setUserActionId(`reset:${userIdToReset}`)
         try {
             const result = await resetAdminUserPassword({
                 userId: userIdToReset,
@@ -358,7 +380,6 @@ export default function UsersPage() {
                 userEmail: member?.users?.email || '',
                 tempPassword: result.tempPassword,
             })
-            setIsResetPasswordDialogOpen(true)
             await refetchUsers()
         } catch (error) {
             console.error('[UsersPage] Failed to reset password:', error)
@@ -379,37 +400,78 @@ export default function UsersPage() {
         }
     }
 
-    const handleResendInvite = async (invitationId: string) => {
+    /** Runs an invite action with its busy flag, toast and refetch. */
+    const runInviteAction = async (
+        invitationId: string,
+        action: () => Promise<{ success: boolean; message?: string }>,
+        success: string,
+        fallbackError: string
+    ) => {
         setInviteActionId(invitationId)
         try {
-            const result = await ClerkResendInvitationAdmin(invitationId)
-            if (result?.success) {
-                toast.success('Invitation resent')
-                await refetchOrganizationInfo()
-                return
+            const result = await action()
+            if (!result?.success) {
+                toast.error(result?.message || fallbackError)
+                return false
             }
-            toast.error(result?.message || 'Failed to resend invitation')
+            toast.success(success)
+            return true
         } catch (error) {
-            console.error('[UsersPage] Resend invite failed:', error)
-            toast.error('Failed to resend invitation')
+            console.error(`[UsersPage] ${fallbackError}:`, error)
+            toast.error(fallbackError)
+            return false
         } finally {
             setInviteActionId(null)
+            // Also after a failure: a resend can revoke the old invite and then
+            // fail to send the new one, and the list must show that.
+            refetchInvites()
         }
     }
 
-    const handleRevokeInvite = async (invitationId: string) => {
-        setInviteActionId(invitationId)
+    const handleResendInvite = (target: InviteTarget) =>
+        void runInviteAction(
+            target.id,
+            () =>
+                target.kind === 'admin'
+                    ? ClerkResendInvitationAdmin(target.id)
+                    : resendOrgMemberInvite(target.organizationId, target.id),
+            'Invitation resent',
+            'Failed to resend invitation'
+        )
+
+    const handleRevokeInvite = async () => {
+        if (!revokeTarget) return
+        const target = revokeTarget
+        const done = await runInviteAction(
+            target.id,
+            () =>
+                target.kind === 'admin'
+                    ? ClerkRevokeInvitation(target.id)
+                    : revokeOrgMemberInvite(target.organizationId, target.id),
+            'Invitation revoked',
+            'Failed to revoke invitation'
+        )
+        if (done) setRevokeTarget(null)
+    }
+
+    const handleCopyInviteLink = async (target: InviteTarget) => {
+        setInviteActionId(target.id)
         try {
-            const result = await ClerkRevokeInvitation(invitationId)
-            if (result?.success) {
-                toast.success('Invitation revoked')
-                await refetchOrganizationInfo()
+            const result = await getOrgInvitationLink(target.organizationId, target.id)
+            if (!result.success || !result.url) {
+                toast.error(result.message || 'Could not get the invite link')
                 return
             }
-            toast.error(result?.message || 'Failed to revoke invitation')
+            try {
+                await navigator.clipboard.writeText(result.url)
+                toast.success('Invite link copied')
+            } catch {
+                // Some browsers refuse clipboard writes after an await; show the link instead.
+                toast.message('Copy this invite link', { description: result.url, duration: 20000 })
+            }
         } catch (error) {
-            console.error('[UsersPage] Revoke invite failed:', error)
-            toast.error('Failed to revoke invitation')
+            console.error('[UsersPage] Copy invite link failed:', error)
+            toast.error('Could not get the invite link')
         } finally {
             setInviteActionId(null)
         }
@@ -418,12 +480,25 @@ export default function UsersPage() {
     const rowMenu = (member: any) => (
         <UserRowMenu
             member={member}
+            href={userHref(member?.users?.id)}
             canManage={canManage}
             busyActionId={userActionId}
-            onEditRole={() => openEditRoleDialog(member)}
+            onEditRole={() => setRoleEditMember(member)}
             onResetPassword={() => void handleResetPassword(member)}
-            onActivate={() => void handleActivateUser(member)}
-            onDeactivate={() => void handleDeactivateUser(member)}
+            onActivate={() => handleActivateUser(member)}
+            onDeactivate={() => setDeactivateMember(member)}
+        />
+    )
+
+    const inviteMenu = (target: InviteTarget, status: string | null | undefined) => (
+        <InviteRowMenu
+            email={target.email}
+            status={status}
+            canManage={canManage}
+            disabled={inviteActionId === target.id}
+            onCopyLink={() => void handleCopyInviteLink(target)}
+            onResend={() => handleResendInvite(target)}
+            onRevoke={() => setRevokeTarget(target)}
         />
     )
 
@@ -431,7 +506,9 @@ export default function UsersPage() {
         ? { title: 'No HQ users yet', hint: 'Invite an admin to add someone to the HQ team.' }
         : { title: 'No users match these filters', hint: 'Clear the search or filters to widen the results.' }
 
-    const noInvites = filteredAdminInvites.length === 0 && filteredMemberInvites.length === 0
+    const memberInvitesLoaded = !memberInvitesQuery.isLoading
+    const noInvites =
+        memberInvitesLoaded && filteredAdminInvites.length === 0 && filteredMemberInvites.length === 0
 
     return (
         /* `as="div"`: app/manage/layout.tsx already owns this surface's <main>. */
@@ -443,45 +520,47 @@ export default function UsersPage() {
                     canManage && (
                         <Button className="h-9 px-4" onClick={() => setIsAdminInviteOpen(true)}>
                             <UserPlus className="mr-2 h-4 w-4" />
-                            Invite Admin
+                            Invite user
                         </Button>
                     )
                 }
             />
 
-            {/* Headline figures for both tabs, so they sit above the rail. The
-                old metas ("+2 from last month", "85% of total users") were
-                hardcoded; the active share is now computed. */}
-            <Panel>
-                <div className="px-4 py-6 sm:px-6">
-                    <StatRow columns={3}>
-                        <StatTile
-                            label="Total users"
-                            value={members.length}
-                            meta="Everyone on the HQ team"
-                            icon={<Users />}
-                        />
-                        <StatTile
-                            label="Active users"
-                            value={activeCount}
-                            meta={
-                                members.length > 0
-                                    ? `${Math.round((activeCount / members.length) * 100)}% of all users`
-                                    : 'No users yet'
-                            }
-                            icon={<UserCheck />}
-                        />
-                        <StatTile
-                            label="Pending invites"
-                            value={pendingInviteCount}
-                            meta="Awaiting acceptance"
-                            icon={<Mail />}
-                        />
-                    </StatRow>
-                </div>
+            {/* Headline figures for both tabs, so they sit above the rail. */}
+            <Panel padded>
+                <StatRow columns={3}>
+                    <StatTile
+                        label="Total users"
+                        value={members.length}
+                        meta="Everyone on the HQ team"
+                        icon={<Users />}
+                    />
+                    <StatTile
+                        label="Active users"
+                        value={activeCount}
+                        meta={
+                            members.length > 0
+                                ? `${Math.round((activeCount / members.length) * 100)}% of all users`
+                                : 'No users yet'
+                        }
+                        icon={<UserCheck />}
+                    />
+                    <StatTile
+                        label="Pending invites"
+                        value={memberInvitesLoaded ? pendingInviteCount : '—'}
+                        meta="Awaiting acceptance"
+                        icon={<Mail />}
+                    />
+                </StatRow>
             </Panel>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <Tabs
+                value={activeTab}
+                onValueChange={(value) => {
+                    setActiveTab(value)
+                    writeParams({ tab: value })
+                }}
+            >
                 {/* Pill rail (§4.5). Two short labels always fit at 320px, so the
                     §13.2 auto-scroll has nothing to do here. */}
                 <div className="w-full min-w-0 overflow-x-auto pb-1">
@@ -502,25 +581,25 @@ export default function UsersPage() {
                     {/* Skeleton A: toolbar, table well and pager share one panel. */}
                     <Panel padded>
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="relative min-w-0 lg:w-72">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-                                <Input
-                                    aria-label="Search users"
-                                    placeholder="Search by name or email"
-                                    value={searchTerm}
-                                    onChange={(e) => {
-                                        setSearchTerm(e.target.value)
-                                        resetUserPage()
-                                    }}
-                                    className="h-9 pl-9 text-[0.8125rem]"
-                                />
-                            </div>
+                            <SearchField
+                                name="user-search"
+                                label="Search users"
+                                placeholder="Search by name or email"
+                                value={searchTerm}
+                                onChange={(value) => {
+                                    setSearchTerm(value)
+                                    userPage.setPage(1)
+                                    writeParams({ q: value.trim(), page: null })
+                                }}
+                                className="lg:w-72"
+                            />
                             <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                                 <Select
                                     value={roleFilter}
                                     onValueChange={(value) => {
                                         setRoleFilter(value)
-                                        resetUserPage()
+                                        userPage.setPage(1)
+                                        writeParams({ role: value, page: null })
                                     }}
                                 >
                                     <SelectTrigger aria-label="Role" className={FILTER_TRIGGER}>
@@ -528,7 +607,7 @@ export default function UsersPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All roles</SelectItem>
-                                        {ROLES_BY_LEVEL.map((role) => (
+                                        {HQ_ROLES_BY_LEVEL.map((role) => (
                                             <SelectItem key={role.code} value={role.code}>
                                                 {role.name}
                                             </SelectItem>
@@ -539,7 +618,8 @@ export default function UsersPage() {
                                     value={statusFilter}
                                     onValueChange={(value) => {
                                         setStatusFilter(value)
-                                        resetUserPage()
+                                        userPage.setPage(1)
+                                        writeParams({ status: value, page: null })
                                     }}
                                 >
                                     <SelectTrigger aria-label="Status" className={FILTER_TRIGGER}>
@@ -568,24 +648,21 @@ export default function UsersPage() {
                         </div>
 
                         <div className="mt-5 min-w-0">
-                            {/* §5.3: seven columns need ~800px, which fits the
-                                content column from `xl`; cards below that. */}
-                            <Table
-                                variant="data"
-                                bounded={false}
-                                containerClassName="hidden xl:block"
-                                className="min-w-[800px]"
-                            >
+                            {/* §5.3: the table from `md`, with columns joining as
+                                they fit; essential-only cards below `md`. Rows are
+                                one line and the table never scrolls inside itself
+                                (§5.7). */}
+                            <Table variant="data" bounded={false} containerClassName="hidden md:block">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>User</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Email</TableHead>
                                         <TableHead>Role</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Merchants</TableHead>
-                                        <TableHead>Joined</TableHead>
-                                        {/* Was "Last Active", but the value is the
-                                            profile's `updated_at`, not a sign-in time. */}
-                                        <TableHead>Updated</TableHead>
+                                        <TableHead className="hidden text-right lg:table-cell">Merchants</TableHead>
+                                        <TableHead className="hidden lg:table-cell">Joined</TableHead>
+                                        {/* The profile's `updated_at`, not a sign-in time. */}
+                                        <TableHead className="hidden 2xl:table-cell">Updated</TableHead>
                                         <TableHead className="w-12">
                                             <span className="sr-only">Actions</span>
                                         </TableHead>
@@ -594,39 +671,36 @@ export default function UsersPage() {
                                 <TableBody>
                                     {userPage.pageRows.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-24 text-center">
+                                            <TableCell colSpan={8} className="h-24 text-center">
                                                 <p className="text-sm font-medium">{usersEmpty.title}</p>
                                                 <p className="mt-1 text-xs text-muted-foreground">{usersEmpty.hint}</p>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         userPage.pageRows.map((member: any) => {
-                                            const href = `/manage/users/${member.users?.id}`
+                                            const href = userHref(member.users?.id)
                                             const updatedAt = member?.users?.updated_at || member.created_at
                                             return (
-                                                <TableRow
-                                                    key={member.id}
-                                                    className="cursor-pointer"
-                                                    onClick={() => router.push(href)}
-                                                >
-                                                    <TableCell className="max-w-[280px]">
-                                                        <div className="flex min-w-0 items-center gap-3">
-                                                            <Avatar className="h-8 w-8 shrink-0">
+                                                <TableRow key={member.id} className="relative">
+                                                    <TableCell className="max-w-[240px]">
+                                                        {/* The whole row is one real link (§5.9): it
+                                                            opens in a new tab and takes keyboard focus.
+                                                            The action menu sits above it. */}
+                                                        <Link
+                                                            href={href}
+                                                            aria-label={`View ${memberName(member)}`}
+                                                            className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                                        />
+                                                        <div className="flex min-w-0 items-center gap-3" title={member?.users?.email || undefined}>
+                                                            <Avatar className="h-7 w-7 shrink-0">
                                                                 <AvatarImage src={member?.users?.avatar_url || ''} alt="" />
-                                                                <AvatarFallback>{initials(member)}</AvatarFallback>
+                                                                <AvatarFallback className="text-xs">{initials(member)}</AvatarFallback>
                                                             </Avatar>
-                                                            <div className="min-w-0">
-                                                                {/* A real link, so the row is reachable by keyboard. */}
-                                                                <Link
-                                                                    href={href}
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                    className="block truncate font-medium hover:underline"
-                                                                >
-                                                                    {memberName(member)}
-                                                                </Link>
-                                                                <div className="truncate text-sm text-muted-foreground">{member?.users?.email}</div>
-                                                            </div>
+                                                            <span className="min-w-0 truncate font-medium">{memberName(member)}</span>
                                                         </div>
+                                                    </TableCell>
+                                                    <TableCell className="hidden max-w-[260px] truncate text-sm text-muted-foreground xl:table-cell">
+                                                        {member?.users?.email || '—'}
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant="outline">{roleName(member?.role)}</Badge>
@@ -634,22 +708,22 @@ export default function UsersPage() {
                                                     <TableCell>
                                                         <Badge variant="outline">{memberStatus(member)}</Badge>
                                                     </TableCell>
-                                                    <TableCell className="text-right tabular-nums">
+                                                    <TableCell className="hidden text-right tabular-nums lg:table-cell">
                                                         {member?.assigned_merchant_count ?? 0}
                                                     </TableCell>
                                                     <TableCell
-                                                        className="text-sm text-muted-foreground tabular-nums"
+                                                        className="hidden text-sm text-muted-foreground tabular-nums lg:table-cell"
                                                         title={formatTimestamp(member.created_at)}
                                                     >
                                                         {formatDay(member.created_at)}
                                                     </TableCell>
                                                     <TableCell
-                                                        className="text-sm text-muted-foreground tabular-nums"
+                                                        className="hidden text-sm text-muted-foreground tabular-nums 2xl:table-cell"
                                                         title={formatTimestamp(updatedAt)}
                                                     >
                                                         {formatDay(updatedAt)}
                                                     </TableCell>
-                                                    <TableCell className="text-right">{rowMenu(member)}</TableCell>
+                                                    <TableCell className="relative z-10 text-right">{rowMenu(member)}</TableCell>
                                                 </TableRow>
                                             )
                                         })
@@ -657,61 +731,49 @@ export default function UsersPage() {
                                 </TableBody>
                             </Table>
 
-                            {/* §5.3 mobile: record cards, never a scrolling table. */}
-                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                            {/* Phones: cards with the essentials only (§5.3, D-27).
+                                Email and dates are on the user's page. */}
+                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                                 {userPage.pageRows.length === 0 ? (
                                     <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 text-center">
                                         <p className="text-sm font-medium">{usersEmpty.title}</p>
                                         <p className="text-xs text-muted-foreground">{usersEmpty.hint}</p>
                                     </div>
                                 ) : (
-                                    userPage.pageRows.map((member: any) => {
-                                        const href = `/manage/users/${member.users?.id}`
-                                        const updatedAt = member?.users?.updated_at || member.created_at
-                                        return (
-                                            <div
-                                                key={member.id}
-                                                className="relative min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted"
-                                            >
-                                                {/* Stretched link: the whole card opens the
-                                                    user; the menu sits above it. */}
-                                                <Link
-                                                    href={href}
-                                                    aria-label={`View ${memberName(member)}`}
-                                                    className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                />
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex min-w-0 items-center gap-3">
-                                                        {/* Avatars drop below `sm` (§13.4). */}
-                                                        <Avatar className="hidden h-8 w-8 shrink-0 sm:flex">
-                                                            <AvatarImage src={member?.users?.avatar_url || ''} alt="" />
-                                                            <AvatarFallback>{initials(member)}</AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="min-w-0">
-                                                            <p className="truncate font-semibold">{memberName(member)}</p>
-                                                            <p className="truncate text-xs text-muted-foreground">{member?.users?.email}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="relative z-10 shrink-0">{rowMenu(member)}</div>
+                                    userPage.pageRows.map((member: any) => (
+                                        <div
+                                            key={member.id}
+                                            className="relative min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted"
+                                        >
+                                            {/* Stretched link: the whole card opens the
+                                                user; the menu sits above it. */}
+                                            <Link
+                                                href={userHref(member.users?.id)}
+                                                aria-label={`View ${memberName(member)}`}
+                                                className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            />
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex min-w-0 items-baseline gap-2">
+                                                    <p className="truncate font-semibold">{memberName(member)}</p>
+                                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                                        {memberStatus(member)}
+                                                    </span>
                                                 </div>
-
-                                                {/* Values are plain text on the tinted card (§3.5). */}
-                                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                                    <CardField label="Role" value={roleName(member?.role)} />
-                                                    <CardField label="Status" value={memberStatus(member)} />
-                                                    <CardField label="Merchants" value={member?.assigned_merchant_count ?? 0} />
-                                                    <CardField label="Joined" value={formatDay(member.created_at)} />
-                                                    <CardField label="Updated" value={formatDay(updatedAt)} />
-                                                </div>
+                                                <div className="relative z-10 -mr-1 -mt-1 shrink-0">{rowMenu(member)}</div>
                                             </div>
-                                        )
-                                    })
+
+                                            {/* Values are plain text on the tinted card (§3.5). */}
+                                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                <CardField label="Role" value={roleName(member?.role)} />
+                                            </div>
+                                        </div>
+                                    ))
                                 )}
                             </div>
 
                             <PaginationBar
                                 pagination={userPage.pagination}
-                                onPageChange={userPage.setPage}
+                                onPageChange={setUserPage}
                                 itemLabel="users"
                             />
                             {/* The pager hides when everything fits on one page;
@@ -729,20 +791,18 @@ export default function UsersPage() {
 
                 <TabsContent value="invites" className="mt-6">
                     <Panel padded>
-                        <div className="relative min-w-0 sm:w-72">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-                            <Input
-                                aria-label="Search invites"
-                                placeholder="Search by name, email or role"
-                                value={inviteSearch}
-                                onChange={(e) => {
-                                    setInviteSearch(e.target.value)
-                                    adminInvitePage.setPage(1)
-                                    memberInvitePage.setPage(1)
-                                }}
-                                className="h-9 pl-9 text-[0.8125rem]"
-                            />
-                        </div>
+                        <SearchField
+                            name="invite-search"
+                            label="Search invites"
+                            placeholder="Search by name, email or role"
+                            value={inviteSearch}
+                            onChange={(value) => {
+                                setInviteSearch(value)
+                                adminInvitePage.setPage(1)
+                                memberInvitePage.setPage(1)
+                            }}
+                            className="sm:w-72"
+                        />
 
                         <div className="mt-5 min-w-0 space-y-6">
                             {noInvites && (
@@ -754,7 +814,7 @@ export default function UsersPage() {
                                     <p className="text-xs text-muted-foreground">
                                         {inviteQuery
                                             ? 'Clear the search to see every invite.'
-                                            : 'Invitations you send to new admins will appear here.'}
+                                            : 'Invitations you send to new team members will appear here.'}
                                     </p>
                                 </div>
                             )}
@@ -763,75 +823,30 @@ export default function UsersPage() {
                                 <section>
                                     <h3 className="mb-3 text-sm text-muted-foreground">Admin invites</h3>
                                     <div className="space-y-2">
-                                        {adminInvitePage.pageRows.map((inv: any) => {
-                                            const isPending = inv.status === 'pending'
-                                            const canAct = canManage && !!inv.clerk_invite_id && isPending && inviteActionId !== inv.clerk_invite_id
-                                            return (
-                                                <div
-                                                    key={inv.id}
-                                                    className="flex min-w-0 items-start justify-between gap-3 rounded-2xl bg-muted/45 p-4"
-                                                >
-                                                    <div className="flex min-w-0 items-center gap-3">
-                                                        {/* The initial disc is decorative; it gives
-                                                            up its column on a phone (§13.4). */}
-                                                        <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium sm:flex">
-                                                            {(inv.email?.[0] || 'A').toUpperCase()}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="truncate font-medium">{inviteDisplayName(inv)}</p>
-                                                            <p className="truncate text-sm text-muted-foreground">{inv.email}</p>
-                                                            {/* Status is a word, not a pill: the card is
-                                                                already tinted (§3.5). */}
-                                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                                <span className="font-medium text-foreground">{inviteStatusLabel(inv.status)}</span>
-                                                                <span className="sm:hidden"> · {roleName(inv.role)}</span>
-                                                                {' · '}Invited by {inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'}
-                                                                {' · '}
-                                                                <span className="tabular-nums" title={formatTimestamp(inv.created_at)}>
-                                                                    {formatDay(inv.created_at)}
-                                                                </span>
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex shrink-0 items-center gap-4">
-                                                        <span className="hidden text-sm text-muted-foreground sm:block">{roleName(inv.role)}</span>
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    aria-label={`Actions for the invite to ${inv.email}`}
-                                                                    className="h-8 w-8 rounded-full p-0"
-                                                                >
-                                                                    <MoreHorizontal className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                                {canManage && (
-                                                                    <>
-                                                                        <DropdownMenuItem
-                                                                            disabled={!canAct}
-                                                                            onClick={() => void handleResendInvite(inv.clerk_invite_id)}
-                                                                        >
-                                                                            Resend
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem
-                                                                            variant="destructive"
-                                                                            disabled={!canAct}
-                                                                            onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
-                                                                        >
-                                                                            Revoke
-                                                                        </DropdownMenuItem>
-                                                                    </>
-                                                                )}
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
+                                        {adminInvitePage.pageRows.map((inv: any) => (
+                                            <InviteRow
+                                                key={inv.id}
+                                                name={inviteDisplayName(inv)}
+                                                email={inv.email}
+                                                role={roleName(inv.role)}
+                                                status={inviteStatusLabel(inv.status)}
+                                                invitedBy={inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'}
+                                                invitedAt={inv.created_at}
+                                                menu={
+                                                    inv.clerk_invite_id && inv.organization_id
+                                                        ? inviteMenu(
+                                                              {
+                                                                  kind: 'admin',
+                                                                  id: inv.clerk_invite_id,
+                                                                  organizationId: inv.organization_id,
+                                                                  email: inv.email,
+                                                              },
+                                                              inv.status
+                                                          )
+                                                        : null
+                                                }
+                                            />
+                                        ))}
                                     </div>
                                     <PaginationBar
                                         pagination={adminInvitePage.pagination}
@@ -841,47 +856,34 @@ export default function UsersPage() {
                                 </section>
                             )}
 
+                            {memberInvitesQuery.data?.error && (
+                                <p className="rounded-2xl bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                                    Member invites could not be loaded: {memberInvitesQuery.data.error}
+                                </p>
+                            )}
+
                             {filteredMemberInvites.length > 0 && (
                                 <section>
                                     <h3 className="mb-3 text-sm text-muted-foreground">Member invites</h3>
                                     <div className="space-y-2">
-                                        {memberInvitePage.pageRows.map((inv: any) => (
-                                            <div
+                                        {memberInvitePage.pageRows.map((inv) => (
+                                            <InviteRow
                                                 key={inv.id}
-                                                className="flex min-w-0 items-start justify-between gap-3 rounded-2xl bg-muted/45 p-4"
-                                            >
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium sm:flex">
-                                                        {(inv.email?.[0] || 'M').toUpperCase()}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="font-medium">Pending invitation</p>
-                                                        <p className="truncate text-sm text-muted-foreground">{inv.email}</p>
-                                                        <p className="mt-1 text-xs text-muted-foreground sm:hidden">Member</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-4">
-                                                    <span className="hidden text-sm text-muted-foreground sm:block">Member</span>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                aria-label={`Actions for the invite to ${inv.email}`}
-                                                                className="h-8 w-8 rounded-full p-0"
-                                                            >
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                            <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                            <DropdownMenuItem>Resend</DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem variant="destructive">Revoke</DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </div>
-                                            </div>
+                                                name={inv.email.split('@')[0] || 'Pending member'}
+                                                email={inv.email}
+                                                role={roleName(inv.role)}
+                                                status="Pending"
+                                                invitedAt={inv.createdAt}
+                                                menu={inviteMenu(
+                                                    {
+                                                        kind: 'member',
+                                                        id: inv.id,
+                                                        organizationId: resolvedOrganizationId,
+                                                        email: inv.email,
+                                                    },
+                                                    'pending'
+                                                )}
+                                            />
                                         ))}
                                     </div>
                                     <PaginationBar
@@ -896,118 +898,57 @@ export default function UsersPage() {
                 </TabsContent>
             </Tabs>
 
-            {/* Admin Invite Wizard */}
             <AdminInviteWizard
                 organizationId={DEXA_HQ_ORG_ID}
                 orgType="hq"
                 open={isAdminInviteOpen}
                 onOpenChange={setIsAdminInviteOpen}
                 onSuccess={() => {
-                    refetchOrganizationInfo()
-                    refetchUsers()
+                    refetchInvites()
+                    void refetchUsers()
                 }}
             />
 
-            {/* A list the user works through, so it goes full screen below `sm`
-                (the dialog default). The dialog clips; only the list scrolls. */}
-            <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
-                <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 max-sm:overflow-hidden sm:max-h-[85vh] sm:max-w-lg">
-                    <DialogHeader className="shrink-0 px-6 pb-4 pr-14 pt-6 text-left">
-                        <DialogTitle>Edit user role</DialogTitle>
-                        <DialogDescription className="truncate">
-                            {selectedMemberForRoleEdit?.users?.email || 'selected user'}
-                        </DialogDescription>
-                    </DialogHeader>
+            <EditRoleDialog
+                open={!!roleEditMember}
+                onOpenChange={(open) => !open && setRoleEditMember(null)}
+                userId={roleEditMember?.users?.id ?? ''}
+                organizationId={resolvedOrganizationId}
+                subject={roleEditMember?.users?.email || memberName(roleEditMember)}
+                currentRole={roleEditMember?.role}
+                roles={HQ_ROLES_BY_LEVEL.filter((role) => role.level <= role_level)}
+                onSaved={() => void refetchUsers()}
+            />
 
-                    <div
-                        role="radiogroup"
-                        aria-label="HQ role"
-                        className="thin-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto px-6 pb-2"
-                    >
-                        {ROLES_BY_LEVEL
-                            .filter((role) => role.level <= role_level)
-                            .map((role) => {
-                                const isSelected = selectedRoleCode === role.code
-                                const isCurrent = selectedMemberForRoleEdit?.role === role.code
-                                const isSaving = userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`
+            <ConfirmDialog
+                open={!!deactivateMember}
+                onOpenChange={(open) => !open && setDeactivateMember(null)}
+                title="Deactivate user?"
+                description={`${memberName(deactivateMember)} will be signed out and can no longer sign in. You can activate them again later.`}
+                confirmLabel="Deactivate"
+                pendingLabel="Deactivating…"
+                destructive
+                pending={!!deactivateMember && userActionId === `deactivate:${deactivateMember?.users?.id}`}
+                onConfirm={() => void handleDeactivateUser()}
+            />
 
-                                return (
-                                    <button
-                                        key={role.code}
-                                        type="button"
-                                        role="radio"
-                                        aria-checked={isSelected}
-                                        disabled={isSaving}
-                                        onClick={() => setSelectedRoleCode(role.code)}
-                                        className={cn(
-                                            'w-full rounded-2xl px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-                                            // Selected is a ring on a deeper fill, never a hue (§3.5, §5.3).
-                                            isSelected ? 'bg-muted ring-1 ring-border' : 'bg-muted/45 hover:bg-muted'
-                                        )}
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <div className="flex flex-wrap items-center gap-x-2">
-                                                    <span className="text-sm font-semibold">{role.name}</span>
-                                                    {isCurrent && (
-                                                        <span className="text-xs text-muted-foreground">Current</span>
-                                                    )}
-                                                </div>
-                                                <p className="mt-1 text-xs leading-snug text-muted-foreground">
-                                                    {role.description}
-                                                </p>
-                                                <p className="mt-1.5 font-mono text-[0.6875rem] text-muted-foreground">
-                                                    {role.code} · level {role.level}
-                                                </p>
-                                            </div>
-                                            <span
-                                                aria-hidden
-                                                className={cn(
-                                                    'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                                                    isSelected
-                                                        ? 'border-foreground bg-foreground text-background'
-                                                        : 'border-muted-foreground/40'
-                                                )}
-                                            >
-                                                {isSelected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-                                            </span>
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                    </div>
+            <ConfirmDialog
+                open={!!revokeTarget}
+                onOpenChange={(open) => !open && setRevokeTarget(null)}
+                title="Revoke invitation?"
+                description={`The invite to ${revokeTarget?.email ?? 'this address'} stops working. You can send a new one later.`}
+                confirmLabel="Revoke"
+                pendingLabel="Revoking…"
+                destructive
+                pending={!!revokeTarget && inviteActionId === revokeTarget.id}
+                onConfirm={() => void handleRevokeInvite()}
+            />
 
-                    <DialogFooter className="shrink-0 gap-2 px-6 pb-6 pt-4 sm:justify-between">
-                        <Button variant="outline" onClick={() => setIsEditRoleDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={() => void handleSaveRole()}
-                            disabled={
-                                !selectedMemberForRoleEdit ||
-                                !selectedRoleCode ||
-                                selectedRoleCode === selectedMemberForRoleEdit?.role ||
-                                userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`
-                            }
-                        >
-                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save role'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog
-                open={isResetPasswordDialogOpen}
-                onOpenChange={(open) => {
-                    setIsResetPasswordDialogOpen(open)
-                    if (!open) {
-                        setResetPasswordResult(null)
-                    }
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Temporary Password Generated</DialogTitle>
+            {/* Short and two-button: a centred card on phones too (§13.1). */}
+            <Dialog open={!!resetPasswordResult} onOpenChange={(open) => !open && setResetPasswordResult(null)}>
+                <DialogContent className={CENTRED_DIALOG}>
+                    <DialogHeader className="pr-10 text-left">
+                        <DialogTitle>Temporary password generated</DialogTitle>
                         <DialogDescription>
                             Share this with{' '}
                             <span className="font-medium">{resetPasswordResult?.userName || 'the user'}</span>{' '}
@@ -1023,9 +964,7 @@ export default function UsersPage() {
                             <Copy className="mr-2 h-4 w-4" />
                             Copy
                         </Button>
-                        <Button onClick={() => setIsResetPasswordDialogOpen(false)}>
-                            Done
-                        </Button>
+                        <Button onClick={() => setResetPasswordResult(null)}>Done</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -1040,6 +979,7 @@ export default function UsersPage() {
  */
 function UserRowMenu({
     member,
+    href,
     canManage,
     busyActionId,
     onEditRole,
@@ -1048,6 +988,8 @@ function UserRowMenu({
     onDeactivate,
 }: {
     member: any
+    /** The user's page, carrying the list state for the back link (§5.9). */
+    href: string
     canManage: boolean
     busyActionId: string | null
     onEditRole: () => void
@@ -1072,16 +1014,15 @@ function UserRowMenu({
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={stop}>
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuItem asChild>
-                    <Link href={`/manage/users/${id}`}>
+                    <Link href={href}>
                         <Eye className="mr-2 h-4 w-4" />
                         View details
                     </Link>
                 </DropdownMenuItem>
                 {canManage && (
                     <>
-                        <DropdownMenuItem onClick={onEditRole} disabled={busyActionId === `role:${id}`}>
+                        <DropdownMenuItem onClick={onEditRole}>
                             <Edit className="mr-2 h-4 w-4" />
                             Edit role
                         </DropdownMenuItem>
@@ -1094,22 +1035,171 @@ function UserRowMenu({
                         {isInactive ? (
                             <DropdownMenuItem onClick={onActivate} disabled={busyActionId === `activate:${id}`}>
                                 <UserCheck className="mr-2 h-4 w-4" />
-                                {busyActionId === `activate:${id}` ? 'Activating...' : 'Activate'}
+                                {busyActionId === `activate:${id}` ? 'Activating…' : 'Activate'}
                             </DropdownMenuItem>
                         ) : (
-                            <DropdownMenuItem
-                                variant="destructive"
-                                onClick={onDeactivate}
-                                disabled={busyActionId === `deactivate:${id}`}
-                            >
+                            <DropdownMenuItem variant="destructive" onClick={onDeactivate}>
                                 <UserX className="mr-2 h-4 w-4" />
-                                {busyActionId === `deactivate:${id}` ? 'Deactivating...' : 'Deactivate'}
+                                Deactivate
                             </DropdownMenuItem>
                         )}
                     </>
                 )}
             </DropdownMenuContent>
         </DropdownMenu>
+    )
+}
+
+/** One pending invite. A list, not a table: it reads the same at every width. */
+function InviteRow({
+    name,
+    email,
+    role,
+    status,
+    invitedBy,
+    invitedAt,
+    menu,
+}: {
+    name: string
+    email: string
+    role: string
+    status: string
+    invitedBy?: string
+    invitedAt?: string | null
+    menu: React.ReactNode
+}) {
+    return (
+        <div className="flex min-w-0 items-start justify-between gap-3 rounded-2xl bg-muted/45 p-4">
+            <div className="min-w-0">
+                {/* Identity and status lead (§5.3). Status is a word, not a
+                    pill: the row is already tinted (§3.5). */}
+                <div className="flex min-w-0 items-baseline gap-2">
+                    <p className="truncate font-medium">{name}</p>
+                    <span className="shrink-0 text-xs font-medium">{status}</span>
+                </div>
+                <p className="truncate text-sm text-muted-foreground">{email}</p>
+                {/* Phones keep the role; who sent it and when join from `md` (D-27). */}
+                <p className="mt-1 text-xs text-muted-foreground">
+                    {role}
+                    {invitedBy && <span className="max-md:hidden"> · Invited by {invitedBy}</span>}
+                    {invitedAt && (
+                        <span className="max-md:hidden">
+                            {' · '}
+                            <span className="tabular-nums" title={formatTimestamp(invitedAt)}>
+                                {formatDay(invitedAt)}
+                            </span>
+                        </span>
+                    )}
+                </p>
+            </div>
+            <div className="-mr-1 -mt-1 shrink-0">{menu}</div>
+        </div>
+    )
+}
+
+/**
+ * What can be done with an invite depends on its state, so the menu only lists
+ * what works: a pending invite can be copied, resent or revoked; a revoked or
+ * expired one can only be sent again; an accepted one has nothing left to do.
+ */
+function InviteRowMenu({
+    email,
+    status,
+    canManage,
+    disabled,
+    onCopyLink,
+    onResend,
+    onRevoke,
+}: {
+    email: string
+    status: string | null | undefined
+    canManage: boolean
+    /** True while an action on this invite is running. */
+    disabled: boolean
+    onCopyLink: () => void
+    onResend: () => void
+    onRevoke: () => void
+}) {
+    // Every action needs manage rights: an invite link lets anyone join HQ.
+    if (!canManage) return null
+    // Accepted (or created directly): the person is a user now.
+    if (status === 'accepted' || status === 'direct_created') return null
+    const isPending = status === 'pending'
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    aria-label={`Actions for the invite to ${email}`}
+                    className="h-8 w-8 rounded-full p-0"
+                >
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {isPending && (
+                    <DropdownMenuItem disabled={disabled} onClick={onCopyLink}>
+                        <Link2 className="mr-2 h-4 w-4" />
+                        Copy invite link
+                    </DropdownMenuItem>
+                )}
+                <DropdownMenuItem disabled={disabled} onClick={onResend}>
+                    <RotateCw className="mr-2 h-4 w-4" />
+                    {isPending ? 'Resend' : 'Send again'}
+                </DropdownMenuItem>
+                {isPending && (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem variant="destructive" disabled={disabled} onClick={onRevoke}>
+                            <Ban className="mr-2 h-4 w-4" />
+                            Revoke
+                        </DropdownMenuItem>
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+/**
+ * A toolbar search box in its own `<form>`. Browsers autofill one form at a
+ * time, and every input outside a form counts as one shared form, so without
+ * this Chrome wrote a saved email into the search box whenever the invite
+ * wizard's name and email fields were autofilled ("…or email" in the
+ * placeholder makes it look like an email field).
+ */
+function SearchField({
+    name,
+    label,
+    placeholder,
+    value,
+    onChange,
+    className,
+}: {
+    name: string
+    label: string
+    placeholder: string
+    value: string
+    onChange: (value: string) => void
+    className?: string
+}) {
+    return (
+        <form
+            role="search"
+            className={cn('relative min-w-0', className)}
+            onSubmit={(event) => event.preventDefault()}
+        >
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <Input
+                name={name}
+                autoComplete="off"
+                aria-label={label}
+                placeholder={placeholder}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                className="h-9 pl-9 text-[0.8125rem]"
+            />
+        </form>
     )
 }
 

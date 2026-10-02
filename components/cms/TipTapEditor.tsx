@@ -17,6 +17,17 @@ import {
 } from "lucide-react";
 
 import { ImageLibraryDialog } from "./ImageLibraryDialog";
+import { Field } from "./cms-fields";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface TipTapEditorProps {
@@ -59,12 +70,86 @@ function ToolbarButton({
   );
 }
 
+type DialogField = { key: string; label: string; placeholder?: string };
+
+/**
+ * The toolbar's small forms (link URL, image alt text) as a centred dialog
+ * rather than `window.prompt` (UI-DESIGN-SYSTEM §12). Mounted only while open,
+ * so each opening starts from the editor's current values.
+ */
+function ToolbarFieldsDialog({
+  title,
+  description,
+  fields,
+  initial,
+  submitLabel,
+  extraAction,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  fields: DialogField[];
+  initial: Record<string, string>;
+  submitLabel: string;
+  extraAction?: { label: string; onClick: () => void };
+  onSubmit: (values: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  const [values, setValues] = useState(initial);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form
+          className="space-y-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            // React events bubble through the portal; keep this submit out of any outer form.
+            e.stopPropagation();
+            onSubmit(values);
+          }}
+        >
+          <DialogHeader className="pr-10 text-left">
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {fields.map((field, i) => (
+              <Field key={field.key} label={field.label} htmlFor={`tiptap-${field.key}`}>
+                <Input
+                  id={`tiptap-${field.key}`}
+                  value={values[field.key] ?? ""}
+                  onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                  placeholder={field.placeholder}
+                  autoFocus={i === 0}
+                />
+              </Field>
+            ))}
+          </div>
+          <DialogFooter>
+            {extraAction && (
+              <Button type="button" variant="ghost" className="sm:mr-auto" onClick={extraAction.onClick}>
+                {extraAction.label}
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit">{submitLabel}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * Rich-text field for the website editor: a muted rounded field (§4.2) with
  * its toolbar inside. The toolbar is separated by spacing, not a rule (§5.5).
  */
 export default function TipTapEditor({ content, onChange, placeholder }: TipTapEditorProps) {
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [toolbarDialog, setToolbarDialog] = useState<"link" | "image" | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -159,10 +244,7 @@ export default function TipTapEditor({ content, onChange, placeholder }: TipTapE
           label="Link"
           active={active?.link}
           disabled={!editor}
-          onClick={() => {
-            const url = window.prompt("Link URL:");
-            if (url) editor?.chain().focus().setLink({ href: url }).run();
-          }}
+          onClick={() => setToolbarDialog("link")}
         >
           <Link2 className="h-4 w-4" aria-hidden />
         </ToolbarButton>
@@ -173,12 +255,7 @@ export default function TipTapEditor({ content, onChange, placeholder }: TipTapE
           label="Edit image alt text"
           disabled={!active?.image}
           onClick={() => {
-            if (!editor) return;
-            const attrs = editor.getAttributes("image");
-            if (!attrs.src) return;
-            const alt = window.prompt("Image alt text:", attrs.alt || "") ?? attrs.alt;
-            const title = window.prompt("Image title:", attrs.title || "") ?? attrs.title;
-            editor.chain().focus().updateAttributes("image", { alt, title }).run();
+            if (editor?.getAttributes("image").src) setToolbarDialog("image");
           }}
         >
           Alt
@@ -208,6 +285,56 @@ export default function TipTapEditor({ content, onChange, placeholder }: TipTapE
         onOpenChange={setLibraryOpen}
         onSelect={(url) => editor?.chain().focus().setImage({ src: url }).run()}
       />
+
+      {editor && toolbarDialog === "link" && (
+        <ToolbarFieldsDialog
+          title={active?.link ? "Edit link" : "Add link"}
+          description="Links the selected text. Use a path such as /pricing, or a full URL."
+          fields={[{ key: "href", label: "URL", placeholder: "/contact or https://" }]}
+          initial={{ href: (editor.getAttributes("link").href as string | undefined) ?? "" }}
+          submitLabel={active?.link ? "Save link" : "Add link"}
+          extraAction={
+            active?.link
+              ? {
+                  label: "Remove link",
+                  onClick: () => {
+                    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+                    setToolbarDialog(null);
+                  },
+                }
+              : undefined
+          }
+          onSubmit={({ href }) => {
+            const url = href.trim();
+            const chain = editor.chain().focus().extendMarkRange("link");
+            if (url) chain.setLink({ href: url }).run();
+            else chain.unsetLink().run();
+            setToolbarDialog(null);
+          }}
+          onClose={() => setToolbarDialog(null)}
+        />
+      )}
+
+      {editor && toolbarDialog === "image" && (
+        <ToolbarFieldsDialog
+          title="Image details"
+          description="Alt text describes the image for screen readers and search engines."
+          fields={[
+            { key: "alt", label: "Alt text" },
+            { key: "title", label: "Title", placeholder: "Shown on hover" },
+          ]}
+          initial={{
+            alt: (editor.getAttributes("image").alt as string | undefined) ?? "",
+            title: (editor.getAttributes("image").title as string | undefined) ?? "",
+          }}
+          submitLabel="Save"
+          onSubmit={({ alt, title }) => {
+            editor.chain().focus().updateAttributes("image", { alt, title }).run();
+            setToolbarDialog(null);
+          }}
+          onClose={() => setToolbarDialog(null)}
+        />
+      )}
     </div>
   );
 }

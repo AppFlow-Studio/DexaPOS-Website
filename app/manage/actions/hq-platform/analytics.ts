@@ -251,7 +251,14 @@ export interface PlatformAuditLogFilters {
   piiAccessOnly?: boolean
   /** Filter to a specific PII access category (implies piiAccessOnly) */
   piiAccessType?: string
+  /**
+   * Rows a Clerk user did (actor) or that were done to them (target). Targets
+   * are Clerk ids, not UUIDs, so they live in `metadata`, not `resource_id`.
+   */
+  involvesUserId?: string
 }
+
+const CLERK_USER_ID = /^user_[A-Za-z0-9]+$/
 
 export interface PlatformAuditLogRow {
   id: string
@@ -277,6 +284,8 @@ export interface PlatformAuditLogRow {
   changes?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
   pii_access_type?: string | null
+  /** Performed by an HQ admin through View as merchant. */
+  is_impersonation?: boolean
 }
 
 export interface PlatformAuditLogsResult {
@@ -649,6 +658,107 @@ export async function getTopMerchants(limit: number = 5): Promise<PlatformTopMer
     .slice(0, Math.max(1, limit))
 }
 
+/** Columns for a platform audit row — the list, the export and one entry's page read the same shape. */
+const PLATFORM_AUDIT_LOG_SELECT = `
+  id,
+  created_at,
+  actor_user_id,
+  actor_email,
+  actor_name,
+  actor_role,
+  action,
+  action_category,
+  severity,
+  resource_type,
+  resource_id,
+  resource_name,
+  status,
+  error_message,
+  merchant_id,
+  location_id,
+  organization_type,
+  organization_name,
+  changes,
+  metadata,
+  pii_access_type,
+  is_impersonation,
+  merchants(name),
+  location:locations(id, name)
+`
+
+function toPlatformAuditLogRow(row: any): PlatformAuditLogRow {
+  const merchantRaw = row.merchants
+  const locationRaw = row.location
+  const merchant = Array.isArray(merchantRaw) ? merchantRaw[0] : merchantRaw
+  const location = Array.isArray(locationRaw) ? locationRaw[0] : locationRaw
+
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    actor_user_id: row.actor_user_id || undefined,
+    actor_email: row.actor_email || undefined,
+    actor_name: row.actor_name || undefined,
+    actor_role: row.actor_role || undefined,
+    action: row.action || 'unknown_action',
+    action_category: row.action_category || undefined,
+    severity: row.severity || undefined,
+    resource_type: row.resource_type || undefined,
+    resource_id: row.resource_id || undefined,
+    resource_name: row.resource_name || undefined,
+    status: row.status || undefined,
+    error_message: row.error_message || undefined,
+    merchant_id: row.merchant_id || undefined,
+    merchant_name: merchant?.name || undefined,
+    location_id: row.location_id || undefined,
+    location_name: location?.name || undefined,
+    organization_type: row.organization_type || undefined,
+    organization_name: row.organization_name || undefined,
+    changes: row.changes || null,
+    metadata: row.metadata || null,
+    pii_access_type: row.pii_access_type ?? null,
+    is_impersonation: row.is_impersonation === true,
+  }
+}
+
+/** The platform audit log reads with the service role, falling back to the caller's client. */
+function platformAuditLogClient(caller: string) {
+  try {
+    return createServiceRoleClient()
+  } catch {
+    console.warn(`[${caller}] Service-role client unavailable, falling back to user-scoped client.`)
+    return createServerSupabaseClient()
+  }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * One platform audit entry, for its own page under /manage/audit-logs. Not
+ * scoped to a merchant: platform rows include system and HQ events.
+ */
+export async function getPlatformAuditLogById(
+  logId: string
+): Promise<{ data: PlatformAuditLogRow | null; error?: string }> {
+  await assertHQPermission('system.audit.view')
+
+  // `id` is a uuid column; a malformed id would fail the cast rather than miss.
+  if (!UUID_PATTERN.test(logId)) return { data: null }
+
+  const supabase = platformAuditLogClient('getPlatformAuditLogById')
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select(PLATFORM_AUDIT_LOG_SELECT)
+    .eq('id', logId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getPlatformAuditLogById] Error:', error)
+    return { data: null, error: error.message }
+  }
+
+  return { data: data ? toPlatformAuditLogRow(data) : null }
+}
+
 /**
  * Get platform-wide audit logs
  */
@@ -659,40 +769,11 @@ export async function getPlatformAuditLogs(
 ): Promise<PlatformAuditLogsResult> {
   await assertHQPermission('system.audit.view')
 
-  let supabase = createServerSupabaseClient()
-  try {
-    supabase = createServiceRoleClient()
-  } catch (error) {
-    console.warn('[getPlatformAuditLogs] Service-role client unavailable, falling back to user-scoped client.')
-  }
+  const supabase = platformAuditLogClient('getPlatformAuditLogs')
 
   let query = supabase
     .from('audit_logs')
-    .select(`
-      id,
-      created_at,
-      actor_user_id,
-      actor_email,
-      actor_name,
-      actor_role,
-      action,
-      action_category,
-      severity,
-      resource_type,
-      resource_id,
-      resource_name,
-      status,
-      error_message,
-      merchant_id,
-      location_id,
-      organization_type,
-      organization_name,
-      changes,
-      metadata,
-      pii_access_type,
-      merchants(name),
-      location:locations(id, name)
-    `, { count: 'exact' })
+    .select(PLATFORM_AUDIT_LOG_SELECT, { count: 'exact' })
     .order('created_at', { ascending: false })
 
   if (filters?.search) {
@@ -753,6 +834,22 @@ export async function getPlatformAuditLogs(
     query = query.not('pii_access_type', 'is', null)
   }
 
+  if (filters?.involvesUserId !== undefined) {
+    const userId = filters.involvesUserId.trim()
+    // The id is interpolated into a PostgREST `or`, so only a well-formed
+    // Clerk id gets through; anything else matches nothing rather than everything.
+    if (!CLERK_USER_ID.test(userId)) return { data: [], total: 0 }
+    query = query.or(
+      [
+        `actor_user_id.eq.${userId}`,
+        `metadata->>resource_id_raw.eq.${userId}`,
+        `metadata->>target_user_id.eq.${userId}`,
+        `metadata->>target_admin_user_id.eq.${userId}`,
+        `metadata->>user_id.eq.${userId}`,
+      ].join(',')
+    )
+  }
+
   query = query.range(offset, offset + limit - 1)
 
   const { data, error, count } = await query
@@ -762,38 +859,7 @@ export async function getPlatformAuditLogs(
     return { data: [], total: 0 }
   }
 
-  const rows: PlatformAuditLogRow[] = (data || []).map((row: any) => {
-    const merchantRaw = row.merchants
-    const locationRaw = row.location
-    const merchant = Array.isArray(merchantRaw) ? merchantRaw[0] : merchantRaw
-    const location = Array.isArray(locationRaw) ? locationRaw[0] : locationRaw
-
-    return {
-      id: row.id,
-      created_at: row.created_at,
-      actor_user_id: row.actor_user_id || undefined,
-      actor_email: row.actor_email || undefined,
-      actor_name: row.actor_name || undefined,
-      actor_role: row.actor_role || undefined,
-      action: row.action || 'unknown_action',
-      action_category: row.action_category || undefined,
-      severity: row.severity || undefined,
-      resource_type: row.resource_type || undefined,
-      resource_id: row.resource_id || undefined,
-      resource_name: row.resource_name || undefined,
-      status: row.status || undefined,
-      error_message: row.error_message || undefined,
-      merchant_id: row.merchant_id || undefined,
-      merchant_name: merchant?.name || undefined,
-      location_id: row.location_id || undefined,
-      location_name: location?.name || undefined,
-      organization_type: row.organization_type || undefined,
-      organization_name: row.organization_name || undefined,
-      changes: row.changes || null,
-      metadata: row.metadata || null,
-      pii_access_type: row.pii_access_type ?? null,
-    }
-  })
+  const rows: PlatformAuditLogRow[] = (data || []).map(toPlatformAuditLogRow)
 
   return {
     data: rows,

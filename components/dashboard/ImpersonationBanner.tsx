@@ -144,28 +144,23 @@ export function ImpersonationBanner() {
 
   return (
     <>
+      {/* Neutral by design (UI-DESIGN-SYSTEM §3.5): the words "Impersonating …"
+          carry the warning, and a change of surface (opaque `bg-muted`, which the
+          onboarding layout needs because the window scrolls under it) separates
+          it from the page — no coloured border or rule (§5.5). The one colour is
+          the countdown figure in its last five minutes, a real alarm. */}
       <div
         role="status"
         aria-live="polite"
-        className={cn(
-          "sticky top-0 z-50 border-b-2 bg-white shadow-sm transition-colors dark:bg-zinc-900",
-          isUrgent
-            ? "border-red-500 text-red-950 dark:border-red-700 dark:text-red-100"
-            : "border-amber-500 text-amber-950 dark:border-amber-700 dark:text-amber-100",
-        )}
+        className="sticky top-0 z-50 bg-muted text-foreground"
       >
-        <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
+        <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-6">
           {/* Identity cluster */}
           <div className="flex items-start gap-3 md:flex-1 min-w-0">
-            <div
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white shadow-sm",
-                isUrgent ? "bg-red-600" : "bg-amber-600",
-              )}
+            <ShieldAlert
+              className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
               aria-hidden
-            >
-              <ShieldAlert className="h-5 w-5" />
-            </div>
+            />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-sm md:text-base truncate">
@@ -175,13 +170,13 @@ export function ImpersonationBanner() {
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      className="opacity-70 hover:opacity-100 transition-opacity"
+                      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
                       aria-label="What does impersonation mean?"
                     >
                       <Info className="h-3.5 w-3.5" />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 text-xs space-y-2" align="start">
+                  <PopoverContent className="w-80 rounded-2xl text-xs space-y-2" align="start">
                     <p className="font-medium text-sm">About impersonation</p>
                     <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
                       <li>Every action you take is audit-logged under your HQ account.</li>
@@ -192,20 +187,18 @@ export function ImpersonationBanner() {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="text-xs opacity-80 truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 Acting as{" "}
-                <span className="font-medium">{hqUserName}</span>
-                {hqRoleName && (
-                  <span className="opacity-70"> · {hqRoleName}</span>
-                )}
+                <span className="font-medium text-foreground">{hqUserName}</span>
+                {hqRoleName && <span> · {hqRoleName}</span>}
               </div>
             </div>
           </div>
 
-          {/* Session metadata */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-90 md:border-l md:border-current/20 md:pl-4">
+          {/* Session metadata — spacing, not a rule, separates the clusters (§5.5). */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 opacity-70" />
+              <Clock className="h-3.5 w-3.5" aria-hidden />
               <span>
                 Started {formatRelative(merchant.startedAt, now)}
               </span>
@@ -213,8 +206,9 @@ export function ImpersonationBanner() {
             <button
               type="button"
               onClick={handleCopySessionId}
-              className="flex items-center gap-1 font-mono opacity-80 hover:opacity-100 transition-opacity"
+              className="flex items-center gap-1 font-mono transition-colors hover:text-foreground"
               title="Copy full session ID"
+              aria-label={copied ? "Session ID copied" : "Copy session ID"}
             >
               <span>ID: {merchant.sessionId.slice(0, 8)}…</span>
               {copied ? (
@@ -224,37 +218,34 @@ export function ImpersonationBanner() {
               )}
             </button>
             {merchant.reason && (
-              <div className="italic opacity-80 truncate max-w-[28ch]" title={merchant.reason}>
+              <div className="italic truncate max-w-[28ch]" title={merchant.reason}>
                 “{merchant.reason}”
               </div>
             )}
           </div>
 
           {/* Countdown + exit */}
-          <div className="flex items-center gap-3 md:border-l md:border-current/20 md:pl-4">
+          <div className="flex items-center gap-3">
             <div className="text-right leading-tight">
-              <div className="text-[10px] uppercase tracking-wide opacity-70">
+              <div className="text-xs text-muted-foreground">
                 Auto-exits in
               </div>
+              {/* A real alarm (§3.5, use 4): the figure alone turns red in the
+                  last five minutes; the label above says what it means. */}
               <div
                 className={cn(
                   "tabular-nums font-semibold text-lg",
-                  isUrgent && "animate-pulse text-red-700 dark:text-red-300",
+                  isUrgent && "text-red-600 dark:text-red-400",
                 )}
               >
                 {formatRemaining(remainingMs)}
               </div>
             </div>
             <Button
-              size="sm"
+              variant="outline"
               disabled={showOverlay}
               onClick={() => handleExit("user_exit")}
-              className={cn(
-                "shadow-sm",
-                isUrgent
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-amber-600 hover:bg-amber-700 text-white",
-              )}
+              className="h-11 px-4 sm:h-9"
             >
               <X className="h-3.5 w-3.5 mr-1" />
               Exit
@@ -269,8 +260,8 @@ export function ImpersonationBanner() {
           aria-live="polite"
           role="status"
         >
-          <div className="flex flex-col items-center gap-3 rounded-lg border bg-card px-6 py-5 shadow-lg">
-            <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+          <div className="flex flex-col items-center gap-3 rounded-3xl border bg-card px-6 py-5">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             <div className="text-sm font-medium">Returning to admin…</div>
             <div className="text-xs text-muted-foreground">
               Closing impersonation session

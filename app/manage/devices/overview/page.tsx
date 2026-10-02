@@ -23,6 +23,7 @@ import {
 
 import { useAdminDeviceOverview } from '@/app/manage/hooks/useDeviceRegistry'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
+import { OverviewBodySkeleton } from '@/app/manage/devices/components/skeletons'
 import {
   AnalyticsPanel,
   AnalyticsTooltip,
@@ -42,7 +43,6 @@ import {
   isEmptySeries,
 } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useIsMobile } from '@/hooks/use-mobile'
 import {
   formatDeviceCategory,
@@ -109,7 +109,10 @@ export default function DeviceRegistryOverviewPage() {
       />
 
       {overviewQuery.isLoading ? (
-        <OverviewSkeleton />
+        <>
+          <p role="status" className="sr-only">Loading the fleet overview</p>
+          <OverviewBodySkeleton />
+        </>
       ) : overviewQuery.isError || !overview ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-muted/30 px-4 py-20 text-center">
           <p className="text-sm font-medium">We hit a snag loading the fleet overview</p>
@@ -330,28 +333,5 @@ export default function DeviceRegistryOverviewPage() {
         </>
       )}
     </PageShell>
-  )
-}
-
-/** Shaped like the loaded page: a figure panel, then paired chart panels. */
-function OverviewSkeleton() {
-  return (
-    <>
-      <Panel padded>
-        <StatRow columns={3}>
-          {Array.from({ length: 6 }).map((_, index) => (
-            <StatTile key={index} label={<Skeleton className="h-4 w-24" />} value="" isLoading />
-          ))}
-        </StatRow>
-      </Panel>
-      <div className="grid min-w-0 items-start gap-6 md:grid-cols-2">
-        <Skeleton className="h-[400px] w-full rounded-3xl" />
-        <Skeleton className="h-[400px] w-full rounded-3xl" />
-      </div>
-      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <Skeleton className="h-[360px] w-full rounded-3xl" />
-        <Skeleton className="h-[360px] w-full rounded-3xl" />
-      </div>
-    </>
   )
 }

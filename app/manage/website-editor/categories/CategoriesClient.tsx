@@ -6,18 +6,8 @@ import { CornerDownRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Field, MutedSelect } from "@/components/cms/cms-fields";
-import { Panel, PanelSection } from "@/components/dashboard/shell";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog, Panel, PanelSection } from "@/components/dashboard/shell";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +37,8 @@ type Editing = { mode: "create" } | { mode: "edit"; category: Category };
 
 /**
  * Page categories as an indented tree. Create and edit open a centred dialog
- * (UI-DESIGN-SYSTEM §12); delete confirms in a small centred card (§13.1).
+ * (UI-DESIGN-SYSTEM §12); delete confirms in a `ConfirmDialog`, which stays a
+ * small centred card on phones (§13.1).
  */
 export function CategoriesClient({
   categories,
@@ -224,7 +215,7 @@ export function CategoriesClient({
               void save();
             }}
           >
-            <DialogHeader className="text-left">
+            <DialogHeader className="pr-10 text-left">
               <DialogTitle>{editing?.mode === "edit" ? "Edit category" : "New category"}</DialogTitle>
               <DialogDescription>
                 {editing?.mode === "edit"
@@ -290,32 +281,26 @@ export function CategoriesClient({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent className="sm:max-w-[425px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {pendingDelete?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingCount === 0
-                ? "No pages are filed under it."
-                : `${pendingCount} ${pendingCount === 1 ? "page stays" : "pages stay"} on the site and keep${pendingCount === 1 ? "s" : ""} the slug “${pendingDelete?.slug}” until you move ${pendingCount === 1 ? "it" : "them"}.`}
-              {pendingHasChildren && " Its subcategories move to the top level."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={buttonVariants({ variant: "destructive" })}
-              disabled={deleting}
-              onClick={(e) => {
-                e.preventDefault();
-                if (pendingDelete) void remove(pendingDelete);
-              }}
-            >
-              Delete category
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={`Delete ${pendingDelete?.name ?? "this category"}?`}
+        description={
+          <>
+            {pendingCount === 0
+              ? "No pages are filed under it."
+              : `${pendingCount} ${pendingCount === 1 ? "page stays" : "pages stay"} on the site and keep${pendingCount === 1 ? "s" : ""} the slug “${pendingDelete?.slug}” until you move ${pendingCount === 1 ? "it" : "them"}.`}
+            {pendingHasChildren && " Its subcategories move to the top level."}
+          </>
+        }
+        confirmLabel="Delete category"
+        pendingLabel="Deleting…"
+        destructive
+        pending={deleting}
+        onConfirm={() => {
+          if (pendingDelete) void remove(pendingDelete);
+        }}
+      />
     </>
   );
 }

@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
+import { LoadError } from '@/app/manage/transactions/components/ledger-primitives'
 import { platformLabel } from '@/lib/orderout/platform'
 import { registerOrderOutPushMenuWebhook } from '@/app/manage/actions/orderout-webhooks'
 import { StatusItem, StatusWell, formatTimestamp } from './IntegrationPrimitives'
@@ -39,6 +41,7 @@ export function OrderOutPushMenuIntegrationCard({
   canRegister,
 }: Props) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const handleRegister = () => {
     startTransition(async () => {
@@ -65,9 +68,10 @@ export function OrderOutPushMenuIntegrationCard({
       >
         <div className="space-y-5">
           {statusUnavailable && (
-            <p className="text-sm text-muted-foreground">
-              We couldn&apos;t load the registration status. Reload the page to try again.
-            </p>
+            <LoadError
+              title="We couldn't load the registration status"
+              onRetry={() => router.refresh()}
+            />
           )}
 
           <StatusWell className="sm:grid-cols-3">
@@ -132,13 +136,13 @@ export function OrderOutPushMenuIntegrationCard({
                 'Registering needs the hq.merchant.update permission.'
               )}
             </p>
+            {/* 44px on phones (§13.6); busy is said by the label, not a spinner (§4.10). */}
             <Button
               onClick={handleRegister}
               disabled={isPending || !canRegister}
-              className="w-full sm:w-auto"
+              className="h-11 w-full sm:h-9 sm:w-auto"
             >
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {lastRegisteredAt ? 'Re-register' : 'Register with OrderOut'}
+              {isPending ? 'Registering…' : lastRegisteredAt ? 'Re-register' : 'Register with OrderOut'}
             </Button>
           </div>
         </div>

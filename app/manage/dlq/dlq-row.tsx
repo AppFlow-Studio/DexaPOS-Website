@@ -24,16 +24,17 @@ export function dlqRowState(row: Pick<DlqRow, 'status' | 'retry_count' | 'max_re
 /**
  * Retry count. When retries are exhausted on a live entry the figure takes the
  * alarm colour and the word says it too — colour is never the only channel (§3.5).
+ * One line, so a table row stays one line tall (§5.7).
  * Classes are literal in this .tsx on purpose (C7).
  */
 export function RetryFigure({ row }: { row: DlqRow }) {
   const { exhausted } = dlqRowState(row)
   return (
-    <span className="inline-flex flex-col">
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
       <span className={cn('font-mono tabular-nums', exhausted && 'text-red-600 dark:text-red-400')}>
         {row.retry_count ?? 0}/{row.max_retries ?? 0}
       </span>
-      {exhausted && <span className="text-xs text-muted-foreground">Exhausted</span>}
+      {exhausted && <span className="text-xs font-normal text-muted-foreground">Exhausted</span>}
     </span>
   )
 }

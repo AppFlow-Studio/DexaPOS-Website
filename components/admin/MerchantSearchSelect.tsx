@@ -86,38 +86,44 @@ export function MerchantSearchSelect({
     setSearch('')
   }
 
+  const hasSelection = value !== 'all' && !!value
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          disabled={disabled}
-          // A combobox trigger is a field, so it takes the muted, borderless
-          // material (UI-DESIGN-SYSTEM §4.2), not outline-button chrome.
-          className={cn(
-            'h-9 justify-between border-0 bg-muted/60 px-3 text-[0.8125rem] font-normal shadow-none hover:bg-muted dark:bg-muted/60',
-            className
-          )}
-        >
-          <span className={cn('truncate', value === 'all' && 'text-muted-foreground')}>
-            {triggerLabel}
-          </span>
-          <div className="flex items-center gap-1">
-            {value !== 'all' && value && (
-              <X
-                className="h-3.5 w-3.5 opacity-50 hover:opacity-100"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  handleSelect('all')
-                }}
-              />
+      {/* `className` sizes the field. The clear control is a sibling of the
+          trigger, not inside it: a button cannot hold another button, and an
+          icon with onClick is unreachable by keyboard (§13.6). */}
+      <div className={cn('relative', className)}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            disabled={disabled}
+            // A combobox trigger is a field, so it takes the muted, borderless
+            // material (UI-DESIGN-SYSTEM §4.2), not outline-button chrome.
+            className={cn(
+              'h-9 w-full min-w-0 justify-between border-0 bg-muted/60 px-3 text-[0.8125rem] font-normal shadow-none hover:bg-muted dark:bg-muted/60',
+              hasSelection && 'pr-16'
             )}
-            <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-          </div>
-        </Button>
-      </PopoverTrigger>
+          >
+            <span className={cn('truncate', !hasSelection && 'text-muted-foreground')}>
+              {triggerLabel}
+            </span>
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        {hasSelection && (
+          <button
+            type="button"
+            aria-label="Clear merchant"
+            disabled={disabled}
+            onClick={() => handleSelect('all')}
+            className="absolute right-7 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        )}
+      </div>
       {/* `w-[var(--radix-popover-trigger-width)]`: Tailwind v4 reads `w-[--x]` as a literal, not a variable.
           `rounded-2xl` at the call site because popover.tsx has no data-slot for
           the global overlay rule to reach (§4.6). */}

@@ -57,7 +57,7 @@ import {
   RowLink,
 } from "@/app/manage/transactions/components/ledger-primitives";
 import { merchantAuditLogHref } from "../audit/routes";
-import { formatKey } from "../audit/[logId]/audit-detail-parts";
+import { formatKey } from "@/app/manage/components/audit-detail-parts";
 
 // The borderless cell pill (§5.2, §4.6b) for every category and severity: the
 // word carries the meaning; the merchant-detail page raises no alarms (§14.3).

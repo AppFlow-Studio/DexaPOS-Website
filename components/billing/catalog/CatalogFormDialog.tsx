@@ -1,7 +1,5 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -62,7 +60,7 @@ export function CatalogFormDialog({
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent
         className={cn(
-          'flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:rounded-3xl',
+          'flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:rounded-3xl',
           size === 'sm' && 'sm:max-w-md',
           size === 'md' && 'sm:max-w-lg',
           size === 'lg' && 'sm:max-w-2xl'
@@ -84,13 +82,19 @@ export function CatalogFormDialog({
             {children}
           </div>
 
+          {/* 44px targets on phones (§13.6). Busy is a label, never a spinner (§4.10). */}
           <DialogFooter className="shrink-0 px-6 pb-6 pt-2">
-            <Button type="button" variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="max-sm:h-11"
+              disabled={pending}
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={submitDisabled || pending}>
-              {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {submitLabel}
+            <Button type="submit" className="max-sm:h-11" disabled={submitDisabled || pending}>
+              {pending ? 'Saving…' : submitLabel}
             </Button>
           </DialogFooter>
         </form>

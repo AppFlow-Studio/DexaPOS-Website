@@ -1,6 +1,10 @@
 import { Panel, PageShell } from '@/components/dashboard/shell'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import {
+  AccountPanelSkeleton,
+  ProfileIdentitySkeleton,
+} from '@/components/profile/ProfileSkeletons'
 
 export type DataPageSkeletonVariant =
   | 'analytics'
@@ -581,66 +585,19 @@ function ThreadSkeleton() {
 }
 
 /**
- * `/dashboard/profile`: an identity panel (avatar beside name/email) over the
- * account-management panel. The lower block is Clerk's `<UserProfile>`, which
- * renders its own side nav beside a form, so the skeleton splits the same way
- * rather than drawing one undifferentiated slab.
- */
-/**
- * Mirrors `/dashboard/profile`: an identity Panel over Clerk's `<UserProfile>`.
- *
- * Shapes are taken from the rendered widget rather than guessed — its nav is a
- * titled rail with exactly two items (Profile, Security), and the body is a
- * stack of read-only detail ROWS (label / value / action), not a form. An
- * earlier version drew three nav pills over three rounded inputs and a submit
- * button, none of which the page has.
+ * `/dashboard/profile` and `/manage/profile`: an identity Panel over Clerk's
+ * `<UserProfile>`. The blocks come from `components/profile/ProfileSkeletons`,
+ * which the page's own in-panel loading states render too, so this skeleton
+ * and the page cannot drift apart (§4.10).
  */
 function ProfileSkeleton() {
   return (
     <>
-      {/* Identity summary — avatar, name, email, org pill. */}
       <Panel padded>
-        <div className="flex items-center gap-4">
-          {/* The page drops its avatar below `sm` (§13.4), so no slot here either. */}
-          <LoadingBlock className="hidden h-16 w-16 shrink-0 rounded-full sm:block" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <LoadingBlock className="h-5 w-40 max-w-full" />
-            <LoadingBlock className="h-4 w-56 max-w-full rounded-full" />
-            <LoadingBlock className="h-5 w-28 max-w-full rounded-full" />
-          </div>
-        </div>
+        <ProfileIdentitySkeleton />
       </Panel>
-
       <Panel padded>
-        <div className="flex min-w-0 flex-col gap-6 sm:flex-row">
-          {/* Clerk's nav rail: "Account" + subtitle, then Profile / Security. */}
-          <div className="w-full shrink-0 space-y-4 sm:w-56">
-            <div className="space-y-2">
-              <LoadingBlock className="h-6 w-28 max-w-full" />
-              <LoadingBlock className="h-3 w-40 max-w-full rounded-full" />
-            </div>
-            <div className="space-y-1.5">
-              {Array.from({ length: 2 }).map((_, index) => (
-                <LoadingBlock key={index} className="h-8 w-full rounded-full" />
-              ))}
-            </div>
-          </div>
-
-          {/* "Profile details" over its detail rows. */}
-          <div className="min-w-0 flex-1 space-y-5">
-            <LoadingBlock className="h-6 w-36 max-w-full" />
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div
-                key={index}
-                className="flex min-w-0 items-center justify-between gap-4"
-              >
-                <LoadingBlock className="h-4 w-28 shrink-0 rounded-full" />
-                <LoadingBlock className="h-4 min-w-0 flex-1 rounded-full" />
-                <LoadingBlock className="hidden h-4 w-20 shrink-0 rounded-full sm:block" />
-              </div>
-            ))}
-          </div>
-        </div>
+        <AccountPanelSkeleton />
       </Panel>
     </>
   )

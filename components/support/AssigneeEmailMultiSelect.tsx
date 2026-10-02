@@ -21,6 +21,12 @@ type AssigneeEmailMultiSelectProps = {
   value: string[];
   onChange: (emails: string[]) => void;
   disabled?: boolean;
+  /**
+   * Shown in the trigger while `emails` is empty. The caller passes it when the
+   * list is loading or failed to load, so the trigger never says "No support
+   * assignees configured" about a list it hasn't read (§4.9).
+   */
+  unavailableLabel?: string;
 };
 
 export function AssigneeEmailMultiSelect({
@@ -28,6 +34,7 @@ export function AssigneeEmailMultiSelect({
   value,
   onChange,
   disabled,
+  unavailableLabel,
 }: AssigneeEmailMultiSelectProps) {
   const selected = new Set(value.map((email) => email.toLowerCase()));
 
@@ -47,12 +54,14 @@ export function AssigneeEmailMultiSelect({
     <div className="space-y-2">
       <Popover>
         <PopoverTrigger asChild>
+          {/* Combobox trigger on the muted, borderless field material (§4.2),
+              matching the Select triggers beside it — not outline chrome. */}
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             role="combobox"
             aria-label="Select ticket assignees"
-            className="w-full justify-between font-normal"
+            className="h-9 w-full justify-between bg-muted/60 px-4 font-normal shadow-none hover:bg-muted has-[>svg]:px-4 dark:hover:bg-muted"
             disabled={disabled || emails.length === 0}
           >
             <span
@@ -62,7 +71,7 @@ export function AssigneeEmailMultiSelect({
               )}
             >
               {emails.length === 0
-                ? "No support assignees configured"
+                ? (unavailableLabel ?? "No support assignees configured")
                 : value.length === 0
                   ? "Select assignees..."
                   : `${value.length} assignee${value.length === 1 ? "" : "s"} selected`}
@@ -71,7 +80,8 @@ export function AssigneeEmailMultiSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[--radix-popover-trigger-width] p-0"
+          // popover.tsx has no data-slot, so the overlay radius (§4.6) is set here.
+          className="w-[var(--radix-popover-trigger-width)] rounded-2xl p-0"
           align="start"
         >
           <Command>

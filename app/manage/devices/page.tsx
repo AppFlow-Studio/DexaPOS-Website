@@ -1,13 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
-import { ArrowRight, Boxes, HardDrive, Search, ShieldAlert, Truck } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Boxes, HardDrive, Search, ShieldAlert, Truck } from 'lucide-react'
 
 import { useAdminDeviceInventory, useAdminDeviceSummary } from '@/app/manage/hooks/useDeviceRegistry'
 import { useDeviceCatalog } from '@/app/manage/hooks/useDeviceCatalog'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
 import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
+import { InventoryListSkeleton, InventoryPageSkeleton } from '@/app/manage/devices/components/skeletons'
+import { RecordLinkCard, RowLink } from '@/app/manage/transactions/components/ledger-primitives'
 import { PageShell, Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Button } from '@/components/ui/button'
@@ -20,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -31,6 +33,7 @@ import {
 } from '@/components/ui/table'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { useDebounce } from '@/lib/hooks/useDebounce'
+import { cn } from '@/lib/utils'
 import {
   formatDeviceCategory,
   formatDeviceStatus,
@@ -64,6 +67,16 @@ const CATEGORY_OPTIONS: Array<{ value: DeviceCategory | 'all'; label: string }> 
 ]
 
 const PAGE_SIZE = 10
+const INVENTORY_HREF = '/manage/devices'
+
+/*
+ * Column tiers (§5.3, D-26). Device, status and merchant are the essentials and
+ * show from `md`, with the Landi row action; the rest join as the content
+ * column widens. The classes sit on both the head and the cell.
+ */
+const LG_UP = 'hidden lg:table-cell'
+const XL_UP = 'hidden xl:table-cell'
+const XXL_UP = 'hidden 2xl:table-cell'
 
 function formatDate(date: string | null) {
   if (!date) return '—'
@@ -87,30 +100,75 @@ function countStatuses(
     .reduce((total, row) => total + Number(row.device_count), 0)
 }
 
-function linkageLabel(device: AdminDeviceInventoryRow) {
-  if (device.linked_station_id) return 'Linked to station'
-  if (device.linked_payment_terminal_id) return 'Linked to terminal'
-  if (device.linked_printer_id) return 'Linked to printer'
-  return 'Unlinked'
-}
-
 function modelLabel(device: AdminDeviceInventoryRow) {
   return [`${device.manufacturer} ${device.model_name}`, device.model_sku].filter(Boolean).join(' · ')
 }
 
+function parseOption<T extends string>(value: string | null, options: Array<{ value: T }>, fallback: T): T {
+  return options.some((option) => option.value === value) ? (value as T) : fallback
+}
+
 export default function ManageDevicesPage() {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<DeviceLifecycleStatus | 'all'>('all')
-  const [category, setCategory] = useState<DeviceCategory | 'all'>('all')
-  const debouncedSearch = useDebounce(search, 250)
+  // useSearchParams needs a Suspense boundary; the fallback is the route skeleton.
+  return (
+    <Suspense fallback={<InventoryPageSkeleton />}>
+      <ManageDevicesPageInner />
+    </Suspense>
+  )
+}
+
+function ManageDevicesPageInner() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  // Memo on the string: useSearchParams() returns a new object every render.
+  const listQuery = searchParams.toString()
+  const params = useMemo(() => new URLSearchParams(listQuery), [listQuery])
+
+  /*
+   * The list's search, filters and page live in the URL, so Back from a device
+   * returns to the same page of 10 (§5.9). A filter change resets the page.
+   */
+  const updateParams = useCallback(
+    (patch: Record<string, string | null>, { resetPage = true }: { resetPage?: boolean } = {}) => {
+      const next = new URLSearchParams(listQuery)
+      let changed = false
+      for (const [key, value] of Object.entries(patch)) {
+        if (value) {
+          if (next.get(key) !== value) {
+            next.set(key, value)
+            changed = true
+          }
+        } else if (next.has(key)) {
+          next.delete(key)
+          changed = true
+        }
+      }
+      if (!changed) return
+      if (resetPage) next.delete('page')
+      const query = next.toString()
+      router.replace(query ? `?${query}` : INVENTORY_HREF, { scroll: false })
+    },
+    [listQuery, router]
+  )
+
+  const status = parseOption(params.get('status'), STATUS_OPTIONS, 'all')
+  const category = parseOption(params.get('category'), CATEGORY_OPTIONS, 'all')
+  const urlPage = Number(params.get('page')) || 1
+
+  // The search types into local state and reaches the URL once typing settles.
+  const [search, setSearch] = useState(() => params.get('q') ?? '')
+  const debouncedSearch = useDebounce(search.trim(), 250)
+  useEffect(() => {
+    updateParams({ q: debouncedSearch || null })
+  }, [debouncedSearch, updateParams])
 
   const filters = useMemo(
     () => ({
-      search: debouncedSearch || null,
+      search: params.get('q') || null,
       status,
       category,
     }),
-    [category, debouncedSearch, status]
+    [category, params, status]
   )
 
   const inventoryQuery = useAdminDeviceInventory(filters)
@@ -122,7 +180,15 @@ export default function ManageDevicesPage() {
   const catalogCount = catalogQuery.data?.length ?? 0
   const hasActiveFilters = Boolean(search.trim()) || status !== 'all' || category !== 'all'
 
-  const { pageRows, pagination, setPage } = useClientPagination(inventory, PAGE_SIZE)
+  const { pageRows, pagination, setPage } = useClientPagination(inventory, PAGE_SIZE, urlPage)
+  // The URL is the source of truth for the page; the hook clamps it to the rows.
+  useEffect(() => {
+    setPage(urlPage)
+  }, [setPage, urlPage])
+  const goToPage = (page: number) => updateParams({ page: page > 1 ? String(page) : null }, { resetPage: false })
+
+  const deviceHref = (id: string) =>
+    `${INVENTORY_HREF}/${id}${listQuery ? `?back=${encodeURIComponent(listQuery)}` : ''}`
 
   const stats = useMemo(() => {
     const total = summary.reduce((count, row) => count + Number(row.device_count), 0)
@@ -137,9 +203,7 @@ export default function ManageDevicesPage() {
 
   const clearFilters = () => {
     setSearch('')
-    setStatus('all')
-    setCategory('all')
-    setPage(1)
+    updateParams({ q: null, status: null, category: null })
   }
 
   // A summary that failed to load is unknown, not zero (§4.9).
@@ -214,10 +278,7 @@ export default function ManageDevicesPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
               <Input
                 value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value)
-                  setPage(1)
-                }}
+                onChange={(event) => setSearch(event.target.value)}
                 className="h-10 pl-9"
                 placeholder="Search serial, model, merchant, or location"
                 aria-label="Search devices"
@@ -227,10 +288,7 @@ export default function ManageDevicesPage() {
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Select
                 value={status}
-                onValueChange={(value) => {
-                  setStatus(value as DeviceLifecycleStatus | 'all')
-                  setPage(1)
-                }}
+                onValueChange={(value) => updateParams({ status: value === 'all' ? null : value })}
               >
                 <SelectTrigger
                   aria-label="Status"
@@ -249,10 +307,7 @@ export default function ManageDevicesPage() {
 
               <Select
                 value={category}
-                onValueChange={(value) => {
-                  setCategory(value as DeviceCategory | 'all')
-                  setPage(1)
-                }}
+                onValueChange={(value) => updateParams({ category: value === 'all' ? null : value })}
               >
                 <SelectTrigger
                   aria-label="Category"
@@ -289,7 +344,10 @@ export default function ManageDevicesPage() {
                 </Button>
               </div>
             ) : inventoryQuery.isLoading ? (
-              <InventoryLoading />
+              <>
+                <p role="status" className="sr-only">Loading devices</p>
+                <InventoryListSkeleton />
+              </>
             ) : inventory.length === 0 ? (
               <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 py-10 text-center">
                 <p className="text-sm font-medium">
@@ -317,18 +375,21 @@ export default function ManageDevicesPage() {
               </div>
             ) : (
               <>
-                {/* 900px of columns fits the content column from `xl` (§5.3, D-23). */}
-                <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+                {/* The table from `md`, rows one line tall and paged at 10, with
+                    no scroll of its own (§5.3, §5.7). Each row opens the device's
+                    page (§5.9). */}
+                <Table variant="data" bounded={false} containerClassName="hidden md:block">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Device</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Merchant</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Versions</TableHead>
-                      <TableHead className="text-right">Monthly fee</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead className="text-right">
+                      <TableHead className={LG_UP}>Location</TableHead>
+                      <TableHead className={XL_UP}>Updated</TableHead>
+                      <TableHead className={cn(XL_UP, 'text-right')}>Monthly fee</TableHead>
+                      <TableHead className={XXL_UP}>Model</TableHead>
+                      <TableHead className={XXL_UP}>Versions</TableHead>
+                      <TableHead className="w-12">
                         <span className="sr-only">Actions</span>
                       </TableHead>
                     </TableRow>
@@ -336,70 +397,56 @@ export default function ManageDevicesPage() {
                   <TableBody>
                     {pageRows.map((device) => {
                       const CategoryIcon = getDeviceCategoryIcon(device.device_category)
+                      const href = deviceHref(device.id)
+                      const categoryLabel = formatDeviceCategory(device.device_category)
                       return (
-                        <TableRow key={device.id}>
-                          <TableCell className="align-top">
-                            <div className="flex items-start gap-3">
-                              <CategoryIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                              <div className="min-w-0 space-y-1">
-                                <Link
-                                  href={`/manage/devices/${device.id}`}
-                                  className="font-medium text-foreground underline-offset-4 hover:underline"
-                                >
-                                  {device.serial_number}
-                                </Link>
-                                <div className="text-sm text-muted-foreground">{modelLabel(device)}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {formatDeviceCategory(device.device_category)}
-                                  {device.pos_id ? ` · POS ID ${device.pos_id}` : ''}
-                                </div>
-                              </div>
+                        <TableRow key={device.id} className="cursor-pointer" onClick={() => router.push(href)}>
+                          {/* Takes the remaining width and truncates, so rows stay one line. */}
+                          <TableCell className="w-full max-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <CategoryIcon
+                                className="h-4 w-4 shrink-0 text-muted-foreground"
+                                aria-label={categoryLabel}
+                              />
+                              <RowLink
+                                href={href}
+                                title={`${device.serial_number} · ${modelLabel(device)}`}
+                                className="block min-w-0 truncate font-medium"
+                              >
+                                {device.serial_number}
+                              </RowLink>
                             </div>
                           </TableCell>
-                          <TableCell className="align-top">
-                            <Badge variant="outline" className="w-fit px-2.5 text-xs font-medium">
+                          <TableCell>
+                            <Badge variant="outline" className="whitespace-nowrap">
                               {formatDeviceStatus(device.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-sm font-medium">{device.merchant_name ?? 'DEXA HQ'}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {device.merchant_id ? 'Assigned merchant' : 'Warehouse stock'}
-                            </div>
+                          <TableCell className="max-w-36 truncate text-sm">
+                            {device.merchant_name ?? 'DEXA HQ'}
                           </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-sm font-medium">{device.location_name ?? '—'}</div>
-                            <div className="text-xs text-muted-foreground">{linkageLabel(device)}</div>
+                          <TableCell className={cn(LG_UP, 'max-w-36 truncate text-sm text-muted-foreground')}>
+                            {device.location_name ?? '—'}
                           </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-sm tabular-nums">FW {device.firmware_version ?? '—'}</div>
-                            <div className="text-xs tabular-nums text-muted-foreground">
-                              App {device.app_version ?? '—'}
-                            </div>
+                          <TableCell className={cn(XL_UP, 'whitespace-nowrap text-sm tabular-nums text-muted-foreground')}>
+                            {formatDate(device.updated_at)}
                           </TableCell>
-                          <TableCell className="text-right align-top tabular-nums">
+                          <TableCell className={cn(XL_UP, 'whitespace-nowrap text-right tabular-nums')}>
                             {formatMoneyDollars(device.monthly_fee)}
                           </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-sm tabular-nums">{formatDate(device.updated_at)}</div>
-                            <div className="text-xs tabular-nums text-muted-foreground">
-                              Warranty {formatDate(device.warranty_expires_at)}
-                            </div>
+                          <TableCell className={cn(XXL_UP, 'max-w-36 truncate text-sm text-muted-foreground')}>
+                            {modelLabel(device)}
                           </TableCell>
-                          <TableCell className="text-right align-top">
-                            <div className="flex items-center justify-end gap-1">
-                              <ManageInLandiConnectButton
-                                serialNumber={device.serial_number}
-                                variant="ghost"
-                                iconOnly
-                              />
-                              <Button asChild variant="ghost" size="sm">
-                                <Link href={`/manage/devices/${device.id}`}>
-                                  View
-                                  <ArrowRight className="h-4 w-4" />
-                                </Link>
-                              </Button>
-                            </div>
+                          <TableCell className={cn(XXL_UP, 'whitespace-nowrap text-xs tabular-nums text-muted-foreground')}>
+                            FW {device.firmware_version ?? '—'} · App {device.app_version ?? '—'}
+                          </TableCell>
+                          {/* The row opens the device; the Landi action must not. */}
+                          <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                            <ManageInLandiConnectButton
+                              serialNumber={device.serial_number}
+                              variant="ghost"
+                              iconOnly
+                            />
                           </TableCell>
                         </TableRow>
                       )
@@ -407,14 +454,21 @@ export default function ManageDevicesPage() {
                   </TableBody>
                 </Table>
 
-                {/* Below `xl` the records become cards; no sideways scroll (§5.3). */}
-                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                {/* Phones (§5.3): serial and status, then who owns it and where.
+                    The card opens the device's page, where everything else lives. */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                   {pageRows.map((device) => (
-                    <DeviceCard key={device.id} device={device} />
+                    <RecordLinkCard
+                      key={device.id}
+                      href={deviceHref(device.id)}
+                      title={device.serial_number}
+                      figure={formatDeviceStatus(device.status)}
+                      subtitle={[device.merchant_name ?? 'DEXA HQ', device.location_name].filter(Boolean).join(' · ')}
+                    />
                   ))}
                 </div>
 
-                <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="devices" />
+                <PaginationBar pagination={pagination} onPageChange={goToPage} itemLabel="devices" />
                 {pagination.total <= PAGE_SIZE ? (
                   <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
                     {formatCount(pagination.total)} {pagination.total === 1 ? 'device' : 'devices'}
@@ -426,84 +480,5 @@ export default function ManageDevicesPage() {
         </PanelSection>
       </Panel>
     </PageShell>
-  )
-}
-
-function DeviceCard({ device }: { device: AdminDeviceInventoryRow }) {
-  return (
-    <div className="relative min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          {/* Stretched link: the whole card opens the device (§5.3). */}
-          <Link
-            href={`/manage/devices/${device.id}`}
-            className="block truncate font-medium text-foreground after:absolute after:inset-0 after:rounded-2xl after:content-['']"
-          >
-            {device.serial_number}
-          </Link>
-          <p className="truncate text-sm text-muted-foreground">{modelLabel(device)}</p>
-        </div>
-        {/* On a muted card the status is plain text, not a pill (§3.5). */}
-        <span className="shrink-0 text-sm font-medium">{formatDeviceStatus(device.status)}</span>
-      </div>
-
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <CardField label="Category" value={formatDeviceCategory(device.device_category)} />
-        <CardField label="Merchant" value={device.merchant_name ?? 'DEXA HQ'} />
-        <CardField label="Location" value={device.location_name ?? '—'} />
-        <CardField label="Linkage" value={linkageLabel(device)} />
-        <CardField
-          label="Versions"
-          value={`FW ${device.firmware_version ?? '—'} · App ${device.app_version ?? '—'}`}
-        />
-        <CardField label="Monthly fee" value={formatMoneyDollars(device.monthly_fee)} />
-        <CardField label="Updated" value={formatDate(device.updated_at)} />
-        <CardField label="Warranty" value={formatDate(device.warranty_expires_at)} />
-      </dl>
-
-      {/* `relative z-10` lifts the action above the stretched link. */}
-      <div className="relative z-10 mt-3 flex justify-end">
-        <ManageInLandiConnectButton serialNumber={device.serial_number} variant="ghost" />
-      </div>
-    </div>
-  )
-}
-
-function CardField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate font-medium tabular-nums">{value}</dd>
-    </div>
-  )
-}
-
-/** Skeletons in the final shape at each width (§5.4). */
-function InventoryLoading() {
-  return (
-    <>
-      <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
-        <TableBody>
-          <TableRow>
-            <TableCell colSpan={8} className="h-24 text-center text-sm text-muted-foreground">
-              Loading devices…
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="rounded-2xl border-0 bg-muted/45 p-4">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="mt-2 h-4 w-32" />
-            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
-              {Array.from({ length: 6 }).map((__, cell) => (
-                <Skeleton key={cell} className="h-8 w-full" />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
   )
 }

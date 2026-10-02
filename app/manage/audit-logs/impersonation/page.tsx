@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { format, formatDistanceStrict } from "date-fns";
+import { format, formatDistanceStrict, isThisYear } from "date-fns";
 import { PageHeader, PageShell } from "@/components/dashboard/shell";
 import { PaginationBar } from "@/components/dashboard/PaginationBar";
 import { Badge } from "@/components/ui/badge";
@@ -51,8 +51,10 @@ function duration(row: ImpersonationSessionRow): string {
   return formatDistanceStrict(new Date(row.ended_at), new Date(row.started_at));
 }
 
+/** The year only when it isn't this one, so the column fits the tablet table (§5.3). */
 function startedAt(row: ImpersonationSessionRow): string {
-  return format(new Date(row.started_at), "MMM d, yyyy, h:mm a");
+  const d = new Date(row.started_at);
+  return format(d, isThisYear(d) ? "MMM d, h:mm a" : "MMM d, yyyy, h:mm a");
 }
 
 /** Seconds matter for audit evidence; they live in the `title` tooltip. */
@@ -111,17 +113,23 @@ export default function ImpersonationAuditPage() {
 
       {isLoading ? (
         <>
-          <div className="hidden space-y-2 xl:block">
+          <div className="hidden space-y-2 md:block">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-2xl" />
+              <Skeleton key={i} className="h-12 w-full rounded-2xl" />
             ))}
           </div>
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="space-y-3 rounded-2xl bg-muted/45 p-4">
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-3 w-1/3" />
-                <Skeleton className="h-10 w-full" />
+              <div key={i} className="rounded-2xl bg-muted/45 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-5 w-1/2" />
+                  <Skeleton className="h-4 w-14" />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                  {Array.from({ length: 4 }).map((_, j) => (
+                    <Skeleton key={j} className="h-9 w-full" />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -151,42 +159,49 @@ export default function ImpersonationAuditPage() {
         </div>
       ) : (
         <div>
-          {/* §5.3: the table from its fit breakpoint (900px fits `xl`), cards below. */}
-          <Table variant="data" bounded={false} containerClassName="hidden xl:block" className="min-w-[900px]">
+          {/*
+            §5.3 (D-26): the table from `md`, cards below. Columns are tiered so
+            nothing scrolls sideways: the essentials (started, admin, merchant,
+            status) from `md`, actions and duration from `lg`, the reason from
+            `xl`. `table-fixed` lets every cell truncate to one line (§5.7).
+          */}
+          <Table
+            variant="data"
+            bounded={false}
+            containerClassName="hidden md:block"
+            className="table-fixed"
+          >
             <TableHeader>
               <TableRow>
-                <TableHead>Started</TableHead>
+                <TableHead className="w-36 xl:w-48">Started</TableHead>
                 <TableHead>HQ admin</TableHead>
                 <TableHead>Merchant</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="hidden xl:table-cell">Reason</TableHead>
+                <TableHead className="hidden w-24 text-right lg:table-cell">Actions</TableHead>
+                <TableHead className="hidden w-28 lg:table-cell">Duration</TableHead>
+                <TableHead className="w-36">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="text-sm tabular-nums" title={startedAtExact(row)}>
+                  <TableCell className="truncate text-sm tabular-nums" title={startedAtExact(row)}>
                     {startedAt(row)}
                   </TableCell>
-                  <TableCell className="text-sm">
+                  {/* One line per row (§5.7): the email moves into the tooltip. */}
+                  <TableCell
+                    className="truncate text-sm font-medium"
+                    title={row.hq_user_email ?? row.hq_user_id}
+                  >
                     {row.hq_user_name || row.hq_user_email ? (
-                      <div className="flex flex-col">
-                        <span className="font-medium">{adminLabel(row)}</span>
-                        {row.hq_user_name && row.hq_user_email && (
-                          <span className="text-xs text-muted-foreground">
-                            {row.hq_user_email}
-                          </span>
-                        )}
-                      </div>
+                      adminLabel(row)
                     ) : (
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="font-mono text-xs font-normal text-muted-foreground">
                         {row.hq_user_id}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="truncate">
                     <Link
                       href={`/manage/merchants/${row.target_merchant_id}`}
                       className="font-medium hover:underline"
@@ -195,13 +210,17 @@ export default function ImpersonationAuditPage() {
                     </Link>
                   </TableCell>
                   <TableCell
-                    className="max-w-xs truncate text-sm text-muted-foreground"
+                    className="hidden truncate text-sm text-muted-foreground xl:table-cell"
                     title={row.reason ?? undefined}
                   >
                     {row.reason ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{row.action_count}</TableCell>
-                  <TableCell className="text-sm tabular-nums">{duration(row)}</TableCell>
+                  <TableCell className="hidden text-right tabular-nums lg:table-cell">
+                    {row.action_count}
+                  </TableCell>
+                  <TableCell className="hidden truncate text-sm tabular-nums lg:table-cell">
+                    {duration(row)}
+                  </TableCell>
                   <TableCell>
                     <StatusBadge row={row} />
                   </TableCell>
@@ -210,21 +229,21 @@ export default function ImpersonationAuditPage() {
             </TableBody>
           </Table>
 
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+          {/*
+            §5.3 (D-27): identity and status lead, then four pairs. There is no
+            session detail view, so the card keeps its four and the free-text
+            reason stays on the table from `xl`.
+          */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
             {rows.map((row) => (
               <div key={row.id} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/manage/merchants/${row.target_merchant_id}`}
-                      className="block truncate font-semibold hover:underline"
-                    >
-                      {row.target_merchant_name ?? row.target_merchant_id}
-                    </Link>
-                    <p className="truncate text-xs text-muted-foreground tabular-nums">
-                      {startedAt(row)}
-                    </p>
-                  </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <Link
+                    href={`/manage/merchants/${row.target_merchant_id}`}
+                    className="min-w-0 truncate font-semibold hover:underline"
+                  >
+                    {row.target_merchant_name ?? row.target_merchant_id}
+                  </Link>
                   {/* On a muted card the status is plain text, not a pill (§5.3). */}
                   <span
                     className={cn(
@@ -239,23 +258,21 @@ export default function ImpersonationAuditPage() {
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div className="col-span-2 min-w-0">
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">HQ admin</p>
                     <p className="truncate font-medium">{adminLabel(row)}</p>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Actions</p>
-                    <p className="truncate font-medium tabular-nums">{row.action_count}</p>
+                    <p className="text-xs text-muted-foreground">Started</p>
+                    <p className="truncate font-medium tabular-nums">{startedAt(row)}</p>
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Duration</p>
                     <p className="truncate font-medium tabular-nums">{duration(row)}</p>
                   </div>
-                  <div className="col-span-2 min-w-0">
-                    <p className="text-xs text-muted-foreground">Reason</p>
-                    <p className="truncate font-medium" title={row.reason ?? undefined}>
-                      {row.reason ?? "—"}
-                    </p>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Actions</p>
+                    <p className="truncate font-medium tabular-nums">{row.action_count}</p>
                   </div>
                 </div>
               </div>

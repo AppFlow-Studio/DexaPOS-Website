@@ -55,7 +55,7 @@ Reuses `RecordCard`, `CardField(s)`, `LoadError`, `TableEmptyRow`, `CardGridEmpt
 
 ## Found, not changed
 
-- Timeline lanes still reveal 100 more entries on demand rather than capping length on the server (§5.7 asks for a server cap on feeds). Changing the device-truth query is out of scope for a UI pass.
+- Timeline lanes still reveal 100 more entries on demand rather than capping length on the server (§5.7 asks for a server cap on feeds). Changing the device-truth query is out of scope for a UI pass. *Kept on purpose on 2026-09-30 and recorded as exception HQ-5 (§14.3); see "Follow-up 2" below.*
 
 ## Verification
 
@@ -65,3 +65,49 @@ Reuses `RecordCard`, `CardField(s)`, `LoadError`, `TableEmptyRow`, `CardGridEmpt
 - [ ] Browser: light + dark at 1440 / 1024 / 375 — **not run** (the Chrome DevTools MCP failed to connect this session). Worth checking: the board's `lg` switch from one stacked column to tablet columns, the ledger and unsent card grids below `xl`, the divergence cards below `lg`, dark-mode surfaces of the expanded ledger row (`bg-muted/30` cell, `bg-background/70` item rows), and the tab rail centring at 375px.
 
 **Dependency:** the tables import `RecordCard`, `CardField(s)`, `LoadError`, `TableEmptyRow` and `CardGridEmpty` from `app/manage/transactions/components/ledger-primitives.tsx`, which is still uncommitted on this branch; it must ship in the same commit or before.
+
+## Follow-up (2026-09-30)
+
+A re-audit against the 2026-09-30 table rules (D-25–D-28) found two claims above that did not hold. Both are fixed; the
+work is recorded in [`support-conversion-plan.md`](support-conversion-plan.md) (steps 1 and 4).
+
+- **The divergence table didn't fit at `lg`.** `min-w-[720px]` inside a `PanelSection` (48px padding plus the panel
+  border) scrolled sideways from 1024px to about 1074px. It now shows from `md` as a `table-fixed` table with tiered
+  columns, and has no `min-w`.
+- **Error handling was only honest on the ledger and unsent tabs.** The board, the truth window and display health
+  rendered their empty sentence ("No pending tickets", "No truth timeline", "No KDS displays at this location") under or
+  instead of the failure. Scope-picker and merchant-search failures were silent. Each now says what failed and offers
+  Retry.
+- The dependency note is stale: `ledger-primitives.tsx` is tracked (commit `cf641def`).
+
+## Follow-up 2 (2026-09-30): expanded rows, timeline, touch targets
+
+Decisions confirmed with the user after the D-25–D-28 re-audit:
+
+| # | Decision | Rule |
+|---|---|---|
+| 4 | **Ledger and unsent rows keep expanding in place**, capped at 5 items with the full list in a centred dialog. Recorded as exception HQ-4. | §5.9, §14.3 |
+| 5 | **Timeline lanes keep "Show 100 more"** instead of a 50-event cap. Recorded as exception HQ-5. | §5.7, §14.3 |
+
+Sizes behind decision 4, measured read-only on 2026-09-30: items per send median 1, p90 4, p99 8, max 32 (536 sends);
+unsent items per order median 1, p90 2, p99 7, max 25 (3,001 orders, all dates). About 17% of sends and 5% of unsent
+orders hold 4+ items. At ~42px per item row, 32 items expanded was ~1,400px on a laptop.
+
+- [x] `CappedItemList` in `kds-primitives.tsx`: the first `EXPANDED_ITEM_CAP` (5) items in place, then "Show all N items"
+      opening a centred `Dialog` (full screen below `sm`, §13.1; the body scrolls, §12) and "5 of N shown". Item rows take
+      `bg-background/70` in the expanded cell and `bg-muted/45` in the dialog, where the former would vanish
+- [x] Send ledger: preview ranked dropped → no route → routed (§5.7 rank before slice), each item keeping its original
+      number; "problems first" is said only when the ranking moved an item up. The dialog keeps the POS order
+- [x] Unsent items: same cap, list order unchanged (every item on it is unsent)
+- [x] §13.6: the merchant, location, display and time-window pickers and the two filter chips (Anomalies only,
+      Show all items) are `h-11` below `sm`, `h-9` from `sm`. The selects need `data-[size=default]:h-11
+      sm:data-[size=default]:h-9`, because `SelectTrigger`'s own `data-[size=default]:h-9` outranks a plain `h-11`. The
+      skeleton's picker bones match
+- [x] `components/ui/command.tsx`: the `CommandInput` wrapper's `border-b` rule became the §4.2 muted pill (all 16
+      comboboxes, including the merchant picker); recorded in §11
+
+Verification: `tsc --noEmit --incremental false` reports 836 project errors (unchanged), **none** in
+`app/manage/support/kds-mirror/**` or `components/ui/command.tsx`; `eslint` on both is clean. §3.5 grep: the only hues
+are the HQ-2 send-failure glyphs and figures. **Not browser-checked** (chrome-devtools MCP down). Worth checking: a send
+with 6+ items (the "Show all" dialog, full screen at 375px), the combobox search pill in the merchant picker and the
+dashboard search palette, and the 44px pickers at 375px in both themes.

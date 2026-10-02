@@ -7,7 +7,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserProfileFallback } from "@/components/profile/UserProfileFallback";
+import {
+  AccountPanelSkeleton,
+  ProfileIdentitySkeleton,
+} from "@/components/profile/ProfileSkeletons";
 
 /*
  * The two halves of a profile page, shared by `/dashboard/profile` and
@@ -31,6 +34,7 @@ export interface ProfileIdentity {
 export function ProfileIdentityPanel({
   identity,
   labels = [],
+  labelsLoading = false,
   isLoading,
   isError,
   onRetry,
@@ -38,6 +42,12 @@ export function ProfileIdentityPanel({
   identity: ProfileIdentity | null;
   /** Rendered as neutral pills — a label, not a status (§4.6b). */
   labels?: string[];
+  /**
+   * The labels arrive separately from the identity (the HQ role does). Holds
+   * the pill row's place meanwhile, so the panel does not grow under the
+   * reader when they land (§4.10).
+   */
+  labelsLoading?: boolean;
   isLoading: boolean;
   isError: boolean;
   onRetry?: () => void;
@@ -57,58 +67,60 @@ export function ProfileIdentityPanel({
             </p>
           </div>
           {onRetry ? (
-            <Button variant="outline" size="sm" className="h-9 shrink-0 px-4" onClick={onRetry}>
+            // 44px on phones, where it is the panel's primary control (§13.6).
+            <Button variant="outline" size="sm" className="h-11 shrink-0 px-4 sm:h-9" onClick={onRetry}>
               Retry
             </Button>
           ) : null}
         </div>
+      ) : isLoading || !identity ? (
+        // The same blocks as the route's `loading.tsx` (§4.10).
+        <>
+          <p role="status" className="sr-only">
+            Loading your profile details
+          </p>
+          <ProfileIdentitySkeleton />
+        </>
       ) : (
         <div className="flex items-center gap-4">
-          {isLoading || !identity ? (
-            <>
-              {/* No avatar slot on phones: the loaded panel drops it (§5.4, §13.4). */}
-              <Skeleton className="hidden h-16 w-16 shrink-0 rounded-full sm:block" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-5 w-40 max-w-full" />
-                <Skeleton className="h-4 w-56 max-w-full" />
-                <Skeleton className="h-5 w-28 max-w-full rounded-full" />
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Avatars beside a name drop below `sm` (§13.4). */}
-              <Avatar className="hidden h-16 w-16 shrink-0 sm:flex">
-                <AvatarImage
-                  src={identity.avatarUrl ?? undefined}
-                  alt={identity.firstName ?? ""}
+          {/* Avatars beside a name drop below `sm` (§13.4). */}
+          <Avatar className="hidden h-16 w-16 shrink-0 sm:flex">
+            <AvatarImage
+              src={identity.avatarUrl ?? undefined}
+              alt={identity.firstName ?? ""}
+            />
+            <AvatarFallback className="text-lg">
+              {identity.firstName?.charAt(0)}
+              {identity.lastName?.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 space-y-1">
+            <h2 className="truncate text-[1.0625rem] font-semibold">
+              {[identity.firstName, identity.lastName].filter(Boolean).join(" ") || "—"}
+            </h2>
+            <p className="truncate text-sm text-muted-foreground">
+              {identity.email ?? "—"}
+            </p>
+            {labelsLoading ? (
+              <div className="pt-1">
+                <Skeleton
+                  aria-hidden="true"
+                  className="h-5 w-28 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none"
                 />
-                <AvatarFallback className="text-lg">
-                  {identity.firstName?.charAt(0)}
-                  {identity.lastName?.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 space-y-1">
-                <h2 className="truncate text-[1.0625rem] font-semibold">
-                  {[identity.firstName, identity.lastName].filter(Boolean).join(" ") || "—"}
-                </h2>
-                <p className="truncate text-sm text-muted-foreground">
-                  {identity.email ?? "—"}
-                </p>
-                {labels.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {labels.map((label, index) => (
-                      <span
-                        key={`${label}-${index}`}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium"
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
-            </>
-          )}
+            ) : labels.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {labels.map((label, index) => (
+                  <span
+                    key={`${label}-${index}`}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </Panel>
@@ -180,7 +192,15 @@ export function ClerkAccountPanel() {
   return (
     <Panel padded>
       <div className="relative min-w-0">
-        {!isProfilePainted ? <UserProfileFallback /> : null}
+        {!isProfilePainted ? (
+          // The same blocks as the route's `loading.tsx` (§4.10).
+          <div aria-busy="true">
+            <p role="status" className="sr-only">
+              Loading your account details
+            </p>
+            <AccountPanelSkeleton />
+          </div>
+        ) : null}
         <div
           ref={profileWidgetRef}
           aria-hidden={!isProfilePainted}
@@ -216,8 +236,9 @@ export function ClerkAccountPanel() {
                 // DS-CTL-02: muted, borderless, rounded fields.
                 formFieldInput:
                   "!rounded-full !border-0 !bg-muted/60 !shadow-none focus-visible:!bg-background",
+                // A pill like every other button (§4), and like Cancel beside it.
                 formButtonPrimary:
-                  "!bg-foreground hover:!bg-foreground/90 !text-background !border-0 !shadow-none normal-case text-sm font-medium",
+                  "!rounded-full !bg-foreground hover:!bg-foreground/90 !text-background !border-0 !shadow-none normal-case text-sm font-medium",
                 formButtonReset:
                   "!rounded-full !border-0 !bg-muted/60 !text-foreground !shadow-none",
                 profileSectionPrimaryButton: "!rounded-full",
@@ -231,6 +252,11 @@ export function ClerkAccountPanel() {
                 // does not track the theme; use the muted token instead.
                 navbarButton:
                   "!rounded-full !text-muted-foreground hover:!bg-muted/60 hover:!text-foreground",
+                // The DS-CTL-05 active pill (§4.5). Clerk adds this class on
+                // top of `navbarButton`, whose `!` colour would otherwise win:
+                // `[&&]` doubles the selector so these outrank it, hover included.
+                navbarButton__active:
+                  "[&&]:!bg-background [&&]:!text-foreground [&&]:!shadow-sm [&&]:!ring-1 [&&]:!ring-border",
                 footer: "hidden",
               },
             }}

@@ -10,8 +10,18 @@ export function routeToSlug(route: string) {
   return route.replace(/^\/+/, "") || "root";
 }
 
-export function pageEditorHref(route: string) {
-  return `/manage/website-editor/pages/${encodeURIComponent(routeToSlug(route))}`;
+/**
+ * The editor for one page. `back` is the pages list's own query (search,
+ * filters, page), so "Back to Pages" returns to the same page of 10 (§5.9).
+ */
+export function pageEditorHref(route: string, back?: string) {
+  const href = `/manage/website-editor/pages/${encodeURIComponent(routeToSlug(route))}`;
+  return back ? `${href}?back=${encodeURIComponent(back)}` : href;
+}
+
+/** The pages list, restored from the query the editor was opened with. */
+export function pagesListHref(back?: string | null) {
+  return back ? `${WEBSITE_EDITOR_HOME}?${back}` : WEBSITE_EDITOR_HOME;
 }
 
 /** The public page with the CMS preview flag, which also shows drafts. */

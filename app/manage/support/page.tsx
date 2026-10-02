@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import {
   Clock,
   MessageSquare,
@@ -37,7 +37,6 @@ import {
   FilterSelect,
   LoadError,
   RecordCard,
-  RecordCardSkeletons,
   TableEmptyRow,
 } from "@/app/manage/transactions/components/ledger-primitives";
 import {
@@ -47,22 +46,31 @@ import {
 } from "../actions/support";
 import {
   SupportTicket,
+  TicketCategory,
   TicketFilters,
+  TicketPriority,
+  TicketStatus,
   TICKET_CATEGORY_LABELS,
   TICKET_PRIORITY_LABELS,
   getTicketStatusLabel,
 } from "@/types/support-ticket";
 import { useUserInfo } from "../hooks/useUserInfo.";
 import { useAdminPermissions } from "@/lib/hooks/useAdminPermissions";
+import RouteLoading from "./loading";
 
 /*
  * UI-DESIGN-SYSTEM skeleton A (list + filters + table), HQ flavour (§14.1):
  * a KPI panel, then one panel holding the status rail, the toolbar, the
  * table well and its pager (§5.2).
+ *
+ * The list's state — status tab, filters, search and page — lives in the URL
+ * (§5.9, D-28), so Back from a ticket lands on the same page of 10.
  */
 
+const SUPPORT_HREF = "/manage/support";
 const PAGE_SIZE = 10;
-const COLUMN_COUNT = 5;
+const COLUMN_COUNT = 6;
+const SEARCH_DELAY_MS = 300;
 
 const STATUS_TABS = [
   { key: "open", label: "Open" },
@@ -113,12 +121,53 @@ const PRIORITY_OPTIONS = (["urgent", "high", "normal", "low"] as const).map((val
   label: TICKET_PRIORITY_LABELS[value],
 }));
 
+/**
+ * "Assigned to me" is `assignee=me` in the URL, resolved to the viewer's id at
+ * query time, so a shared or bookmarked link never carries someone's user id.
+ */
+const ASSIGNEE_OPTIONS = [
+  { value: "unassigned", label: "Unassigned" },
+  { value: "me", label: "Assigned to me" },
+];
+
+/** The filter URL params, all cleared by "Clear filters". The status tab is not a filter. */
+const FILTER_PARAMS = ["q", "source", "category", "priority", "assignee"] as const;
+
+/**
+ * The list's one-word status, as the tab rail words it: the table and the phone
+ * card have room for "Waiting", not "Waiting on Merchant". The full label rides
+ * in the `title` and on the ticket page.
+ */
+const SHORT_STATUS_LABELS: Record<TicketStatus, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  waiting_on_merchant: "Waiting",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
 type TicketListRow = SupportTicket & {
   merchant?: { name: string } | null;
   location?: { name: string } | null;
 };
 
-/** Merchant · location · category, or the HQ equivalent for developer tickets. */
+/** One of `allowed`, or `null` for a missing or hand-edited param. */
+function pick<T extends string>(raw: string | null, allowed: readonly T[]): T | null {
+  return raw !== null && (allowed as readonly string[]).includes(raw) ? (raw as T) : null;
+}
+
+function positivePage(raw: string | null): number {
+  const page = Number(raw ?? "1");
+  return Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+}
+
+/** Who raised it: the merchant, or DEXA HQ for developer tickets. */
+function ticketSource(ticket: TicketListRow) {
+  if (ticket.ticket_scope === "hq_internal") return "DEXA HQ";
+  return ticket.merchant?.name || "Unknown merchant";
+}
+
+/** Merchant · location · category, for the source cell's tooltip. */
 function ticketContext(ticket: TicketListRow) {
   const category = TICKET_CATEGORY_LABELS[ticket.category];
   if (ticket.ticket_scope === "hq_internal") {
@@ -147,6 +196,11 @@ function needsAttention(ticket: TicketListRow) {
   );
 }
 
+/** "2 hours ago": the strict form drops "about", so the column stays narrow. */
+function lastActivity(ticket: TicketListRow) {
+  return formatDistanceToNowStrict(new Date(ticket.last_message_at), { addSuffix: true });
+}
+
 /** Unknown is not zero (§4.9): a missing average renders "—". */
 function hoursValue(value: unknown) {
   if (value === null || value === undefined) return null;
@@ -167,31 +221,115 @@ function HoursFigure({ value }: { value: string | null }) {
 }
 
 export default function AdminSupportPage() {
+  // useSearchParams needs a Suspense boundary; the fallback is the route skeleton.
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <SupportInbox />
+    </Suspense>
+  );
+}
+
+function SupportInbox() {
   const router = useRouter();
   const { data: userInfo } = useUserInfo();
   const { hasPermission } = useAdminPermissions();
   const canCreateTicket = hasPermission("hq.support.manage");
 
-  const [activeStatus, setActiveStatus] = useState<StatusKey>("open");
-  const [filters, setFilters] = useState<Omit<TicketFilters, "status">>({});
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  // Memo on the string: useSearchParams() returns a new object every render.
+  const listQuery = searchParams.toString();
+  const params = useMemo(() => new URLSearchParams(listQuery), [listQuery]);
 
-  const effectiveFilters: TicketFilters = {
-    ...filters,
-    status: activeStatus,
-    search: search || undefined,
-  };
+  /**
+   * Writes to the URL. Any change but a page turn sends the list back to page
+   * 1. A patch that changes nothing is a no-op, so the settled search never
+   * wipes a restored page.
+   */
+  const updateParams = useCallback(
+    (patch: Record<string, string | null>, { resetPage = true }: { resetPage?: boolean } = {}) => {
+      const next = new URLSearchParams(listQuery);
+      let changed = false;
+      for (const [key, value] of Object.entries(patch)) {
+        if (value) {
+          if (next.get(key) !== value) {
+            next.set(key, value);
+            changed = true;
+          }
+        } else if (next.has(key)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      if (resetPage) next.delete("page");
+      const query = next.toString();
+      router.replace(query ? `?${query}` : SUPPORT_HREF, { scroll: false });
+    },
+    [listQuery, router],
+  );
+
+  const search = params.get("q") ?? "";
+
+  // Search types into local state and reaches the URL once typing settles.
+  const [searchInput, setSearchInput] = useState(search);
+  // The last `q` this page wrote. A different `q` arriving in the URL came
+  // from outside (e.g. the sidebar link back to a bare inbox), so the box
+  // follows it instead of the debounce writing the stale text back.
+  const writtenSearch = useRef(search);
+  useEffect(() => {
+    if (search === writtenSearch.current) return;
+    writtenSearch.current = search;
+    setSearchInput(search);
+  }, [search]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const q = searchInput.trim();
+      writtenSearch.current = q;
+      updateParams({ q: q || null });
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, updateParams]);
+
+  const activeStatus: StatusKey =
+    pick(params.get("status"), STATUS_TABS.map((tab) => tab.key)) ?? "open";
+  const source = pick(params.get("source"), ["merchant", "hq_internal"] as const);
+  const category = pick(
+    params.get("category"),
+    Object.keys(TICKET_CATEGORY_LABELS) as TicketCategory[],
+  );
+  const priority = pick(
+    params.get("priority"),
+    PRIORITY_OPTIONS.map((option) => option.value) as TicketPriority[],
+  );
+  const assignee = pick(params.get("assignee"), ["unassigned", "me"] as const);
+  const page = positivePage(params.get("page"));
+
+  const myId = userInfo?.id;
+  const effectiveFilters = useMemo<TicketFilters>(
+    () => ({
+      status: activeStatus,
+      ticket_scope: source ?? undefined,
+      category: category ?? undefined,
+      priority: priority ?? undefined,
+      assigned_to: assignee === "me" ? myId : (assignee ?? undefined),
+      search: search || undefined,
+    }),
+    [activeStatus, source, category, priority, assignee, myId, search],
+  );
 
   const {
     data: ticketsResult,
-    isLoading: ticketsLoading,
+    isPending: ticketsPending,
     isFetching: ticketsFetching,
+    isPlaceholderData: ticketsPlaceholder,
     isError: ticketsThrew,
+    error: ticketsError,
     refetch: refetchTickets,
   } = useQuery({
     queryKey: ["admin-support-tickets", effectiveFilters, page],
     queryFn: () => GetAllTickets(effectiveFilters, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    // "Assigned to me" waits for the viewer's id rather than listing everyone.
+    enabled: assignee !== "me" || !!myId,
     // Paging and filtering keep the current rows on screen until the next
     // page lands, instead of flashing the skeleton on every click.
     placeholderData: keepPreviousData,
@@ -216,14 +354,26 @@ export default function AdminSupportPage() {
   const stats = statsResult?.data;
   const statsFailed = statsThrew || !!statsResult?.error;
   const tickets = (ticketsResult?.data ?? []) as TicketListRow[];
+  const hasRows = !!ticketsResult?.data;
   const total = ticketsResult?.total ?? 0;
   const ticketsFailed = ticketsThrew || !!ticketsResult?.error;
+  const ticketsErrorDetail =
+    ticketsResult?.error ?? (ticketsError instanceof Error ? ticketsError.message : undefined);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const setPage = useCallback(
+    (next: number) => updateParams({ page: next > 1 ? String(next) : null }, { resetPage: false }),
+    [updateParams],
+  );
+
   // Clamp the page (§5.7) if the list shrinks under the user, e.g. a ticket
-  // resolved elsewhere empties the last page. Adjusted during render rather
-  // than in an effect, so the stranded page never paints.
-  if (!ticketsFetching && page > totalPages) setPage(totalPages);
+  // resolved elsewhere empties the last page, or a restored URL points past
+  // the end. Only against a real result: never a placeholder or a failure,
+  // whose total would read as 0.
+  useEffect(() => {
+    if (!hasRows || ticketsPlaceholder || ticketsFetching || page <= totalPages) return;
+    setPage(totalPages);
+  }, [hasRows, ticketsPlaceholder, ticketsFetching, page, totalPages, setPage]);
 
   const pagination: PaginationMeta = {
     page,
@@ -239,22 +389,15 @@ export default function AdminSupportPage() {
     [unreadCounts],
   );
 
-  const setFilter = <K extends keyof Omit<TicketFilters, "status">>(
-    key: K,
-    value: TicketFilters[K],
-  ) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-  };
+  const setFilter = (key: (typeof FILTER_PARAMS)[number], value: string) =>
+    updateParams({ [key]: value === "all" ? null : value });
 
   const hasActiveFilters =
-    search.trim() !== "" ||
-    Object.values(filters).some((value) => value !== undefined && value !== "all");
+    searchInput.trim() !== "" || FILTER_PARAMS.some((key) => key !== "q" && params.has(key));
 
   const clearFilters = () => {
-    setFilters({});
-    setSearch("");
-    setPage(1);
+    setSearchInput("");
+    updateParams(Object.fromEntries(FILTER_PARAMS.map((key) => [key, null])));
   };
 
   const empty = hasActiveFilters
@@ -287,7 +430,9 @@ export default function AdminSupportPage() {
     return () => observer.disconnect();
   }, [activeStatus]);
 
-  const showSkeleton = ticketsLoading;
+  // `isPending`, not `isLoading`: an "Assigned to me" query waiting on the
+  // viewer's id is pending without fetching, and must not read as empty.
+  const showSkeleton = ticketsPending && !ticketsFailed;
   const ticketHref = (ticket: TicketListRow) => `/manage/support/${ticket.id}`;
 
   return (
@@ -381,10 +526,7 @@ export default function AdminSupportPage() {
                   type="button"
                   data-state={isActive ? "active" : "inactive"}
                   aria-pressed={isActive}
-                  onClick={() => {
-                    setActiveStatus(tab.key);
-                    setPage(1);
-                  }}
+                  onClick={() => updateParams({ status: tab.key === "open" ? null : tab.key })}
                   className={cn(
                     "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
                     isActive
@@ -406,11 +548,8 @@ export default function AdminSupportPage() {
             <Input
               aria-label="Search tickets"
               placeholder="Search subject, submitter or ticket #"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="h-9 pl-9 text-[0.8125rem]"
             />
           </div>
@@ -419,36 +558,33 @@ export default function AdminSupportPage() {
             <FilterSelect
               ariaLabel="Source"
               allLabel="All sources"
-              value={(filters.ticket_scope as string) || "all"}
-              onValueChange={(v) => setFilter("ticket_scope", v as TicketFilters["ticket_scope"])}
+              value={source ?? "all"}
+              onValueChange={(v) => setFilter("source", v)}
               options={SCOPE_OPTIONS}
               className="sm:w-40"
             />
             <FilterSelect
               ariaLabel="Category"
               allLabel="All categories"
-              value={(filters.category as string) || "all"}
-              onValueChange={(v) => setFilter("category", v as TicketFilters["category"])}
+              value={category ?? "all"}
+              onValueChange={(v) => setFilter("category", v)}
               options={CATEGORY_OPTIONS}
               className="sm:w-44"
             />
             <FilterSelect
               ariaLabel="Priority"
               allLabel="All priorities"
-              value={(filters.priority as string) || "all"}
-              onValueChange={(v) => setFilter("priority", v as TicketFilters["priority"])}
+              value={priority ?? "all"}
+              onValueChange={(v) => setFilter("priority", v)}
               options={PRIORITY_OPTIONS}
               className="sm:w-36"
             />
             <FilterSelect
               ariaLabel="Assignee"
               allLabel="Anyone"
-              value={(filters.assigned_to as string) || "all"}
-              onValueChange={(v) => setFilter("assigned_to", v)}
-              options={[
-                { value: "unassigned", label: "Unassigned" },
-                ...(userInfo?.id ? [{ value: userInfo.id, label: "Assigned to me" }] : []),
-              ]}
+              value={assignee ?? "all"}
+              onValueChange={(v) => setFilter("assignee", v)}
+              options={ASSIGNEE_OPTIONS}
               className="sm:w-40"
             />
             {hasActiveFilters && (
@@ -465,37 +601,55 @@ export default function AdminSupportPage() {
         </div>
 
         <div className="mt-5 min-w-0">
-          {ticketsFailed && !ticketsResult?.data ? (
+          {/* §4.9: a failure is always said. With rows from an earlier load
+              still on screen, the sentence sits above them rather than
+              replacing them. */}
+          {ticketsFailed && (
             <LoadError
               title="We hit a snag loading tickets"
-              detail={ticketsResult?.error}
+              detail={ticketsErrorDetail}
               onRetry={() => void refetchTickets()}
+              className={cn(hasRows && "mb-4")}
             />
-          ) : (
+          )}
+          {(!ticketsFailed || hasRows) && (
             <>
-              {/* ≤ 720px wide, so it fits the `lg` content column (§5.3, D-23). */}
-              <Table variant="data" bounded={false} containerClassName="hidden lg:block" className="min-w-[680px]">
+              {/*
+                §5.3 (D-26): the table from `md`, cards below. Inside the padded
+                panel (48px + 2px border) the content column leaves 414px at
+                `md`, 670 at `lg`, 926 at `xl`. Essential columns — ticket,
+                status, last activity — take 128 + 128, leaving the ticket
+                ~158px at `md`, so its number and unread count join at `xl`.
+                Priority (96) and assignee (128) join at `lg` (ticket ~190);
+                the source merchant (176) at `xl` (ticket ~222 with the
+                assignee at 160). Location and category live on the ticket
+                page. `table-fixed` truncates every cell to one line (§5.7).
+              */}
+              <Table
+                variant="data"
+                bounded={false}
+                containerClassName="hidden md:block"
+                className="table-fixed"
+              >
                 <TableHeader>
                   <TableRow>
                     <TableHead>Ticket</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Assignee</TableHead>
-                    <TableHead className="text-right">Last activity</TableHead>
+                    <TableHead className="hidden w-44 xl:table-cell">Merchant</TableHead>
+                    <TableHead className="w-32">Status</TableHead>
+                    <TableHead className="hidden w-24 lg:table-cell">Priority</TableHead>
+                    <TableHead className="hidden w-32 lg:table-cell xl:w-40">Assignee</TableHead>
+                    <TableHead className="w-32 text-right">Last activity</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {showSkeleton ? (
                     Array.from({ length: 6 }).map((_, i) => (
                       <TableRow key={i}>
-                        <TableCell>
-                          <Skeleton className="h-3 w-20" />
-                          <Skeleton className="mt-2 h-4 w-64 max-w-full" />
-                          <Skeleton className="mt-2 h-3 w-48 max-w-full" />
-                        </TableCell>
-                        <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
-                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
+                        <TableCell className="hidden xl:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                        <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
+                        <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-20" /></TableCell>
                         <TableCell><Skeleton className="ml-auto h-4 w-20" /></TableCell>
                       </TableRow>
                     ))
@@ -505,46 +659,52 @@ export default function AdminSupportPage() {
                     tickets.map((ticket) => {
                       const unread = unreadByTicket.get(ticket.id) ?? 0;
                       const assignee = assigneeLabel(ticket);
-                      const lastActivity = new Date(ticket.last_message_at);
+                      const statusLabel = getTicketStatusLabel(ticket.status, ticket.ticket_scope);
                       return (
                         <TableRow
                           key={ticket.id}
                           className="cursor-pointer"
                           onClick={() => router.push(ticketHref(ticket))}
                         >
-                          {/* `w-full max-w-0` lets the subject take the spare
-                              width and truncate instead of widening the table. */}
-                          <TableCell className="w-full max-w-0">
+                          {/* One line (§5.7): number, unread count, subject. */}
+                          <TableCell>
                             <div className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                              <span className="hidden shrink-0 font-mono text-xs text-muted-foreground xl:inline">
                                 {ticket.ticket_number}
                               </span>
                               {unread > 0 && (
-                                <Badge variant="outline" className="text-foreground tabular-nums">
-                                  {unread} unread
-                                </Badge>
+                                <span className="hidden shrink-0 xl:inline-flex">
+                                  <Badge variant="outline" className="text-foreground tabular-nums">
+                                    {unread} unread
+                                  </Badge>
+                                </span>
+                              )}
+                              <Link
+                                href={ticketHref(ticket)}
+                                onClick={(e) => e.stopPropagation()}
+                                title={`${ticket.ticket_number} · ${ticket.subject}`}
+                                className={cn(
+                                  "min-w-0 truncate text-sm hover:underline",
+                                  unread > 0 ? "font-semibold" : "font-medium",
+                                )}
+                              >
+                                {ticket.subject}
+                              </Link>
+                              {unread > 0 && (
+                                <span className="sr-only xl:hidden">, {unread} unread</span>
                               )}
                             </div>
-                            <Link
-                              href={ticketHref(ticket)}
-                              onClick={(e) => e.stopPropagation()}
-                              className={cn(
-                                "mt-1 block truncate text-sm hover:underline",
-                                unread > 0 ? "font-semibold" : "font-medium",
-                              )}
-                            >
-                              {ticket.subject}
-                            </Link>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                              {ticketContext(ticket)}
-                            </p>
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {getTicketStatusLabel(ticket.status, ticket.ticket_scope)}
-                            </Badge>
+                          <TableCell
+                            className="hidden truncate text-sm text-muted-foreground xl:table-cell"
+                            title={ticketContext(ticket)}
+                          >
+                            {ticketSource(ticket)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell title={statusLabel}>
+                            <Badge variant="outline">{SHORT_STATUS_LABELS[ticket.status]}</Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
                             <Badge
                               variant="outline"
                               className={cn(needsAttention(ticket) && "font-semibold text-foreground")}
@@ -554,17 +714,18 @@ export default function AdminSupportPage() {
                           </TableCell>
                           <TableCell
                             className={cn(
-                              "max-w-48 truncate text-sm",
+                              "hidden truncate text-sm lg:table-cell",
                               assignee ? "text-muted-foreground" : "font-medium text-foreground",
                             )}
+                            title={assignee ?? undefined}
                           >
                             {assignee ?? "Unassigned"}
                           </TableCell>
                           <TableCell
-                            className="whitespace-nowrap text-right text-sm text-muted-foreground tabular-nums"
-                            title={format(lastActivity, "PPpp")}
+                            className="truncate text-right text-sm text-muted-foreground tabular-nums"
+                            title={format(new Date(ticket.last_message_at), "PPpp")}
                           >
-                            {formatDistanceToNow(lastActivity, { addSuffix: true })}
+                            {lastActivity(ticket)}
                           </TableCell>
                         </TableRow>
                       );
@@ -573,11 +734,29 @@ export default function AdminSupportPage() {
                 </TableBody>
               </Table>
 
-              {/* §5.3: a card grid below the table's fit breakpoint, never a
-                  sideways-scrolling table. */}
-              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+              {/*
+                §5.3 (D-27): subject and status lead, then four pairs. The
+                ticket number, location and category are one tap away on the
+                ticket page.
+              */}
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                 {showSkeleton ? (
-                  <RecordCardSkeletons count={4} />
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="min-w-0 rounded-2xl bg-muted/45 p-4">
+                      <div className="flex h-6 items-center justify-between gap-3">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-3 w-14" />
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                        {Array.from({ length: 4 }).map((_, j) => (
+                          <div key={j} className="min-w-0">
+                            <Skeleton className="my-0.5 h-3 w-14" />
+                            <Skeleton className="my-0.5 h-4 w-20 max-w-full" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
                 ) : tickets.length === 0 ? (
                   <CardGridEmpty title={empty.title} hint={empty.hint} />
                 ) : (
@@ -588,46 +767,45 @@ export default function AdminSupportPage() {
                       <Link
                         key={ticket.id}
                         href={ticketHref(ticket)}
+                        title={`${ticket.ticket_number} · ${ticket.subject}`}
                         className="block min-w-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <RecordCard className="h-full transition-colors hover:bg-muted">
                           <div className="flex min-w-0 items-baseline justify-between gap-3">
-                            <span className="truncate font-mono text-xs text-muted-foreground">
-                              {ticket.ticket_number}
+                            <p
+                              className={cn(
+                                "min-w-0 truncate",
+                                unread > 0 ? "font-semibold" : "font-medium",
+                              )}
+                            >
+                              {ticket.subject}
+                            </p>
+                            {/* On a muted card the status is plain text, not a pill (§5.3). */}
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {unread > 0 && (
+                                <span className="font-medium text-foreground tabular-nums">
+                                  {unread} unread ·{" "}
+                                </span>
+                              )}
+                              {SHORT_STATUS_LABELS[ticket.status]}
                             </span>
-                            {unread > 0 && (
-                              <span className="shrink-0 text-xs font-medium tabular-nums">
-                                {unread} unread
-                              </span>
-                            )}
                           </div>
-                          <p
-                            className={cn(
-                              "mt-1 truncate",
-                              unread > 0 ? "font-semibold" : "font-medium",
-                            )}
-                          >
-                            {ticket.subject}
-                          </p>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {ticketContext(ticket)}
-                          </p>
                           <CardFields>
                             <CardField
-                              label="Status"
-                              value={getTicketStatusLabel(ticket.status, ticket.ticket_scope)}
-                            />
-                            <CardField
                               label="Priority"
-                              value={TICKET_PRIORITY_LABELS[ticket.priority]}
+                              value={
+                                <span
+                                  className={cn(
+                                    needsAttention(ticket) && "font-semibold text-foreground",
+                                  )}
+                                >
+                                  {TICKET_PRIORITY_LABELS[ticket.priority]}
+                                </span>
+                              }
                             />
                             <CardField label="Assignee" value={assignee ?? "Unassigned"} />
-                            <CardField
-                              label="Last activity"
-                              value={formatDistanceToNow(new Date(ticket.last_message_at), {
-                                addSuffix: true,
-                              })}
-                            />
+                            <CardField label="Last activity" value={lastActivity(ticket)} />
+                            <CardField label="Merchant" value={ticketSource(ticket)} />
                           </CardFields>
                         </RecordCard>
                       </Link>

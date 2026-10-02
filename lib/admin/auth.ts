@@ -134,6 +134,18 @@ export async function assertHQPermission(
 }
 
 /**
+ * For invitation server actions — HQ team invites need `hq.team.manage`, and
+ * invites to any other organization (carriers, merchants) need `hq.org.manage`.
+ */
+export async function assertCanManageOrgInvites(
+  organizationId: string
+): Promise<ServerAdminAuth> {
+  return assertHQPermission(
+    organizationId === DEXA_HQ_ORG_ID ? 'hq.team.manage' : 'hq.org.manage'
+  )
+}
+
+/**
  * For server actions — asserts the caller is an HQ super admin (`hq.super_admin`).
  * Throws if not.
  */

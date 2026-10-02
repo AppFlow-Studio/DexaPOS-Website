@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
@@ -162,8 +161,12 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
           {/* Centred on a phone, right-aligned from `sm` up — the same footer as
               create-organization. */}
           <div className="flex items-center justify-center sm:justify-end md:col-span-2">
-            <Button type="submit" disabled={isPending || !canEdit} className="w-full sm:w-auto">
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {/* 44px on phones (§13.6); busy is said by the label, not a spinner (§4.10). */}
+            <Button
+              type="submit"
+              disabled={isPending || !canEdit}
+              className="h-11 w-full sm:h-9 sm:w-auto"
+            >
               {isPending ? 'Saving…' : 'Save billing account'}
             </Button>
           </div>

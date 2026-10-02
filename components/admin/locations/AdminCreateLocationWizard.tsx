@@ -96,6 +96,13 @@ const initialFormData: LocationFormData = {
     uses_global_menu: true,
 }
 
+/** A thrown value as a sentence for a toast. */
+function errorMessage(error: unknown): string {
+    const message = error instanceof Error ? error.message.trim() : ''
+    if (!message) return 'The request did not complete.'
+    return /[.!?]$/.test(message) ? message : `${message}.`
+}
+
 function buildOnlineStoreLocationMetadata(data: LocationFormData) {
     return {
         online_store_bank_name: data.bank_name || null,
@@ -343,6 +350,7 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
         }
 
         setIsSubmitting(true)
+        let created = false
 
         try {
             const normalizedTaxRate = Number(formData.sales_tax_rate)
@@ -385,19 +393,30 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 return
             }
 
+            // From here the location exists. A failure below must not read as
+            // "Creation Failed", or the admin retries and creates a duplicate.
+            created = true
+
             // Manager assignment (needs clerkOrgId)
             if (result.data && clerkOrgId && formData.manager_assignment_type !== 'skip') {
-                const managerAssignmentResult = await ApplyLocationManagerAssignment({
-                    clerkOrgId,
-                    locationId: result.data.id,
-                    assignmentType: formData.manager_assignment_type,
-                    managerInviteEmail: formData.manager_invite_email,
-                    existingManagerIdentifier: formData.existing_manager_identifier,
-                })
+                try {
+                    const managerAssignmentResult = await ApplyLocationManagerAssignment({
+                        clerkOrgId,
+                        locationId: result.data.id,
+                        assignmentType: formData.manager_assignment_type,
+                        managerInviteEmail: formData.manager_invite_email,
+                        existingManagerIdentifier: formData.existing_manager_identifier,
+                    })
 
-                if ('error' in managerAssignmentResult) {
+                    if ('error' in managerAssignmentResult) {
+                        toast.warning('Location created, manager assignment not completed', {
+                            description: managerAssignmentResult.error,
+                        })
+                    }
+                } catch (assignmentError) {
+                    console.error('[AdminCreateLocationWizard] Manager assignment failed:', assignmentError)
                     toast.warning('Location created, manager assignment not completed', {
-                        description: managerAssignmentResult.error,
+                        description: errorMessage(assignmentError),
                     })
                 }
             }
@@ -425,9 +444,20 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
             setHasUnsavedChanges(false)
             router.push(`${backUrl}?tab=business-info`)
         } catch (error) {
-            toast.error('Creation Failed', {
-                description: 'An unexpected error occurred. Please try again.'
-            })
+            // Log and show the real reason instead of swallowing it.
+            console.error('[AdminCreateLocationWizard] Submit failed:', error)
+            if (created) {
+                // Saved, but refreshing or redirecting afterwards failed.
+                toast.warning('Location created', {
+                    description: `${errorMessage(error)} Go back to the merchant to see it; do not create it again.`,
+                })
+            } else {
+                // The create request never returned: usually a network failure,
+                // or the dev server recompiling mid-request.
+                toast.error('Creation Failed', {
+                    description: `${errorMessage(error)} Nothing was saved, so it is safe to try again.`,
+                })
+            }
         } finally {
             setIsSubmitting(false)
         }

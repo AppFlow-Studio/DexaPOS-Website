@@ -61,11 +61,16 @@ export function MerchantPicker({
   const label = selected.data
     ? (selected.data.dba_name ?? selected.data.name)
     : merchantId
-      ? "Loading merchant..."
+      ? selected.isError
+        ? "Couldn't load this merchant"
+        : "Loading merchant..."
       : null;
 
   const merchants = results.data ?? [];
-  const isSearching = results.isFetching && debounced !== "";
+  // Loading is not empty (§4.9): any fetch with nothing on screen yet shows
+  // the spinner, including the first load and a Retry.
+  const isSearching =
+    results.isFetching && (debounced !== "" || merchants.length === 0);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -78,7 +83,7 @@ export function MerchantPicker({
           aria-expanded={open}
           aria-label="Merchant"
           className={cn(
-            "h-9 w-full min-w-0 justify-between border-0 bg-muted/60 px-3 text-[0.8125rem] font-normal shadow-none hover:bg-muted sm:w-60",
+            "h-11 w-full min-w-0 justify-between border-0 bg-muted/60 px-3 text-[0.8125rem] font-normal shadow-none hover:bg-muted sm:h-9 sm:w-60",
             className
           )}
         >
@@ -104,7 +109,22 @@ export function MerchantPicker({
             onValueChange={setInput}
           />
           <CommandList>
-            {isSearching && merchants.length === 0 ? (
+            {/* A failed search is not "no match" (§4.9). */}
+            {results.isError && !results.isFetching ? (
+              <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
+                <p className="text-sm font-medium">
+                  We couldn&rsquo;t search merchants
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-4"
+                  onClick={() => void results.refetch()}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : isSearching && merchants.length === 0 ? (
               <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Searching

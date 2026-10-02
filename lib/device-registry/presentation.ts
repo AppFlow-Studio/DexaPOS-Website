@@ -45,7 +45,7 @@ export function getDeviceCategoryIcon(category: DeviceCategory) {
 }
 
 export function formatMoneyCents(amount: number | null | undefined) {
-  if (amount === null || amount === undefined) return 'N/A'
+  if (amount === null || amount === undefined) return '—'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -53,7 +53,7 @@ export function formatMoneyCents(amount: number | null | undefined) {
 }
 
 export function formatMoneyDollars(amount: number | null | undefined) {
-  if (amount === null || amount === undefined) return 'N/A'
+  if (amount === null || amount === undefined) return '—'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

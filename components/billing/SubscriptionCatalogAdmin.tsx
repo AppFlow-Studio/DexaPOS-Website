@@ -9,13 +9,12 @@ import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableRow } from '@/components/ui/table'
 import {
   CardField,
   CardFields,
   CardGridEmpty,
   LoadError,
-  RecordCardSkeletons,
   TableEmptyRow,
 } from '@/app/manage/transactions/components/ledger-primitives'
 import {
@@ -27,9 +26,17 @@ import {
   type SubscriptionPlanRecord,
 } from '@/app/manage/actions/subscription-billing'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { BillableServiceDialog } from './catalog/BillableServiceDialog'
 import { MutedSelectTrigger } from './catalog/CatalogFormDialog'
+import {
+  CatalogPanelsSkeleton,
+  CatalogTable,
+  DEVICES_CAPTION,
+  DEVICE_COLUMNS,
+  SERVICES_CAPTION,
+  SERVICE_COLUMNS,
+} from './catalog/CatalogTable'
 import { DeviceMappingDialog } from './catalog/DeviceMappingDialog'
 import { PlanPricingDialog } from './catalog/PlanPricingDialog'
 import {
@@ -52,9 +59,6 @@ type DeviceRow = {
   /** The service the mapping bills as; `null` when unmapped or the code is not in the catalog. */
   service: BillableServiceRecord | null
 }
-
-const SERVICE_COLUMNS = 9
-const DEVICE_COLUMNS = 4
 
 // Stable empties, so memos keyed on them do not recompute every render while loading.
 const NO_PLANS: SubscriptionPlanRecord[] = []
@@ -127,9 +131,12 @@ export function SubscriptionCatalogAdmin() {
   const servicePage = useClientPagination(services, 10)
   const devicePage = useClientPagination(deviceRows, 10)
 
+  // §4.10: the catalog's own skeleton, the same one the route's loading.tsx shows.
+  if (isLoading) return <CatalogPanelsSkeleton />
+
   // The first load failed (§4.9: a worded error with Retry, never red text).
   // A failed refetch after a save keeps the last good catalog on screen.
-  if (!catalog && !isLoading) {
+  if (!catalog) {
     return (
       <Panel padded>
         <LoadError
@@ -178,7 +185,8 @@ export function SubscriptionCatalogAdmin() {
               <div className="flex flex-wrap items-center gap-2">
                 {plans.length > 1 && (
                   <Select value={plan.id} onValueChange={setSelectedPlanId}>
-                    <MutedSelectTrigger aria-label="Plan" className="h-9 text-[0.8125rem] sm:w-56">
+                    {/* Height comes from the trigger's own `data-[size]` rule; phones get a 44px target (§13.6). */}
+                    <MutedSelectTrigger aria-label="Plan" className="text-[0.8125rem] max-sm:min-h-11 sm:w-56">
                       <SelectValue />
                     </MutedSelectTrigger>
                     <SelectContent>
@@ -194,7 +202,7 @@ export function SubscriptionCatalogAdmin() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
+                  className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm max-sm:h-11"
                   onClick={openPlan}
                 >
                   <Pencil className="mr-2 h-3.5 w-3.5" />
@@ -204,24 +212,21 @@ export function SubscriptionCatalogAdmin() {
             )
           }
         >
-          {isLoading ? (
-            <StatRow columns={4}>
-              {['Base price', 'Included stations', 'Each extra station', 'Card surcharge'].map((label) => (
-                <StatTile key={label} label={label} value="—" isLoading />
-              ))}
-            </StatRow>
-          ) : plan ? (
+          {plan ? (
+            // "Per month" is the figure's unit, so it stays on phones (§13.4).
             <StatRow columns={4}>
               <StatTile
                 label="Base price"
                 value={formatCurrency(Number(plan.base_price_monthly))}
-                meta={`Per month · covers ${plan.included_stations} ${Number(plan.included_stations) === 1 ? 'station' : 'stations'}`}
+                meta="Per month"
+                showMetaOnMobile
               />
               <StatTile label="Included stations" value={Number(plan.included_stations)} meta="In the base price" />
               <StatTile
                 label="Each extra station"
                 value={formatCurrency(Number(plan.per_extra_station_price))}
                 meta="Per month"
+                showMetaOnMobile
               />
               <StatTile
                 label="Card surcharge"
@@ -235,7 +240,7 @@ export function SubscriptionCatalogAdmin() {
               <p className="text-xs text-muted-foreground">
                 Create one to set the base price, included stations, extra-station price and card surcharge.
               </p>
-              <Button size="sm" className="mt-3 h-9 px-4" onClick={openPlan}>
+              <Button size="sm" className="mt-3 h-9 px-4 max-sm:h-11" onClick={openPlan}>
                 Create plan
               </Button>
             </div>
@@ -247,12 +252,11 @@ export function SubscriptionCatalogAdmin() {
       <Panel>
         <PanelSection
           label="Services & add-ons"
-          caption="Hardware, software and services billed on each location's subscription. Inactive services stay listed so they can be switched back on."
+          caption={SERVICES_CAPTION}
           action={
             <Button
               size="sm"
-              className="h-9 px-4 text-[0.8125rem] font-medium"
-              disabled={isLoading}
+              className="h-9 px-4 text-[0.8125rem] font-medium max-sm:h-11"
               onClick={() => openService(null)}
             >
               <Plus className="mr-1.5 h-4 w-4" />
@@ -260,49 +264,47 @@ export function SubscriptionCatalogAdmin() {
             </Button>
           }
         >
-          {/* §5.3: nine columns need ~900px, which fits the content column from `xl`; cards below that. */}
-          <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Service</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Pricing</TableHead>
-                <TableHead className="text-right">Monthly</TableHead>
-                <TableHead className="text-right">Included</TableHead>
-                <TableHead className="text-right">Extra unit</TableHead>
-                <TableHead className="text-right">Card surcharge</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={SERVICE_COLUMNS} className="h-24 text-center text-sm text-muted-foreground">
-                    Loading services…
-                  </TableCell>
-                </TableRow>
-              ) : services.length === 0 ? (
-                <TableEmptyRow
-                  colSpan={SERVICE_COLUMNS}
-                  title="No billable services yet"
-                  hint="Add POS tablets, KDS, online ordering and other add-ons with New service."
-                />
-              ) : (
-                servicePage.pageRows.map((service) => (
+          {/* §5.3: the table from `md`, its columns joining by tier (SERVICE_COLUMNS); one line per row (§5.7). */}
+          <CatalogTable columns={SERVICE_COLUMNS}>
+            {services.length === 0 ? (
+              <TableEmptyRow
+                colSpan={Object.keys(SERVICE_COLUMNS).length}
+                title="No billable services yet"
+                hint="Add POS tablets, KDS, online ordering and other add-ons with New service."
+              />
+            ) : (
+              servicePage.pageRows.map((service) => {
+                const category = SERVICE_CATEGORY_LABELS[service.service_category] ?? service.service_category
+                const pricing = PRICING_MODEL_LABELS[service.pricing_model] ?? service.pricing_model
+                return (
                   <TableRow key={service.id} className="cursor-pointer" onClick={() => openService(service)}>
-                    <TableCell className="max-w-[260px]">
-                      <p className="truncate font-medium">{service.display_name}</p>
-                      <p className="truncate font-mono text-xs text-muted-foreground">{service.service_code}</p>
+                    {/* The code has its own column from `2xl`; below that it is in the tooltip. */}
+                    <TableCell className="truncate font-medium" title={`${service.display_name} · ${service.service_code}`}>
+                      {service.display_name}
                     </TableCell>
-                    <TableCell>{SERVICE_CATEGORY_LABELS[service.service_category] ?? service.service_category}</TableCell>
-                    <TableCell>{PRICING_MODEL_LABELS[service.pricing_model] ?? service.pricing_model}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(service.base_price_monthly)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{service.included_quantity}</TableCell>
-                    <TableCell className="text-right tabular-nums">{extraUnitPrice(service)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatPercent(service.card_surcharge_pct)}</TableCell>
+                    <TableCell className={cn(SERVICE_COLUMNS.category.className, 'truncate')}>{category}</TableCell>
+                    <TableCell
+                      className={cn(SERVICE_COLUMNS.code.className, 'truncate font-mono text-xs text-muted-foreground')}
+                      title={service.service_code}
+                    >
+                      {service.service_code}
+                    </TableCell>
+                    <TableCell className={cn(SERVICE_COLUMNS.pricing.className, 'truncate')}>{pricing}</TableCell>
+                    <TableCell className={cn(SERVICE_COLUMNS.monthly.className, 'tabular-nums')}>
+                      {formatCurrency(service.base_price_monthly)}
+                    </TableCell>
+                    <TableCell className={cn(SERVICE_COLUMNS.included.className, 'tabular-nums')}>
+                      {service.included_quantity}
+                    </TableCell>
+                    <TableCell
+                      className={cn(SERVICE_COLUMNS.extra.className, 'truncate tabular-nums')}
+                      title={extraUnitPrice(service)}
+                    >
+                      {extraUnitPrice(service)}
+                    </TableCell>
+                    <TableCell className={cn(SERVICE_COLUMNS.surcharge.className, 'tabular-nums')}>
+                      {formatPercent(service.card_surcharge_pct)}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{service.is_active ? 'Active' : 'Inactive'}</Badge>
                     </TableCell>
@@ -321,16 +323,17 @@ export function SubscriptionCatalogAdmin() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                )
+              })
+            )}
+          </CatalogTable>
 
-          {/* §5.3 below `xl`: record cards, never a scrolling table. */}
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-            {isLoading ? (
-              <RecordCardSkeletons count={4} />
-            ) : services.length === 0 ? (
+          {/*
+            §5.3 below `md`: record cards with the table's essentials only — name,
+            status and the monthly price. The editor the card opens shows the rest.
+          */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
+            {services.length === 0 ? (
               <CardGridEmpty
                 title="No billable services yet"
                 hint="Add POS tablets, KDS, online ordering and other add-ons with New service."
@@ -339,20 +342,12 @@ export function SubscriptionCatalogAdmin() {
               servicePage.pageRows.map((service) => (
                 <RecordShell key={service.id} label={`Edit ${service.display_name}`} onOpen={() => openService(service)}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{service.display_name}</p>
-                      <p className="truncate font-mono text-xs text-muted-foreground">{service.service_code}</p>
-                    </div>
+                    <p className="min-w-0 truncate font-semibold">{service.display_name}</p>
                     {/* Values on the tinted card are plain text, not pills (§3.5). */}
                     <p className="shrink-0 text-sm text-muted-foreground">{service.is_active ? 'Active' : 'Inactive'}</p>
                   </div>
                   <CardFields>
-                    <CardField label="Category" value={SERVICE_CATEGORY_LABELS[service.service_category] ?? service.service_category} />
-                    <CardField label="Pricing" value={PRICING_MODEL_LABELS[service.pricing_model] ?? service.pricing_model} />
                     <CardField label="Monthly" value={formatCurrency(service.base_price_monthly)} />
-                    <CardField label="Included" value={service.included_quantity} />
-                    <CardField label="Extra unit" value={extraUnitPrice(service)} />
-                    <CardField label="Card surcharge" value={formatPercent(service.card_surcharge_pct)} />
                   </CardFields>
                 </RecordShell>
               ))
@@ -361,7 +356,7 @@ export function SubscriptionCatalogAdmin() {
 
           <PaginationBar pagination={servicePage.pagination} onPageChange={servicePage.setPage} itemLabel="services" />
           {/* The pager hides when everything fits on one page; the count still shows (§5.2). */}
-          {!isLoading && services.length > 0 && servicePage.pagination.totalPages <= 1 && (
+          {services.length > 0 && servicePage.pagination.totalPages <= 1 && (
             <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
               {services.length} {services.length === 1 ? 'service' : 'services'} · {activeServices} active
             </p>
@@ -371,98 +366,71 @@ export function SubscriptionCatalogAdmin() {
 
       {/* ── Device billing ───────────────────────────────────────────── */}
       <Panel>
-        <PanelSection
-          label="Device billing"
-          caption="Which service each deployed device adds to a location's subscription. Quantities recalculate when devices are assigned or removed."
-        >
-          {/* §5.3: four short columns fit the content column from `lg`; cards below that. */}
-          <Table variant="data" containerClassName="hidden lg:block" className="min-w-[560px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Device</TableHead>
-                <TableHead>Billed as</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={DEVICE_COLUMNS} className="h-24 text-center text-sm text-muted-foreground">
-                    Loading device billing…
+        <PanelSection label="Device billing" caption={DEVICES_CAPTION}>
+          {/* §5.3: every column is essential, so the table shows whole from `md`. */}
+          <CatalogTable columns={DEVICE_COLUMNS}>
+            {devicePage.pageRows.map((row) => {
+              const label = deviceCategoryLabel(row.category)
+              return (
+                <TableRow key={row.category} className="cursor-pointer" onClick={() => openDevice(row)}>
+                  <TableCell className="truncate font-medium">{label}</TableCell>
+                  <TableCell>
+                    <BilledAs row={row} />
+                  </TableCell>
+                  <TableCell>
+                    {row.mapping ? (
+                      <Badge variant="outline">{row.mapping.is_active ? 'Active' : 'Inactive'}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full p-0"
+                      aria-label={row.mapping ? `Edit ${label} billing` : `Map ${label}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openDevice(row)
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ) : (
-                devicePage.pageRows.map((row) => {
-                  const label = deviceCategoryLabel(row.category)
-                  return (
-                    <TableRow key={row.category} className="cursor-pointer" onClick={() => openDevice(row)}>
-                      <TableCell className="font-medium">{label}</TableCell>
-                      <TableCell className="max-w-[320px]">
-                        <BilledAs row={row} />
-                      </TableCell>
-                      <TableCell>
-                        {row.mapping ? (
-                          <Badge variant="outline">{row.mapping.is_active ? 'Active' : 'Inactive'}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full p-0"
-                          aria-label={row.mapping ? `Edit ${label} billing` : `Map ${label}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            openDevice(row)
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
+              )
+            })}
+          </CatalogTable>
 
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
-            {isLoading ? (
-              <RecordCardSkeletons count={4} />
-            ) : (
-              devicePage.pageRows.map((row) => {
-                const label = deviceCategoryLabel(row.category)
-                return (
-                  <RecordShell
-                    key={row.category}
-                    label={row.mapping ? `Edit ${label} billing` : `Map ${label}`}
-                    onOpen={() => openDevice(row)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 truncate font-semibold">{label}</p>
-                      <p className="shrink-0 text-sm text-muted-foreground">
-                        {row.mapping ? (row.mapping.is_active ? 'Active' : 'Inactive') : 'Not mapped'}
-                      </p>
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
+            {devicePage.pageRows.map((row) => {
+              const label = deviceCategoryLabel(row.category)
+              return (
+                <RecordShell
+                  key={row.category}
+                  label={row.mapping ? `Edit ${label} billing` : `Map ${label}`}
+                  onOpen={() => openDevice(row)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 truncate font-semibold">{label}</p>
+                    <p className="shrink-0 text-sm text-muted-foreground">
+                      {row.mapping ? (row.mapping.is_active ? 'Active' : 'Inactive') : 'Not mapped'}
+                    </p>
+                  </div>
+                  {row.mapping && (
+                    <div className="mt-3 min-w-0 text-sm">
+                      <p className="text-xs text-muted-foreground">Billed as</p>
+                      <BilledAs row={row} />
                     </div>
-                    {row.mapping && (
-                      <div className="mt-3 min-w-0 text-sm">
-                        <p className="text-xs text-muted-foreground">Billed as</p>
-                        <BilledAs row={row} />
-                      </div>
-                    )}
-                  </RecordShell>
-                )
-              })
-            )}
+                  )}
+                </RecordShell>
+              )
+            })}
           </div>
 
           <PaginationBar pagination={devicePage.pagination} onPageChange={devicePage.setPage} itemLabel="devices" />
-          {!isLoading && devicePage.pagination.totalPages <= 1 && (
+          {devicePage.pagination.totalPages <= 1 && (
             <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
               {deviceRows.length} device {deviceRows.length === 1 ? 'category' : 'categories'} · {mappedDevices} mapped
             </p>

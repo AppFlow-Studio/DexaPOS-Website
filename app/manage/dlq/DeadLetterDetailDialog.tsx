@@ -203,9 +203,11 @@ export function DeadLetterDetailDialog({
           )}
         </div>
 
+        {/* Stacked full-width on phones, so each is a 44px target (§13.6). */}
         <DialogFooter className="shrink-0 px-6 pb-6 pt-2">
           <Button
             variant="outline"
+            className="h-11 sm:h-9"
             disabled={terminalOrMissing || resolvePending}
             onClick={() => entry && onResolve(entry.id)}
           >
@@ -214,14 +216,14 @@ export function DeadLetterDetailDialog({
           </Button>
           <Button
             variant="outline"
-            className="text-destructive hover:text-destructive"
+            className="h-11 text-destructive hover:text-destructive sm:h-9"
             disabled={terminalOrMissing}
             onClick={() => entry && onAbandon(entry)}
           >
             <Ban className="mr-2 h-4 w-4" />
             Abandon
           </Button>
-          <Button disabled={retryDisabled} onClick={() => entry && onRetry(entry.id)}>
+          <Button className="h-11 sm:h-9" disabled={retryDisabled} onClick={() => entry && onRetry(entry.id)}>
             <RotateCcw className="mr-2 h-4 w-4" />
             {retryPending ? 'Retrying…' : 'Retry'}
           </Button>

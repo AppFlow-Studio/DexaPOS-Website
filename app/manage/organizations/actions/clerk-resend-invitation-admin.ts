@@ -5,13 +5,14 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClerkClient } from '@clerk/backend'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { auth } from '@clerk/nextjs/server'
+import { assertCanManageOrgInvites } from '@/lib/admin/auth'
 export async function ClerkResendInvitationAdmin(invitationId: string) {
     try {
         // Find the pending invite in the pending_org_admin_invites table
         const supabase = createServerSupabaseClient()
         const { data: existingInvite, error } = await supabase
             .from('pending_org_admin_invites')
-            .select('id, email, role, organization_id, first_name, last_name')
+            .select('id, email, role, organization_id, first_name, last_name, status')
             .eq('clerk_invite_id', invitationId)
             .single()
         if (error) {
@@ -29,6 +30,9 @@ export async function ClerkResendInvitationAdmin(invitationId: string) {
             }
         }
 
+        // A server action is a public endpoint: check the caller before touching Clerk.
+        await assertCanManageOrgInvites(organizationId)
+
         const inviteEmail = existingInvite?.email
         if (!inviteEmail) {
             return {
@@ -39,11 +43,22 @@ export async function ClerkResendInvitationAdmin(invitationId: string) {
 
         const { userId } = await auth()
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
-        await clerkClient.organizations.revokeOrganizationInvitation({
-            organizationId,
-            invitationId,
-            requestingUserId: userId || '',
-        })
+        if (existingInvite.status === 'accepted') {
+            return {
+                success: false,
+                message: 'This invite was already accepted. The person is a user now.',
+            }
+        }
+
+        // Only a pending invite needs revoking first; a revoked or expired one
+        // is simply sent again.
+        if (existingInvite.status === 'pending') {
+            await clerkClient.organizations.revokeOrganizationInvitation({
+                organizationId,
+                invitationId,
+                requestingUserId: userId || '',
+            })
+        }
 
         const resendInvitation = await clerkClient.organizations.createOrganizationInvitation({
             organizationId,

@@ -135,7 +135,7 @@ function ImageLibraryContents({ onChoose }: { onChoose: (url: string) => void })
 
   return (
     <>
-      <DialogHeader className="px-6 pt-6 pb-4 text-left">
+      <DialogHeader className="px-6 pt-6 pr-14 pb-4 text-left">
         <DialogTitle>Image library</DialogTitle>
         <DialogDescription>
           {loading || error

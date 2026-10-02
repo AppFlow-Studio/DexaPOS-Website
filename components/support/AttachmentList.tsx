@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Download, X } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { FileText, Download } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SupportTicketAttachmentWithUrl } from "@/types/support-ticket";
 
 interface AttachmentListProps {
@@ -44,7 +43,7 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
               setLightboxId(att.id);
               setLightboxName(att.file_name);
             }}
-            className="group relative overflow-hidden rounded-lg bg-background ring-1 ring-black/[0.07] transition-shadow hover:shadow-md dark:bg-background/60 dark:ring-white/10"
+            className="group relative overflow-hidden rounded-2xl bg-background ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
             title={att.file_name}
           >
             {/* `object-contain` on an opaque tile, not `object-cover`: logos and
@@ -67,7 +66,7 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
         {videos.map((att) => (
           <div
             key={att.id}
-            className="flex w-full max-w-sm flex-col overflow-hidden rounded-lg bg-background ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
+            className="flex w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-background ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
           >
             {/* No rounding on the player itself — the card clips it, so the
                 video meets the card edge instead of leaving a seam of card
@@ -105,9 +104,10 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
         {pdfs.map((att) => (
           <div
             key={att.id}
-            className="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-xs ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
+            className="flex items-center gap-2 rounded-2xl bg-background px-3 py-2 text-xs ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
           >
-            <FileText className="h-4 w-4 text-red-500 shrink-0" />
+            {/* Neutral glyph: a file type is a label, not an alarm (§3.5). */}
+            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <a
               href={attachmentUrl(att.id)}
               target="_blank"
@@ -139,16 +139,11 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
           if (!open) setLightboxId(null);
         }}
       >
+        {/* One close control: DialogContent's own (§4.7). A hand-rolled
+            second ✕ used to sit on top of it. */}
         <DialogContent className="max-w-3xl p-2 bg-black/90 border-none">
+          <DialogTitle className="sr-only">{lightboxName || "Image attachment"}</DialogTitle>
           <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 z-10 text-white hover:bg-white/10"
-              onClick={() => setLightboxId(null)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
             {lightboxId && (
               <img
                 src={attachmentUrl(lightboxId)}

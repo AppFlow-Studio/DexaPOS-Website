@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, ArrowRight, Loader2, MapPin, PackageCheck, Warehouse } from 'lucide-react'
+import { AlertCircle, ArrowRight, MapPin, PackageCheck, Warehouse } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { useAssignDeviceStatus, useDeviceTransitionTargets } from '@/app/manage/hooks/useDeviceRegistry'
@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatDeviceStatus } from '@/lib/device-registry/presentation'
@@ -150,7 +151,7 @@ export function DeviceStatusTransitionDialog({
       <Dialog open={open} onOpenChange={setOpen}>
         {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
             the body scrolls; header and footer carry no rule (§5.5). */}
-        <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-4xl sm:rounded-3xl">
+        <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-4xl sm:rounded-3xl">
           <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
             <DialogTitle className="text-xl">Status transition</DialogTitle>
             <DialogDescription>
@@ -262,46 +263,55 @@ export function DeviceStatusTransitionDialog({
                     {requirement?.requiresMerchant ? (
                       <div className="space-y-2">
                         <Label htmlFor="transition-merchant">Target merchant</Label>
-                        <Select value={merchantId} onValueChange={setMerchantId}>
-                          <SelectTrigger
-                            id="transition-merchant"
-                            className="w-full rounded-full border-0 bg-muted/60 shadow-none"
-                          >
-                            <SelectValue placeholder="Select merchant" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {merchants.map((merchant) => (
-                              <SelectItem key={merchant.id} value={merchant.id}>
-                                {merchant.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {/* The targets load when the dialog opens: a skeleton of the field until then (§4.10). */}
+                        {transitionTargetsQuery.isLoading ? (
+                          <Skeleton className="h-9 w-full rounded-full" />
+                        ) : (
+                          <Select value={merchantId} onValueChange={setMerchantId}>
+                            <SelectTrigger
+                              id="transition-merchant"
+                              className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                            >
+                              <SelectValue placeholder="Select merchant" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {merchants.map((merchant) => (
+                                <SelectItem key={merchant.id} value={merchant.id}>
+                                  {merchant.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     ) : null}
 
                     {requirement?.requiresLocation ? (
                       <div className="space-y-2">
                         <Label htmlFor="transition-location">Target location</Label>
-                        <Select
-                          value={locationId}
-                          onValueChange={setLocationId}
-                          disabled={!merchantId}
-                        >
-                          <SelectTrigger
-                            id="transition-location"
-                            className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                        {transitionTargetsQuery.isLoading ? (
+                          <Skeleton className="h-9 w-full rounded-full" />
+                        ) : (
+                          <Select
+                            value={locationId}
+                            onValueChange={setLocationId}
+                            disabled={!merchantId}
                           >
-                            <SelectValue placeholder="Select location" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {filteredLocations.map((location) => (
-                              <SelectItem key={location.id} value={location.id}>
-                                {location.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                            <SelectTrigger
+                              id="transition-location"
+                              className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                            >
+                              <SelectValue placeholder="Select location" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredLocations.map((location) => (
+                                <SelectItem key={location.id} value={location.id}>
+                                  {location.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <p className="text-xs text-muted-foreground">
                           Locations are filtered by the selected merchant.
                         </p>
@@ -355,18 +365,10 @@ export function DeviceStatusTransitionDialog({
             <Button variant="outline" onClick={() => setOpen(false)} disabled={assignMutation.isPending}>
               Cancel
             </Button>
+            {/* A busy button changes its label, never a spinner (§4.10). */}
             <Button onClick={handleSubmit} disabled={submitDisabled}>
-              {assignMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating
-                </>
-              ) : (
-                <>
-                  <PackageCheck className="h-4 w-4" />
-                  Apply transition
-                </>
-              )}
+              <PackageCheck className="h-4 w-4" />
+              {assignMutation.isPending ? 'Applying…' : 'Apply transition'}
             </Button>
           </DialogFooter>
         </DialogContent>

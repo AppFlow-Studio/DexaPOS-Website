@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   User,
@@ -27,7 +28,6 @@ import {
   ChevronLeft,
   Building2,
   Store,
-  Loader2,
   Search,
   AlertCircle,
   Copy,
@@ -77,6 +77,10 @@ export function AdminInviteWizard({
   children,
 }: AdminInviteWizardProps) {
   const { user } = useUser();
+  // HQ invites team members with any HQ role, and a Manager is not an admin;
+  // other organizations invite their admins.
+  const subject = orgType === "hq" ? "user" : "admin";
+  const Subject = orgType === "hq" ? "User" : "Admin";
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const onOpenChange = controlledOnOpenChange || setInternalOpen;
@@ -329,7 +333,7 @@ export function AdminInviteWizard({
             userId: result.data.user_id,
           });
           setIsCredentialDialogOpen(true);
-          toast.success("Admin account created", {
+          toast.success(`${Subject} account created`, {
             description: `Account created for ${email.trim()}.`,
           });
           onOpenChange(false);
@@ -338,7 +342,7 @@ export function AdminInviteWizard({
           }
         } else {
           toast.error("Direct create failed", {
-            description: result?.message || "Unable to create the admin account.",
+            description: result?.message || `Unable to create the ${subject} account.`,
           });
         }
       } else {
@@ -357,7 +361,7 @@ export function AdminInviteWizard({
         const result = await createInvitationAdmin(params);
 
         if (result?.success) {
-          toast.success("Admin Invitation Sent", {
+          toast.success("Invitation sent", {
             description: `Invitation sent to ${email}`,
           });
           onOpenChange(false);
@@ -450,16 +454,16 @@ export function AdminInviteWizard({
           <div className="flex-1 flex flex-col overflow-hidden">
             <DialogHeader className="shrink-0 gap-1.5 px-6 pt-6 pb-4 text-left sm:text-left">
               <DialogTitle className="text-xl font-semibold">
-                {currentStep === "details" && "Admin Details"}
+                {currentStep === "details" && `${Subject} details`}
                 {currentStep === "role" && "Select Role"}
                 {currentStep === "merchants" && "Assign Merchants"}
                 {currentStep === "review" &&
                   (inviteMode === "direct" ? "Review & Create Account" : "Review & Send Invite")}
               </DialogTitle>
               <DialogDescription className="pr-10">
-                {currentStep === "details" && "Choose invite flow and enter admin information."}
-                {currentStep === "role" && "Choose the role for this admin. The role determines their permissions."}
-                {currentStep === "merchants" && "Select which merchants this admin can access."}
+                {currentStep === "details" && `Choose how to add them, then enter the ${subject}’s details.`}
+                {currentStep === "role" && `Choose the role for this ${subject}. The role determines their permissions.`}
+                {currentStep === "merchants" && `Select which merchants this ${subject} can access. Their role decides what they can do there.`}
                 {currentStep === "review" && "Review all details before completing this action."}
               </DialogDescription>
 
@@ -501,10 +505,19 @@ export function AdminInviteWizard({
               className="min-h-0 flex-1 overflow-y-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {isLoadingMerchants && currentStep === "merchants" ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center space-y-2">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                    <p className="text-sm text-muted-foreground">Loading merchants...</p>
+                // Shaped like the merchant step (§4.10): search row, note, merchant rows.
+                <div className="space-y-4 py-6" aria-hidden>
+                  <p role="status" className="sr-only">Loading merchants</p>
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-9 flex-1 rounded-full" />
+                    <Skeleton className="h-9 w-24 rounded-full" />
+                    <Skeleton className="h-9 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-10 w-full rounded-2xl" />
+                  <div className="space-y-2">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <Skeleton key={index} className="h-[4.25rem] w-full rounded-2xl" />
+                    ))}
                   </div>
                 </div>
               ) : (
@@ -531,7 +544,7 @@ export function AdminInviteWizard({
                             <RadioGroupItem id="invite-mode-single" value="single" className="mt-1" />
                             <div>
                               <div className="text-sm font-medium">Single invite</div>
-                              <p className="text-xs text-muted-foreground">Invite one admin with full profile fields.</p>
+                              <p className="text-xs text-muted-foreground">Invite one {subject} with full profile fields.</p>
                             </div>
                           </label>
                           <label
@@ -558,6 +571,7 @@ export function AdminInviteWizard({
                               <Label htmlFor="firstName">First name *</Label>
                               <Input
                                 id="firstName"
+                                autoComplete="off"
                                 placeholder="John"
                                 value={firstName}
                                 onChange={(e) => setFirstName(e.target.value)}
@@ -567,6 +581,7 @@ export function AdminInviteWizard({
                               <Label htmlFor="lastName">Last name *</Label>
                               <Input
                                 id="lastName"
+                                autoComplete="off"
                                 placeholder="Doe"
                                 value={lastName}
                                 onChange={(e) => setLastName(e.target.value)}
@@ -580,7 +595,8 @@ export function AdminInviteWizard({
                               <Input
                                 id="email"
                                 type="email"
-                                placeholder="admin@company.com"
+                                autoComplete="off"
+                                placeholder="name@company.com"
                                 className="pl-10"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
@@ -617,10 +633,6 @@ export function AdminInviteWizard({
                   {/* Step 2: Role Selection */}
                   {currentStep === "role" && (
                     <div className="space-y-4">
-                      <div className="text-sm text-muted-foreground">
-                        Select a role for this admin. Each role has predefined permissions.
-                      </div>
-
                       {invitableRoles.length === 0 ? (
                         <div className="rounded-2xl bg-yellow-50 dark:bg-yellow-950/20 p-4">
                           <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-500">
@@ -683,16 +695,13 @@ export function AdminInviteWizard({
                   {/* Step 3: Merchant Selection */}
                   {currentStep === "merchants" && (
                     <div className="space-y-4">
-                      <div className="text-sm text-muted-foreground">
-                        Select which merchants this admin can access. Their role determines what they can do.
-                      </div>
-
                       {/* Search and bulk actions */}
                       <div className="flex items-center gap-4">
                         <div className="relative flex-1">
                           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
                             placeholder="Search merchants..."
+                            autoComplete="off"
                             className="pl-10"
                             value={merchantSearchQuery}
                             onChange={(e) => setMerchantSearchQuery(e.target.value)}
@@ -711,7 +720,7 @@ export function AdminInviteWizard({
                         <p className="text-xs text-muted-foreground">
                           <strong>Note:</strong> {selectedRole?.code === 'hq.super_admin' 
                             ? "Super Admins have access to all merchants regardless of selection."
-                            : "Select at least one merchant. This assignment controls which merchants the admin can access."}
+                            : "Select at least one merchant to continue."}
                         </p>
                       </div>
 
@@ -883,11 +892,8 @@ export function AdminInviteWizard({
                         : inviteMode === "direct"
                           ? "Create Account"
                           : "Send Invitation"}
-                      {isSubmitting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        inviteMode === "direct" ? <KeyRound className="h-4 w-4" /> : <Mail className="h-4 w-4" />
-                      )}
+                      {!isSubmitting &&
+                        (inviteMode === "direct" ? <KeyRound className="h-4 w-4" /> : <Mail className="h-4 w-4" />)}
                     </>
                   ) : (
                     <>

@@ -7,13 +7,17 @@ import { PageEditorClient, type EditorCategory } from "./PageEditorClient";
 
 export default async function WebsiteEditorPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ route: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { userId, supabase } = await requireHqUser();
   if (!userId) redirect("/dashboard");
 
   const raw = (await params).route;
+  // The pages list's own query, so "Back to Pages" returns to the same page of 10 (§5.9).
+  const back = (await searchParams).back;
   const decoded = raw === "root" ? "/" : "/" + raw.replace(/%2F/g, "/").replace(/^\/+/, "");
 
   const [{ data }, { data: categories }] = await Promise.all([
@@ -41,12 +45,14 @@ export default async function WebsiteEditorPage({
     category: data?.category || "Other",
     sections,
     published: data?.published || false,
+    updated_at: (data?.updated_at as string | null) ?? null,
     isNew: !data,
   };
 
   return (
     <PageEditorClient
       data={pageData}
+      back={typeof back === "string" ? back : undefined}
       categories={(categories as EditorCategory[] | null) || []}
     />
   );

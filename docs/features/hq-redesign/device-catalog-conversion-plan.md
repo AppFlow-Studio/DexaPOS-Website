@@ -46,3 +46,32 @@ Reuses `FilterSelect`, `LoadError`, `RecordCard`, `CardFields`, `CardField` and 
   - product images in the 40px plate (`next/image` still needs the host in `images.remotePatterns`, as before)
   - the form dialog full-screen on phones, with the footer pinned and the body scrolling
   - dark mode inside the route (C4)
+
+## Follow-up 2026-10-02 — onto D-25–D-29
+
+An audit against the rules added after this conversion (D-25 table height, D-26 one breakpoint, D-27 phone cards, D-29 loading) found the gaps below. Scope stays `app/manage/device-catalog/**`. The shared registry rail and command palette live in `app/manage/devices/components/`, which a parallel session is converting, so they are not touched here.
+
+- [x] Table: `bounded={false}` (no inner scroll), shown from `md` with cards below, `table-fixed` with tiered columns and no `min-w` (§5.3, §5.7)
+- [x] Rows one line: model name and manufacturer on one truncating line; the image plate shrinks to `size-8` and joins at `lg` (§5.7)
+- [x] Phone card: model, manufacturer and status lead; Category, Unit cost and Monthly fee pairs; SKU and specs dropped (in the edit dialog) (D-27)
+- [x] Empty state in the footprint it replaces: a table row from `md`, a card-grid cell below (§4.9)
+- [x] Loading: one `CatalogListSkeleton` used in-page and by a new `loading.tsx` page skeleton; no "Loading…" text; a `role="status"` line (§4.10, D-29)
+- [x] Delete confirm on the shell `ConfirmDialog` instead of `AlertDialog` (bordered, `slide-in-from-*`) (§12, §13.1)
+- [x] Form dialog: "Active in catalog" becomes a status `Select` (C5, as billing-catalog decision 3); spec switches and checkboxes keep their control but fill neutral (`bg-foreground`) when on, since `--primary` is violet in the portal
+- [x] Phone touch targets: Add device and the card's Edit are `h-11` below `sm` (§13.6)
+
+### Decisions (follow-up)
+
+| # | Decision | Why |
+|---|---|---|
+| 3 | Essential columns are Model, Unit cost, Status and actions; Monthly fee joins at `lg`, Category and Specs at `xl` | At `md` the content column is 464px. With Monthly fee and Category added, Model would keep about 70px. |
+| 4 | The phone card carries three pairs (Category, Unit cost, Monthly fee), one more than the `md` table's figures | §5.3 ties the card to the essential columns. But a card lays its pairs out in a two-column grid, so it has room the 464px table row does not. Without Category, a phone user could not tell a tablet from a printer. SKU and specs drop as secondary fields. |
+| 5 | Spec flags keep `Switch`/`Checkbox`, with a neutral checked fill set locally | They are feature flags, not states, so a select would be heavier for no gain. Recolouring the shared primitives would change every page, which is a §11 decision, not this page's. |
+| 6 | The catalog has its own `components/skeletons.tsx` | The registry header skeleton in `app/manage/devices/components/skeletons.tsx` is not exported, and that file belonged to the parallel devices session. The two can merge once it is exported. |
+
+### Verification (follow-up)
+
+- ESLint on `app/manage/device-catalog`: the same single pre-existing finding (`set-state-in-effect` in the form reset)
+- §3.5, §8, §12 and §4.10 greps clean. §5.5 finds only the `DropdownMenuSeparator` above Delete, kept to match the users and organizations menus
+- The shared rail (`useRailAutoScroll`, `no-scrollbar`) and the palette's skeleton search state were fixed by the parallel devices session, so the audit's shared items are closed
+- [ ] Browser check not run: the Chrome DevTools MCP failed to connect. To check: 768/1024/1280/1536px column tiers with no sideways scroll and no inner scroll; the 375px card; the switch/checkbox fill in dark mode inside the dialog

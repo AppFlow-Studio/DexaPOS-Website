@@ -48,7 +48,7 @@ export default function Dashboard() {
           activeTab === 'dashboard' ? (
             <Button size="sm" onClick={() => setIsAdminInviteOpen(true)}>
               <UserPlus2 className="h-4 w-4 mr-2" />
-              Invite Admin
+              Invite user
             </Button>
           ) : undefined
         }

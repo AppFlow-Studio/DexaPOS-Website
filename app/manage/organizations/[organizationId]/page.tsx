@@ -9,6 +9,7 @@ import {
     PanelSection,
     StatRow,
     StatTile,
+    useRailAutoScroll,
 } from '@/components/dashboard/shell'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -19,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2, Building2 } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { SendAdminInviteButton } from './components/SendAdminInviteButton'
@@ -103,62 +104,8 @@ export default function OrganizationInfoPage() {
     )
     const [inviteSearch, setInviteSearch] = useState('')
 
-    /**
-     * Scroll the strip so the selected section sits centred in the rail —
-     * moving right or left as the selection moves, and clamped at both ends so
-     * the first and last tabs rest flush instead of leaving dead space.
-     *
-     * Scrolls the rail itself rather than calling `scrollIntoView` on the tab:
-     * that walks up to every scrollable ancestor and would yank the whole page
-     * vertically as well.
-     *
-     * Centring rather than nudging-into-view: a tab that is technically visible
-     * but half-clipped at an edge still reads as cut off, and the neighbours on
-     * both sides stay discoverable when the active pill is mid-rail.
-     */
-    const tabStripRef = useRef<HTMLDivElement | null>(null)
-    const hasScrolledTabIntoView = useRef(false)
-    useEffect(() => {
-        const rail = tabStripRef.current
-        // `isLoading` in the deps, not just `activeTab`: while the query is in
-        // flight this component returns the skeleton early, so the rail has not
-        // rendered and the ref is still null. Without re-running once the data
-        // lands, the effect only ever saw that null and never scrolled.
-        if (!rail) return
-
-        // Measured via `ResizeObserver` rather than a single frame: on a cold
-        // load the strip is not yet at its final width when the effect runs,
-        // so a one-shot `requestAnimationFrame` measured the active tab as
-        // already in view and never scrolled. The observer fires once the rail
-        // has real width, which covers both first paint and later resizes.
-        let aligned = false
-        const align = () => {
-            const maxScroll = rail.scrollWidth - rail.clientWidth
-            if (aligned || maxScroll <= 0) return
-            const tab = rail.querySelector<HTMLElement>(`[data-tab-value="${activeTab}"]`)
-            if (!tab) return
-
-            // `offsetLeft` is relative to the rail's content box, so it is
-            // unaffected by the current scroll position — unlike a
-            // `getBoundingClientRect()` delta, which has to be re-derived each
-            // time the rail moves.
-            const target = tab.offsetLeft - (rail.clientWidth - tab.offsetWidth) / 2
-            const next = Math.max(0, Math.min(target, maxScroll))
-
-            // No animation for the first positioning — a deep-linked tab should
-            // already be in place rather than sliding in after the page settles.
-            const behavior: ScrollBehavior = hasScrolledTabIntoView.current ? 'smooth' : 'auto'
-            rail.scrollTo({ left: next, behavior })
-
-            aligned = true
-            hasScrolledTabIntoView.current = true
-        }
-
-        align()
-        const observer = new ResizeObserver(align)
-        observer.observe(rail)
-        return () => observer.disconnect()
-    }, [activeTab, isLoading, error])
+    // Keeps the selected tab centred in the scrolling rail (§13.2, D-24).
+    const tabStripRef = useRailAutoScroll(activeTab)
 
     // §5.7: the members table pages at 10, and the mobile card grid with it.
     // Called above the loading/error returns so the hook order is fixed.

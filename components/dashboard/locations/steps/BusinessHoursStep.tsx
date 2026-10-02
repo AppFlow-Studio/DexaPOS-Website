@@ -48,6 +48,18 @@ const OVERNIGHT_CLOSE_OPTIONS = Array.from({ length: 13 }, (_, i) => {
     return { value, label }
 })
 
+/*
+ * The time lists hold 48 half-hour slots. Uncapped, the dropdown filled the
+ * screen, so it is held to about six short rows at every width; the list
+ * scrolls, and Radix scrolls the chosen time into view.
+ *
+ * A plain `max-h-48`, not an arbitrary `max-h-[min(…, var(…))]`: the arbitrary
+ * class did not take effect, and because tailwind-merge had already dropped the
+ * base cap, the menu ended up with no height limit at all.
+ */
+const TIME_MENU = 'max-h-48'
+const TIME_ITEM = 'py-1 text-[0.8125rem]'
+
 function DayHoursRow({
     day,
     label,
@@ -111,9 +123,9 @@ function DayHoursRow({
                             <SelectTrigger className="w-full border-0 bg-background shadow-none @md:w-36">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className={TIME_MENU}>
                                 {TIME_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                    <SelectItem key={opt.value} value={opt.value} className={TIME_ITEM}>{opt.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -128,9 +140,9 @@ function DayHoursRow({
                             <SelectTrigger className="w-full border-0 bg-background shadow-none @md:w-48">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className={TIME_MENU}>
                                 {closeOptions.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                    <SelectItem key={opt.value} value={opt.value} className={TIME_ITEM}>{opt.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>

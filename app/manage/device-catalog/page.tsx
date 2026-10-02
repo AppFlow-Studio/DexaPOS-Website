@@ -32,9 +32,8 @@ import {
   FilterSelect,
   LoadError,
   RecordCard,
-  RecordCardSkeletons,
 } from '@/app/manage/transactions/components/ledger-primitives'
-import { PageShell, Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
+import { ConfirmDialog, PageShell, Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,16 +46,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,6 +74,8 @@ import {
 } from '@/components/ui/table'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
 import { cn } from '@/lib/utils'
+
+import { CatalogListSkeleton } from './components/skeletons'
 
 import {
   useDeviceCatalog,
@@ -141,6 +132,26 @@ const STATUS_FILTER_OPTIONS = [
 ]
 
 const PAGE_SIZE = 10
+
+/*
+ * Column tiers (§5.3, D-26). Model, unit cost, status and the actions menu are
+ * the essentials and show from `md`; Monthly fee joins at `lg`, Category and
+ * Specs at `xl`. The table is `table-fixed`, so Model takes whatever width is
+ * left and truncates, and nothing scrolls sideways at 768px. The classes sit
+ * on both the head and the cell.
+ */
+const LG_UP = 'hidden lg:table-cell'
+const XL_UP = 'hidden xl:table-cell'
+const TABLE_COLUMNS = 7
+
+/*
+ * Switch and Checkbox fill their checked state with `--primary`, which turns
+ * violet inside the dialog portal (C5). On a feature flag the fill only has to
+ * say "on", so it takes the foreground colour instead.
+ */
+const NEUTRAL_SWITCH = 'data-[state=checked]:bg-foreground'
+const NEUTRAL_CHECKBOX =
+  'data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=checked]:text-background dark:data-[state=checked]:bg-foreground'
 
 // ============================================================================
 // Spec field configuration per category
@@ -390,6 +401,33 @@ export default function DeviceCatalogPage() {
     }
   }
 
+  // The empty sentence, set in the table's footprint from `md` and the card
+  // grid's below it, so the layout does not jump when rows arrive (§4.9).
+  const catalogEmpty = (
+    <>
+      <p className="text-sm font-medium">
+        {hasActiveFilters ? 'No models match these filters' : 'No models in the catalog yet'}
+      </p>
+      <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+        {hasActiveFilters
+          ? 'Clear the search or filters to widen the results.'
+          : 'Add a hardware model to define its pricing and specs before units reach the registry.'}
+      </p>
+      <div className="mt-3">
+        {hasActiveFilters ? (
+          <Button variant="outline" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Add device
+          </Button>
+        )}
+      </div>
+    </>
+  )
+
   const rowActions = (device: DeviceCatalogItem) => (
     <DeviceActionsMenu
       device={device}
@@ -412,7 +450,8 @@ export default function DeviceCatalogPage() {
             <Button asChild variant="outline">
               <Link href="/manage/devices/overview">Open overview</Link>
             </Button>
-            <Button onClick={openCreate}>
+            {/* The page's primary action: 44px tall on phones (§13.6). */}
+            <Button onClick={openCreate} className="max-sm:h-11">
               <Plus className="h-4 w-4" />
               Add device
             </Button>
@@ -527,123 +566,120 @@ export default function DeviceCatalogPage() {
                 onRetry={() => void catalogQuery.refetch()}
               />
             ) : isLoading ? (
-              <CatalogLoading />
-            ) : filtered.length === 0 ? (
-              <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 py-10 text-center">
-                <p className="text-sm font-medium">
-                  {hasActiveFilters ? 'No models match these filters' : 'No models in the catalog yet'}
-                </p>
-                <p className="max-w-md text-xs text-muted-foreground">
-                  {hasActiveFilters
-                    ? 'Clear the search or filters to widen the results.'
-                    : 'Add a hardware model to define its pricing and specs before units reach the registry.'}
-                </p>
-                <div className="mt-2">
-                  {hasActiveFilters ? (
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
-                      Clear filters
-                    </Button>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={openCreate}>
-                      <Plus className="h-4 w-4" />
-                      Add device
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <>
+                <p role="status" className="sr-only">Loading the device catalog</p>
+                <CatalogListSkeleton />
+              </>
             ) : (
               <>
-                {/* 900px of columns fits the content column from `xl` (§5.3, D-23). */}
-                <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+                {/* The table from `md`, rows one line tall and paged at 10, with
+                    no scroll of its own (§5.3, §5.7). */}
+                <Table variant="data" bounded={false} containerClassName="hidden md:block" className="table-fixed">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Model</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Specs</TableHead>
-                      <TableHead className="text-right">Unit cost</TableHead>
-                      <TableHead className="text-right">Monthly fee</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">
+                      <TableHead className={cn(XL_UP, 'w-[150px]')}>Category</TableHead>
+                      <TableHead className={cn(XL_UP, 'w-[220px]')}>Specs</TableHead>
+                      <TableHead className="w-[104px] text-right">Unit cost</TableHead>
+                      <TableHead className={cn(LG_UP, 'w-[112px] text-right')}>Monthly fee</TableHead>
+                      <TableHead className="w-[132px]">Status</TableHead>
+                      <TableHead className="w-[56px]">
                         <span className="sr-only">Actions</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pageRows.map((device) => {
-                      const category = device.device_category as DeviceCategory
-                      const specsSummary = renderSpecsSummary(device.specs, category)
-                      return (
-                        <TableRow key={device.id}>
-                          <TableCell>
-                            <div className="flex min-w-0 items-center gap-3">
-                              <DeviceThumbnail device={device} />
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{device.model_name}</p>
-                                <p className="truncate text-sm text-muted-foreground">{modelSubline(device)}</p>
+                    {filtered.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={TABLE_COLUMNS} className="h-24 whitespace-normal text-center">
+                          {catalogEmpty}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      pageRows.map((device) => {
+                        const category = device.device_category as DeviceCategory
+                        const specsSummary = renderSpecsSummary(device.specs, category)
+                        return (
+                          <TableRow key={device.id}>
+                            <TableCell>
+                              <div className="flex min-w-0 items-center gap-3">
+                                {/* The image plate joins once the column has room for it. */}
+                                <DeviceThumbnail device={device} className="hidden lg:flex" />
+                                <p className="min-w-0 truncate" title={modelSubline(device) || undefined}>
+                                  <span className="font-medium">{device.model_name}</span>
+                                  <span className="text-sm text-muted-foreground"> · {device.manufacturer}</span>
+                                </p>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">{CATEGORY_SINGULAR[category] ?? category}</TableCell>
-                          <TableCell className="max-w-[240px]">
-                            <p className="truncate text-sm text-muted-foreground" title={specsSummary || undefined}>
-                              {specsSummary || '—'}
-                            </p>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{formatDollars(device.unit_cost)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{formatDollars(device.monthly_fee)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="w-fit px-2.5 text-xs font-medium">
-                              {device.is_active ? 'Active' : 'Discontinued'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{rowActions(device)}</TableCell>
-                        </TableRow>
-                      )
-                    })}
+                            </TableCell>
+                            <TableCell className={cn(XL_UP, 'truncate text-sm')}>
+                              {CATEGORY_SINGULAR[category] ?? category}
+                            </TableCell>
+                            <TableCell className={XL_UP}>
+                              <p className="truncate text-sm text-muted-foreground" title={specsSummary || undefined}>
+                                {specsSummary || '—'}
+                              </p>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{formatDollars(device.unit_cost)}</TableCell>
+                            <TableCell className={cn(LG_UP, 'text-right tabular-nums')}>
+                              {formatDollars(device.monthly_fee)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="whitespace-nowrap">
+                                {device.is_active ? 'Active' : 'Discontinued'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{rowActions(device)}</TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
                   </TableBody>
                 </Table>
 
-                {/* Below `xl` the records become cards; no sideways scroll (§5.3). */}
-                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-                  {pageRows.map((device) => {
-                    const category = device.device_category as DeviceCategory
-                    const specsSummary = renderSpecsSummary(device.specs, category)
-                    return (
-                      <RecordCard key={device.id}>
-                        <div className="flex min-w-0 items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-3">
-                            {/* Product images drop on phones (§13.4). */}
-                            <DeviceThumbnail device={device} className="hidden sm:flex" />
+                {/* Phones (§5.3, D-27): model and status lead, then the three
+                    figures a buyer compares. SKU and specs live in the edit
+                    dialog, which shows every field. */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
+                  {filtered.length === 0 ? (
+                    <div className="col-span-full flex min-h-40 flex-col items-center justify-center rounded-2xl bg-muted/30 px-4 py-6 text-center">
+                      {catalogEmpty}
+                    </div>
+                  ) : (
+                    pageRows.map((device) => {
+                      const category = device.device_category as DeviceCategory
+                      return (
+                        <RecordCard key={device.id}>
+                          <div className="flex min-w-0 items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate font-medium">{device.model_name}</p>
-                              <p className="truncate text-sm text-muted-foreground">{modelSubline(device)}</p>
+                              <p className="truncate text-sm text-muted-foreground">{device.manufacturer}</p>
                             </div>
+                            {/* On a muted card the status is plain text, not a pill (§3.5). */}
+                            <span className="shrink-0 text-sm font-medium">
+                              {device.is_active ? 'Active' : 'Discontinued'}
+                            </span>
                           </div>
-                          {/* On a muted card the status is plain text, not a pill (§3.5). */}
-                          <span className="shrink-0 text-sm font-medium">
-                            {device.is_active ? 'Active' : 'Discontinued'}
-                          </span>
-                        </div>
-                        <CardFields>
-                          <CardField label="Category" value={CATEGORY_SINGULAR[category] ?? category} />
-                          <CardField label="Specs" value={specsSummary || '—'} />
-                          <CardField label="Unit cost" value={formatDollars(device.unit_cost)} />
-                          <CardField label="Monthly fee" value={formatDollars(device.monthly_fee)} />
-                        </CardFields>
-                        <div className="mt-3 flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => openEdit(device)}>
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </Button>
-                          {rowActions(device)}
-                        </div>
-                      </RecordCard>
-                    )
-                  })}
+                          <CardFields>
+                            <CardField label="Category" value={CATEGORY_SINGULAR[category] ?? category} />
+                            <CardField label="Unit cost" value={formatDollars(device.unit_cost)} />
+                            <CardField label="Monthly fee" value={formatDollars(device.monthly_fee)} />
+                          </CardFields>
+                          <div className="mt-3 flex items-center justify-end gap-1">
+                            {/* The card's primary action: 44px tall on phones (§13.6). */}
+                            <Button variant="ghost" size="sm" className="h-11 px-3 sm:h-8" onClick={() => openEdit(device)}>
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </Button>
+                            {rowActions(device)}
+                          </div>
+                        </RecordCard>
+                      )
+                    })
+                  )}
                 </div>
 
                 <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="models" />
-                {pagination.total <= PAGE_SIZE ? (
+                {pagination.total > 0 && pagination.total <= PAGE_SIZE ? (
                   <p className="mt-4 text-xs text-muted-foreground tabular-nums sm:text-sm">
                     {formatCount(pagination.total)} {pagination.total === 1 ? 'model' : 'models'}
                   </p>
@@ -678,27 +714,17 @@ export default function DeviceCatalogPage() {
       />
 
       {/* Delete confirmation: a question with two buttons stays a centred card (§13.1). */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTarget?.model_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this device model from the catalog.
-              Any inventory referencing it may be affected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`Delete ${deleteTarget?.model_name ?? 'this model'}?`}
+        description="This will permanently remove this device model from the catalog. Any inventory referencing it may be affected."
+        confirmLabel="Delete"
+        pendingLabel="Deleting…"
+        destructive
+        pending={deleteMutation.isPending}
+        onConfirm={() => void handleDelete()}
+      />
     </PageShell>
   )
 }
@@ -710,19 +736,20 @@ export default function DeviceCatalogPage() {
 /**
  * The model's product image, or its category glyph. A borderless muted plate:
  * it is the record's identity, so it keeps a surface, but no tint (§3.5).
+ * `size-8`, so a row with it stays one line tall (§5.7).
  */
 function DeviceThumbnail({ device, className }: { device: DeviceCatalogItem; className?: string }) {
   const CatIcon = CATEGORY_MAP[device.device_category as DeviceCategory]?.icon ?? Monitor
-  // `cn` lets a caller's `hidden sm:flex` replace the base `flex` (§13.4).
+  // `cn` lets a caller's `hidden lg:flex` replace the base `flex`.
   return (
     <div
       className={cn(
-        'relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted text-muted-foreground',
+        'relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground',
         className
       )}
     >
       {device.image_url ? (
-        <Image src={device.image_url} alt={device.model_name} fill className="object-cover" sizes="40px" />
+        <Image src={device.image_url} alt={device.model_name} fill className="object-cover" sizes="32px" />
       ) : (
         <CatIcon className="h-4 w-4" />
       )}
@@ -778,26 +805,6 @@ function DeviceActionsMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-/** Skeletons in the final shape at each width (§5.4). */
-function CatalogLoading() {
-  return (
-    <>
-      <Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
-        <TableBody>
-          <TableRow>
-            <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
-              Loading catalog…
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-        <RecordCardSkeletons />
-      </div>
-    </>
   )
 }
 
@@ -1049,9 +1056,26 @@ function DeviceFormDialog({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Switch id="is_active" checked={isActive} onCheckedChange={setIsActive} />
-                <Label htmlFor="is_active" className="text-sm font-normal">Active in catalog</Label>
+              {/* A state is a word (§4.6b), and a checked Switch fills violet
+                  in this portal (C5), so status is a select, as on the billing
+                  catalog. */}
+              <div className="space-y-2 sm:w-1/2 sm:pr-2">
+                <Label htmlFor="is_active">Status</Label>
+                <Select
+                  value={isActive ? 'active' : 'discontinued'}
+                  onValueChange={(value) => setIsActive(value === 'active')}
+                >
+                  <SelectTrigger id="is_active" className="w-full border-0 bg-muted/60 shadow-none dark:bg-muted/60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </section>
 
@@ -1133,6 +1157,7 @@ function SpecField({
           id={field.key}
           checked={!!value}
           onCheckedChange={(checked) => onChange(checked)}
+          className={NEUTRAL_SWITCH}
         />
       </div>
     )
@@ -1167,6 +1192,7 @@ function SpecField({
           {field.options?.map((opt) => (
             <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm">
               <Checkbox
+                className={NEUTRAL_CHECKBOX}
                 checked={selected.includes(opt)}
                 onCheckedChange={(checked) => {
                   if (checked) {

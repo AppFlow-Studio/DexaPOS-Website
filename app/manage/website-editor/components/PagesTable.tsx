@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, ExternalLink, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react";
@@ -8,18 +8,9 @@ import { toast } from "sonner";
 
 import { MutedSelect } from "@/components/cms/cms-fields";
 import { PaginationBar } from "@/components/dashboard/PaginationBar";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useClientPagination } from "@/lib/hooks/useClientPagination";
-import { pageEditorHref, pagePreviewHref, routeToSlug } from "../lib/paths";
+import { WEBSITE_EDITOR_HOME, pageEditorHref, pagePreviewHref, routeToSlug } from "../lib/paths";
 
 export interface PageRow {
   route: string;
@@ -46,8 +37,26 @@ export interface CategoryOption {
   name: string;
 }
 
+export interface PagesListState {
+  q: string;
+  category: string;
+  status: string;
+  page: number;
+}
+
 const UNCATEGORISED = "other";
-const COLUMN_COUNT = 5;
+const COLUMN_COUNT = 6;
+const URL_DEFAULTS: Record<keyof PagesListState, string> = { q: "", category: "all", status: "all", page: "1" };
+
+/** The list's state as a query string, with defaults left out so a plain visit keeps a clean address. */
+function listQueryOf(state: PagesListState) {
+  const params = new URLSearchParams();
+  for (const key of Object.keys(URL_DEFAULTS) as (keyof PagesListState)[]) {
+    const value = String(state[key]);
+    if (value !== URL_DEFAULTS[key]) params.set(key, value);
+  }
+  return params.toString();
+}
 
 function formatDay(value: string) {
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
@@ -63,13 +72,19 @@ function formatTimestamp(value: string) {
   });
 }
 
+function pageName(page: PageRow) {
+  return page.cms_title || page.title || page.route;
+}
+
 function PageRowMenu({
   page,
+  editHref,
   busy,
   onDuplicate,
   onDelete,
 }: {
   page: PageRow;
+  editHref: string;
   busy: boolean;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -80,7 +95,7 @@ function PageRowMenu({
         <Button
           variant="ghost"
           className="h-8 w-8 p-0"
-          aria-label={`Actions for ${page.cms_title || page.route}`}
+          aria-label={`Actions for ${pageName(page)}`}
           disabled={busy}
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden />
@@ -88,7 +103,7 @@ function PageRowMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem asChild>
-          <Link href={pageEditorHref(page.route)}>
+          <Link href={editHref}>
             <Pencil aria-hidden /> Edit
           </Link>
         </DropdownMenuItem>
@@ -109,14 +124,24 @@ function PageRowMenu({
 }
 
 /**
- * Every CMS page: a §5.2 toolbar, a `variant="data"` table from `lg` (its fit
- * breakpoint, §5.3) with record cards below, paged at 10 (§5.7).
+ * Every CMS page: a §5.2 toolbar, then a `variant="data"` table from `md` with
+ * essential-only record cards below (§5.3), paged at 10 (§5.7). Each row and
+ * card links to the page's editor (§5.9); the search, filters and page live in
+ * the URL so "Back to Pages" lands on the same page of 10.
  */
-export function PagesTable({ pages, categories }: { pages: PageRow[]; categories: CategoryOption[] }) {
+export function PagesTable({
+  pages,
+  categories,
+  initialState,
+}: {
+  pages: PageRow[];
+  categories: CategoryOption[];
+  initialState: PagesListState;
+}) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [search, setSearch] = useState(initialState.q);
+  const [category, setCategory] = useState(initialState.category);
+  const [status, setStatus] = useState(initialState.status);
   const [busyRoute, setBusyRoute] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PageRow | null>(null);
 
@@ -159,8 +184,17 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
     });
   }, [sorted, search, category, status]);
 
-  const { pageRows, pagination, setPage } = useClientPagination(filtered, 10);
+  const { pageRows, pagination, setPage } = useClientPagination(filtered, 10, initialState.page);
   const filtersActive = search !== "" || category !== "all" || status !== "all";
+
+  // `replaceState` is tracked by the Next router but never round-trips to the
+  // server, so typing in the search box costs nothing.
+  const listQuery = listQueryOf({ q: search, category, status, page: pagination.page });
+  useEffect(() => {
+    window.history.replaceState(null, "", listQuery ? `${WEBSITE_EDITOR_HOME}?${listQuery}` : WEBSITE_EDITOR_HOME);
+  }, [listQuery]);
+
+  const editHref = (page: PageRow) => pageEditorHref(page.route, listQuery);
 
   const withFilterReset = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
@@ -174,7 +208,7 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
         method: "POST",
       });
       if (!res.ok) throw new Error();
-      toast.success(`Duplicated ${page.cms_title || page.route}`);
+      toast.success(`Duplicated ${pageName(page)}`);
       router.refresh();
     } catch {
       toast.error("Couldn't duplicate the page");
@@ -190,7 +224,7 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
         method: "DELETE",
       });
       if (!res.ok) throw new Error();
-      toast.success(`Deleted ${page.cms_title || page.route}`);
+      toast.success(`Deleted ${pageName(page)}`);
       router.refresh();
     } catch {
       toast.error("Couldn't delete the page");
@@ -255,13 +289,16 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
         </div>
       </div>
 
-      <Table variant="data" containerClassName="hidden lg:block" className="min-w-[640px]">
+      {/* §5.3: page, route and status from `md`; updated joins at `lg`, category
+          at `xl`. Fixed layout keeps every row one line (§5.7). */}
+      <Table variant="data" bounded={false} containerClassName="hidden md:block" className="table-fixed">
         <TableHeader>
           <TableRow>
             <TableHead>Page</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Updated</TableHead>
+            <TableHead className="w-[32%]">Route</TableHead>
+            <TableHead className="hidden w-40 xl:table-cell">Category</TableHead>
+            <TableHead className="w-28">Status</TableHead>
+            <TableHead className="hidden w-32 lg:table-cell">Updated</TableHead>
             <TableHead className="w-12">
               <span className="sr-only">Actions</span>
             </TableHead>
@@ -277,30 +314,34 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
             </TableRow>
           ) : (
             pageRows.map((page) => (
-              <TableRow key={page.route}>
-                <TableCell className="max-w-[22rem]">
+              <TableRow key={page.route} className="relative">
+                <TableCell className="truncate font-medium">
+                  {/* The whole row is one real link (§5.9); the menu sits above it. */}
                   <Link
-                    href={pageEditorHref(page.route)}
-                    className="block truncate font-medium hover:underline hover:underline-offset-2"
-                  >
-                    {page.cms_title || page.title || page.route}
-                  </Link>
-                  <span className="block truncate font-mono text-xs text-muted-foreground">{page.route}</span>
+                    href={editHref(page)}
+                    aria-label={`Edit ${pageName(page)}`}
+                    className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  />
+                  {pageName(page)}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{categoryName(page.category)}</TableCell>
+                <TableCell className="truncate font-mono text-xs text-muted-foreground" title={page.route}>
+                  {page.route}
+                </TableCell>
+                <TableCell className="hidden truncate text-muted-foreground xl:table-cell">
+                  {categoryName(page.category)}
+                </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="w-fit rounded-full border-0 px-2.5 text-xs font-medium">
-                    {page.published ? "Published" : "Draft"}
-                  </Badge>
+                  <Badge variant="outline">{page.published ? "Published" : "Draft"}</Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
+                <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
                   <span title={formatTimestamp(page.updated_at)} suppressHydrationWarning>
                     {formatDay(page.updated_at)}
                   </span>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="relative z-10 text-right">
                   <PageRowMenu
                     page={page}
+                    editHref={editHref(page)}
                     busy={busyRoute === page.route}
                     onDuplicate={() => void duplicate(page)}
                     onDelete={() => setPendingDelete(page)}
@@ -312,7 +353,9 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
         </TableBody>
       </Table>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+      {/* Phones: the essentials only (§5.3, D-27). Category and the update time
+          are in the editor. */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {pageRows.length === 0 ? (
           <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-1 rounded-2xl bg-muted/30 px-4 text-center">
             <p className="text-sm font-medium">{emptyTitle}</p>
@@ -320,77 +363,64 @@ export function PagesTable({ pages, categories }: { pages: PageRow[]; categories
           </div>
         ) : (
           pageRows.map((page) => (
-            <div key={page.route} className="relative min-w-0 rounded-2xl bg-muted/45 p-4">
+            <div
+              key={page.route}
+              className="relative min-w-0 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted"
+            >
+              <Link
+                href={editHref(page)}
+                aria-label={`Edit ${pageName(page)}`}
+                className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
               <div className="flex min-w-0 items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <Link
-                    href={pageEditorHref(page.route)}
-                    className="block truncate font-medium after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
-                  >
-                    {page.cms_title || page.title || page.route}
-                  </Link>
-                  <p className="truncate font-mono text-xs text-muted-foreground">{page.route}</p>
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <p className="truncate font-semibold">{pageName(page)}</p>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {page.published ? "Published" : "Draft"}
+                  </span>
                 </div>
-                <div className="relative z-10 -mt-1 -mr-1">
+                <div className="relative z-10 -mt-1 -mr-1 shrink-0">
                   <PageRowMenu
                     page={page}
+                    editHref={editHref(page)}
                     busy={busyRoute === page.route}
                     onDuplicate={() => void duplicate(page)}
                     onDelete={() => setPendingDelete(page)}
                   />
                 </div>
               </div>
-              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <div className="min-w-0">
-                  <dt className="text-xs text-muted-foreground">Category</dt>
-                  <dd className="truncate font-medium">{categoryName(page.category)}</dd>
-                </div>
-                <div className="min-w-0">
-                  <dt className="text-xs text-muted-foreground">Status</dt>
-                  <dd className="truncate font-medium">{page.published ? "Published" : "Draft"}</dd>
-                </div>
-                <div className="col-span-2 min-w-0">
-                  <dt className="text-xs text-muted-foreground">Updated</dt>
-                  <dd className="truncate font-medium tabular-nums" suppressHydrationWarning>
-                    {formatTimestamp(page.updated_at)}
-                  </dd>
-                </div>
-              </dl>
+              <div className="mt-3 min-w-0 text-sm">
+                <p className="text-xs text-muted-foreground">Route</p>
+                <p className="truncate font-mono font-medium">{page.route}</p>
+              </div>
             </div>
           ))
         )}
       </div>
 
-      {pagination.total > 0 && pagination.total <= pagination.pageSize && (
+      <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="pages" />
+      {/* The pager hides when everything fits on one page; the count still shows (§5.2). */}
+      {pagination.totalPages <= 1 && filtered.length > 0 && (
         <p className="text-xs text-muted-foreground tabular-nums sm:text-sm">
-          {pagination.total} {pagination.total === 1 ? "page" : "pages"}
+          {filtersActive
+            ? `${filtered.length} of ${pages.length} pages`
+            : `${pages.length} ${pages.length === 1 ? "page" : "pages"}`}
         </p>
       )}
-      <PaginationBar pagination={pagination} onPageChange={setPage} itemLabel="pages" />
 
-      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent className="sm:max-w-[425px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this page?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete?.cms_title || pendingDelete?.route} will be removed from the site. This can&apos;t be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={buttonVariants({ variant: "destructive" })}
-              disabled={!!busyRoute}
-              onClick={(e) => {
-                e.preventDefault();
-                if (pendingDelete) void remove(pendingDelete);
-              }}
-            >
-              Delete page
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete this page?"
+        description={`${pendingDelete ? pageName(pendingDelete) : "The page"} will be removed from the site. This can't be undone.`}
+        confirmLabel="Delete page"
+        pendingLabel="Deleting…"
+        destructive
+        pending={!!pendingDelete && busyRoute === pendingDelete.route}
+        onConfirm={() => {
+          if (pendingDelete) void remove(pendingDelete);
+        }}
+      />
     </div>
   );
 }
