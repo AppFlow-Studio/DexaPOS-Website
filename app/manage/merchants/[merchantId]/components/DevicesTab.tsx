@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
@@ -148,7 +149,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     // Local state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [searchTerm, setSearchTerm] = useState('')
-    const [activeTab, setActiveTab] = useState<'stations' | 'terminals'>('stations')
+    const [activeTab, setActiveTab] = useState<'stations' | 'terminals'>('terminals')
     const [isAddStationOpen, setIsAddStationOpen] = useState(false)
     const [isAddTerminalOpen, setIsAddTerminalOpen] = useState(false)
     const [editTerminal, setEditTerminal] = useState<TerminalRow | null>(null)
@@ -364,6 +365,22 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
         </DropdownMenu>
     )
 
+    const terminalHref = (serial: string) =>
+        `/manage/merchants/${merchantId}/devices/terminal/${encodeURIComponent(serial)}`
+
+    // A terminal with a serial opens its batches & activity page.
+    const renderTerminalName = (terminal: TerminalRow, className: string) =>
+        terminal.serial_number ? (
+            <Link
+                href={terminalHref(terminal.serial_number)}
+                className={`${className} underline decoration-muted-foreground/40 underline-offset-4 hover:decoration-foreground`}
+            >
+                {terminal.terminal_name}
+            </Link>
+        ) : (
+            <div className={className}>{terminal.terminal_name}</div>
+        )
+
     const renderTerminalActions = (terminal: TerminalRow) => (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -372,9 +389,17 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+                {terminal.serial_number && (
+                    <DropdownMenuItem asChild>
+                        <Link href={terminalHref(terminal.serial_number)}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            View batches & activity
+                        </Link>
+                    </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => setEditTerminal(terminal)}>
                     <Settings2 className="h-4 w-4 mr-2" />
-                    Edit
+                    Edit terminal settings
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     onClick={() => handleTestConnection(terminal)}
@@ -408,8 +433,14 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
             <Panel>
                 <PanelSection
                     label="Stations & Terminals"
-                    caption="Manage POS stations and payment terminals for this merchant"
+                    caption="A station is a POS workspace. A payment terminal is the card reader linked to batches and payments."
                     action={
+                        <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm" asChild>
+                            <Link href={`/manage/merchants/${merchantId}?tab=settlements`}>
+                                View batches & deposits
+                            </Link>
+                        </Button>
                         <Button
                             variant="outline"
                             className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
@@ -421,6 +452,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                             <RefreshCw className="h-4 w-4 mr-2" />
                             Refresh
                         </Button>
+                        </div>
                     }
                 >
                     {/* Two rows of two, not one row of four: this tab renders beside
@@ -712,6 +744,9 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                 {/* Terminals Tab Content */}
                                 {activeTab === 'terminals' && (
                                     <>
+                                        <p className="mb-3 text-sm text-muted-foreground">
+                                            Select a terminal name to review its batches and activity. Use the row menu to edit its settings or test the connection.
+                                        </p>
                                         {filteredTerminals.length === 0 ? (
                                             <Empty>
                                                 <EmptyHeader>
@@ -752,7 +787,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                         <CreditCard className="h-4 w-4" />
                                                                     </div>
                                                                     <div className="min-w-0">
-                                                                        <div className="font-medium">{terminal.terminal_name}</div>
+                                                                        {renderTerminalName(terminal, 'font-medium')}
                                                                         <div className="text-xs text-muted-foreground">
                                                                             {getTerminalTypeLabel(terminal.terminal_type)} · {terminal.location_name}
                                                                         </div>
@@ -807,7 +842,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
                                                             <div className="min-w-0">
-                                                                <p className="truncate font-semibold">{terminal.terminal_name}</p>
+                                                                {renderTerminalName(terminal, 'block truncate font-semibold')}
                                                                 <p className="truncate text-xs text-muted-foreground">
                                                                     {getTerminalTypeLabel(terminal.terminal_type)}
                                                                     {' · '}

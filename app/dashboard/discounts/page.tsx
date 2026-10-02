@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import {
     PageShell,
     PageHeader,
-    LocationIndicator,
     Panel,
     StatRow,
     StatTile,
@@ -133,14 +132,6 @@ export default function DiscountsPage() {
             <PageHeader
                 title="Discounts"
                 subtitle="Manage POS discounts, activation, and targeting."
-                indicator={
-                    !isSingleLocation ? (
-                        <LocationIndicator
-                            isAllLocations={isAllLocations}
-                            locationName={selectedLocation?.name}
-                        />
-                    ) : undefined
-                }
                 actions={
                     <Button
                         onClick={handleCreate}

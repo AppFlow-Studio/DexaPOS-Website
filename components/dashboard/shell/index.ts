@@ -13,7 +13,7 @@
  */
 
 export { PageShell } from './PageShell'
-export { PageHeader, LocationIndicator } from './PageHeader'
+export { PageHeader } from './PageHeader'
 export { Panel, PanelGrid } from './Panel'
 export { PanelSection, PanelRow, PanelSubLabel } from './PanelSection'
 export { StatTile, StatRow, InsetTile } from './StatTile'

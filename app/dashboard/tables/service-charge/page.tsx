@@ -29,7 +29,6 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -380,12 +379,6 @@ export default function ServiceChargePage() {
         subtitle="Automatic gratuity for dine-in parties. Configure the label, rate, and minimum party size that triggers it on the POS."
         backHref="/dashboard/tables"
         backLabel="Back to Tables"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           canQuickToggle ? (
             <label className="flex select-none items-center gap-2">

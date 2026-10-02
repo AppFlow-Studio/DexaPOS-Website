@@ -14,6 +14,11 @@ import {
 } from '@/lib/payments/valor/customerProfileApi'
 import { getClientToken } from '@/lib/payments/valor/saleApi'
 import { deactivateSubscription, updateSubscription } from '@/lib/payments/valor/subscriptionApi'
+import { normalizeBillingCardBrand } from '@/lib/subscription-billing/card-display'
+import {
+  healBillingProfileCardMeta,
+  resolveVaultCardMeta,
+} from '@/lib/subscription-billing/vault-card-meta'
 import { shouldRebindSubscriptionCard } from '@/supabase/functions/_shared/subscription-billing-scope'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
@@ -91,68 +96,6 @@ function normalizeText(value?: string | null): string | null {
 function digitsOnly(value?: string | null): string {
   if (!value) return ''
   return value.replace(/\D/g, '')
-}
-
-/**
- * Pull non-sensitive card metadata (last four, expiry, brand) out of a Valor
- * vault response. The vault endpoints are loosely documented, so every plausible
- * key is probed and anything missing is left null — this is best-effort display
- * data, never a hard dependency. Raw PANs never reach here (Passage tokenizes
- * client-side); a "masked_card_number" style value only exposes the last four.
- */
-function extractVaultCardMeta(raw: unknown): {
-  lastFour: string | null
-  expMonth: number | null
-  expYear: number | null
-  brand: string | null
-} {
-  const empty = { lastFour: null, expMonth: null, expYear: null, brand: null }
-  if (!raw || typeof raw !== 'object') return empty
-  const body = raw as Record<string, unknown>
-
-  const str = (keys: string[]): string | null => {
-    for (const key of keys) {
-      const value = body[key]
-      if (typeof value === 'string' && value.trim()) return value.trim()
-      if (typeof value === 'number') return String(value)
-    }
-    return null
-  }
-
-  // Last four — accept a bare 4-digit field or a masked card number, taking the
-  // final four digits either way.
-  const lastFourRaw = str([
-    'card_last_four', 'last_four', 'last4', 'card_last4', 'cardLastFour',
-    'masked_card_number', 'maskedCardNumber', 'card_number', 'cardNumber', 'masked_card', 'maskedCard',
-  ])
-  const lastFourDigits = digitsOnly(lastFourRaw)
-  const lastFour = lastFourDigits.length >= 4 ? lastFourDigits.slice(-4) : null
-
-  // Expiry — either split month/year fields, or a combined MMYY / MM/YY / MMYYYY.
-  let expMonth: number | null = null
-  let expYear: number | null = null
-  const monthRaw = str(['card_exp_month', 'exp_month', 'expiry_month', 'expMonth', 'expiration_month'])
-  const yearRaw = str(['card_exp_year', 'exp_year', 'expiry_year', 'expYear', 'expiration_year'])
-  if (monthRaw && yearRaw) {
-    expMonth = Number(monthRaw) || null
-    expYear = Number(yearRaw) || null
-  } else {
-    const combined = digitsOnly(str(['exp_date', 'expiry', 'card_exp', 'expiration', 'exp', 'expdate']))
-    if (combined.length === 4) {
-      expMonth = Number(combined.slice(0, 2)) || null
-      expYear = 2000 + (Number(combined.slice(2, 4)) || 0)
-    } else if (combined.length === 6) {
-      expMonth = Number(combined.slice(0, 2)) || null
-      expYear = Number(combined.slice(2, 6)) || null
-    }
-  }
-  // Two-digit years → 20xx.
-  if (expYear !== null && expYear < 100) expYear += 2000
-  if (expMonth !== null && (expMonth < 1 || expMonth > 12)) expMonth = null
-
-  const brand = str(['card_type', 'cardType', 'card_brand', 'cardBrand', 'brand', 'scheme'])
-
-  return { lastFour, expMonth, expYear, brand }
 }
 
 interface ValorCredentialRow {
@@ -262,13 +205,16 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
     throw new Error('Failed to load merchant billing profiles.')
   }
 
-  return ((data || []) as any[]).map((row) => {
+  const profiles = ((data || []) as any[]).map((row) => {
     const location = Array.isArray(row.location) ? row.location[0] : row.location
     return {
       ...row,
       location_name: location?.name ?? null,
     }
   }) as MerchantBillingProfileRecord[]
+
+  // Cards saved before brand/last-four capture backfill themselves from Valor here.
+  return healBillingProfileCardMeta(profiles)
 }
 
 export async function getMerchantBillingCardSetup(
@@ -867,7 +813,9 @@ export async function saveMerchantBillingCardWithVault(
     const paymentToken = normalizeText(params.paymentToken)
     const cardholderName = normalizeText(params.cardholderName)
     const billingEmail = normalizeText(params.billingEmail)
-    const cardBrand = normalizeText(params.cardBrand)
+    // Passage.js reports the payment method ("credit-card") where a brand would
+    // go, so a generic type is dropped here rather than stored as one.
+    const cardBrand = normalizeBillingCardBrand(params.cardBrand)
     const cardLastFour = digitsOnly(params.cardLastFour)
 
     if (!paymentToken) {
@@ -955,17 +903,22 @@ export async function saveMerchantBillingCardWithVault(
       },
     )
 
-    // Best-effort card metadata for display — probe the vault responses (payment
-    // profile first, then customer). Anything Valor doesn't return stays null.
-    const vaultCardMeta = extractVaultCardMeta(paymentProfile.raw)
-    const fallbackCardMeta = extractVaultCardMeta(customer.raw)
+    // Best-effort card metadata for display — Valor is the authority (the attach
+    // response, else Get Payment Profile); what the client sent is only a
+    // fallback. Anything Valor doesn't return stays null.
+    const vaultCardMeta = await resolveVaultCardMeta(
+      { credentials },
+      {
+        vaultCustomerId: customer.vaultCustomerId,
+        paymentProfileId: paymentProfile.paymentProfileId,
+        responses: [paymentProfile.raw, customer.raw],
+      },
+    )
     const resolvedLastFour =
-      (cardLastFour.length === 4 ? cardLastFour : null) ??
-      vaultCardMeta.lastFour ??
-      fallbackCardMeta.lastFour
-    const resolvedBrand = cardBrand ?? vaultCardMeta.brand ?? fallbackCardMeta.brand
-    const resolvedExpMonth = vaultCardMeta.expMonth ?? fallbackCardMeta.expMonth
-    const resolvedExpYear = vaultCardMeta.expYear ?? fallbackCardMeta.expYear
+      vaultCardMeta.lastFour ?? (cardLastFour.length === 4 ? cardLastFour : null)
+    const resolvedBrand = vaultCardMeta.brand ?? cardBrand
+    const resolvedExpMonth = vaultCardMeta.expMonth
+    const resolvedExpYear = vaultCardMeta.expYear
 
     let previousProfilesQuery = supabase.from('merchant_billing_profiles')
       .select('id').eq('merchant_id', merchantId)

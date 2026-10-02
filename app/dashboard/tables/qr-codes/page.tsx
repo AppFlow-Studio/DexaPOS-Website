@@ -11,7 +11,6 @@ import {
 } from '@/stores/location-store'
 import { LocationListView } from '@/components/dashboard/tables/LocationListView'
 import {
-    LocationIndicator,
     PageHeader,
     PageShell,
 } from '@/components/dashboard/shell'
@@ -90,12 +89,6 @@ export default function TableQrCodesPage() {
                 subtitle="Generate, print and revoke the table QR codes guests scan to order."
                 backHref="/dashboard/tables"
                 backLabel="Back to floor plan"
-                indicator={
-                    <LocationIndicator
-                        isAllLocations={false}
-                        locationName={locationName || null}
-                    />
-                }
             />
 
             <QrTableManager

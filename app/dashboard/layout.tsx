@@ -70,9 +70,7 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
-  Settings2,
   Mail,
-  Gift,
   DollarSign,
   CalendarClock,
   ShieldAlert,
@@ -117,6 +115,8 @@ import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBot
 import { GlobalSearch } from "./components/global-search/GlobalSearch";
 import { FinancialNav } from "@/components/dashboard/financial/FinancialNav";
 import { isFinancialWorkspacePath } from "@/lib/navigation/financial";
+import { TeamNav } from "@/components/dashboard/staff/TeamNav";
+import { isTeamWorkspacePath } from "@/lib/navigation/team";
 import { resolveInitialLocationSelection } from "@/lib/locations/initial-selection";
 
 const navMain = [
@@ -187,14 +187,9 @@ const navMain = [
     title: "Management",
     items: [
       {
-        title: "Staff",
+        title: "Team",
         url: "/dashboard/staff",
         icon: Users,
-      },
-      {
-        title: "Schedules",
-        url: "/dashboard/schedules",
-        icon: Calendar,
       },
       {
         title: "Online Ordering",
@@ -272,11 +267,6 @@ const navMain = [
         icon: FileText,
       },
       {
-        title: "Billing & Payments",
-        url: "/dashboard/subscriptions/billing",
-        icon: CreditCard,
-      },
-      {
         title: "Devices",
         url: "/dashboard/devices",
         icon: Monitor,
@@ -307,7 +297,7 @@ const navMain = [
             icon: GitCompare,
           },
           {
-            title: "Orders",
+            title: "Order Reports",
             url: "/dashboard/orders/reports",
             icon: ShoppingCart,
           },
@@ -564,7 +554,7 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                                 {/* Expand-only, like Orders/Tables/Tips/Settings:
                                     the whole row toggles rather than navigating.
                                     The landing page is reachable from the
-                                    "General" sub-item below. */}
+                                    "Sales Overview" sub-item below. */}
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isReportsActive}
@@ -584,7 +574,7 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                                       >
                                         <Link href={menuItem.url}>
                                           <BarChart3 className="h-3 w-3" />
-                                          <span>General</span>
+                                          <span>Sales Overview</span>
                                         </Link>
                                       </SidebarMenuSubButton>
                                     </SidebarMenuSubItem>
@@ -766,8 +756,14 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                               isActive={
                                 menuItem.url === "/dashboard/financial"
                                   ? isFinancialWorkspacePath(pathname)
-                                  : pathname === menuItem.url ||
-                                    pathname.startsWith(menuItem.url + "/")
+                                  : menuItem.url === "/dashboard/staff"
+                                    ? isTeamWorkspacePath(pathname)
+                                    : pathname === menuItem.url ||
+                                      // Every page starts with "/dashboard/", so the
+                                      // home item matches exactly or it lights up
+                                      // alongside whichever page is really open.
+                                      (menuItem.url !== "/dashboard" &&
+                                        pathname.startsWith(menuItem.url + "/"))
                               }
                             >
                               <Link href={menuItem.url}>
@@ -788,128 +784,17 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {/* Settings submenu */}
+          {/* Settings — sub-pages live in the in-page settings nav */}
           <SidebarMenuItem>
-            <Collapsible
-              defaultOpen={pathname.startsWith("/dashboard/settings")}
-              className="group"
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.startsWith("/dashboard/settings")}
             >
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton
-                  isActive={pathname.startsWith("/dashboard/settings")}
-                  className="w-full"
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
-                  <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={
-                        pathname === "/dashboard/settings" &&
-                        !pathname.includes("/stations")
-                      }
-                    >
-                      <Link href="/dashboard/settings">
-                        <Settings className="h-3 w-3" />
-                        <span>General</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/stations"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/stations">
-                        <Monitor className="h-3 w-3" />
-                        <span>Stations</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/pos"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/pos">
-                        <Settings2 className="h-3 w-3" />
-                        <span>POS Settings</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/prep-stations"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/prep-stations">
-                        <Flame className="h-3 w-3" />
-                        <span>Prep Stations</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/customer-display"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/customer-display">
-                        <MonitorPlay className="h-3 w-3" />
-                        <span>Customer Display</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/receipt-templates"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/receipt-templates">
-                        <Receipt className="h-3 w-3" />
-                        <span>Receipt Templates</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith("/dashboard/settings/tips")}
-                    >
-                      <Link href="/dashboard/settings/tips">
-                        <DollarSign className="h-3 w-3" />
-                        <span>Tip Configuration</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith("/dashboard/settings/loyalty")}
-                    >
-                      <Link href="/dashboard/settings/loyalty">
-                        <Gift className="h-3 w-3" />
-                        <span>Loyalty</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
+              <Link href="/dashboard/settings">
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
           {/* Support */}
           <SidebarMenuItem>
@@ -1545,7 +1430,7 @@ export default function MerchantDashboardLayout({
     { id: "home", label: "Home", icon: LayoutDashboard, url: "/dashboard" },
     { id: "orders", label: "Orders", icon: ShoppingCart, url: "/dashboard/orders" },
     { id: "menu", label: "Menu", icon: Utensils, url: "/dashboard/menu" },
-    { id: "staff", label: "Staff", icon: Users, url: "/dashboard/staff" },
+    { id: "staff", label: "Team", icon: Users, url: "/dashboard/staff", activeWhen: isTeamWorkspacePath },
   ];
 
   // Every page the sidebar can reach, flattened in sidebar order — nothing
@@ -1571,8 +1456,7 @@ export default function MerchantDashboardLayout({
     { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
     { title: "Modifiers", url: "/dashboard/menu/modifiers", icon: Layers },
 
-    // Management — "Staff" has a bottom-bar tab.
-    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
+    // Management — Team navigation contains scheduling and timesheets.
     { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
     { title: "Kiosk", url: "/dashboard/kiosk", icon: MonitorPlay },
     { title: "Customers", url: "/dashboard/customers", icon: User },
@@ -1668,6 +1552,7 @@ export default function MerchantDashboardLayout({
         </header>
         <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">
           {isFinancialWorkspacePath(pathname) && <FinancialNav pathname={pathname} />}
+          {isTeamWorkspacePath(pathname) && <TeamNav pathname={pathname} />}
           {children}
         </div>
       </main>

@@ -121,6 +121,11 @@ const PRESETS: Array<{ value: DatePreset; label: string; getDates: () => { from:
     },
 ]
 
+/** The from/to a preset stands for right now (the same dates the picker applies). */
+export function getPresetDates(preset: DatePreset): { from: Date; to: Date } {
+    return (PRESETS.find((p) => p.value === preset) ?? PRESETS[0]).getDates()
+}
+
 function formatDateDisplay(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }

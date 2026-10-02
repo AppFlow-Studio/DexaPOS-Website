@@ -642,6 +642,8 @@ export function CheckoutPage({
       price: item.price,
       quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
       notes: item.notes,
+      menu_id: item.menu_id,
+      category_id: item.category_id,
       modifiers: item.selectedModifiers?.map((m) => ({
         id: m.id,
         name: m.name,

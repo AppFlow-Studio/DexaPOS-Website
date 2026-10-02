@@ -302,9 +302,6 @@ export function SubscriptionCatalogAdmin() {
                     >
                       {extraUnitPrice(service)}
                     </TableCell>
-                    <TableCell className={cn(SERVICE_COLUMNS.surcharge.className, 'tabular-nums')}>
-                      {formatPercent(service.card_surcharge_pct)}
-                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{service.is_active ? 'Active' : 'Inactive'}</Badge>
                     </TableCell>

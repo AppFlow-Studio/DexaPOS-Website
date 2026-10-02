@@ -19,6 +19,7 @@ import {
   getMerchantBillingProfiles,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
+import { formatBillingCard } from '@/lib/subscription-billing/card-display'
 
 /**
  * One neutral pill for every billing state (§4.6b). The status word carries
@@ -52,12 +53,8 @@ function cardOnFileLabel(profiles: MerchantBillingProfileRecord[]): string | nul
 
   if (!card || !card.card_last_four) return null
 
-  const brand = card.card_brand || 'Card'
-  const exp =
-    card.card_exp_month && card.card_exp_year
-      ? ` · ${String(card.card_exp_month).padStart(2, '0')}/${String(card.card_exp_year).slice(-2)}`
-      : ''
-  return `${brand} •••• ${card.card_last_four}${exp}`
+  const display = formatBillingCard(card)
+  return display.expiry ? `${display.label} · ${display.expiry}` : display.label
 }
 
 /**

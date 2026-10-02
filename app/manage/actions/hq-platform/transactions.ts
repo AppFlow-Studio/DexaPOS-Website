@@ -4,6 +4,7 @@ import { assertHQPermission, assertSuperAdmin } from '@/lib/admin/auth'
 import { auth, reverificationError } from '@clerk/nextjs/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { attachBatchTerminalIdentity } from '@/lib/admin/settlement-terminal-attribution'
 import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
 import { headers } from 'next/headers'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
@@ -325,6 +326,10 @@ export interface PlatformSettlementBatch {
   merchant_name: string
   location_id?: string
   location_name?: string
+  /** Batch-owned terminal, not necessarily the device that initiated settlement. */
+  payment_terminal_id?: string
+  terminal_name?: string
+  terminal_serial?: string
   business_date: string
   opened_at?: string
   closed_at?: string
@@ -388,6 +393,7 @@ export interface PlatformSettlementBatchPayment {
 export interface PlatformSettlementBatchResult {
   data: PlatformSettlementBatch[]
   errorCode?: string
+  terminalLookupFailed?: boolean
 }
 
 export interface PlatformSettlementBatchPaymentsResult {
@@ -2086,8 +2092,53 @@ export async function getPlatformSettlementBatches(
   }
 
   const rows = (data ?? []) as PlatformSettlementBatchRpcRow[]
+  return withBatchTerminals(rows.map(mapRpcRowToSettlementBatch))
+}
+
+/**
+ * Attaches each batch's linked payment terminal (name + serial). The
+ * reconciliation RPC intentionally returns financial totals only, so terminal
+ * attribution is read from each exact batch FK; batch numbers can repeat.
+ */
+async function withBatchTerminals(
+  batches: PlatformSettlementBatch[]
+): Promise<PlatformSettlementBatchResult> {
+  if (batches.length === 0) return { data: batches }
+
+  let service: ReturnType<typeof createServiceRoleClient>
+  try {
+    service = createServiceRoleClient()
+  } catch (error) {
+    console.error('[withBatchTerminals:client] Error:', error)
+    return { data: batches, terminalLookupFailed: true }
+  }
+  const { data: batchLinks, error: linkError } = await service
+    .from('settlement_batches')
+    .select('id, merchant_id, payment_terminal_id')
+    .in('id', batches.map((batch) => batch.id))
+
+  if (linkError) {
+    console.error('[withBatchTerminals:links] Error:', linkError)
+    return { data: batches, terminalLookupFailed: true }
+  }
+
+  const terminalIds = [...new Set((batchLinks ?? [])
+    .map((batch) => batch.payment_terminal_id)
+    .filter((id): id is string => typeof id === 'string'))]
+  const { data: terminals, error: terminalError } = terminalIds.length > 0
+    ? await service
+        .from('payment_terminals')
+        .select('id, merchant_id, terminal_name, serial_number')
+        .in('id', terminalIds)
+    : { data: [], error: null }
+
+  if (terminalError) {
+    console.error('[withBatchTerminals:terminals] Error:', terminalError)
+    return { data: batches, terminalLookupFailed: true }
+  }
+
   return {
-    data: rows.map(mapRpcRowToSettlementBatch),
+    data: attachBatchTerminalIdentity(batches, batchLinks ?? [], terminals ?? []),
   }
 }
 
@@ -2100,7 +2151,7 @@ export async function getPlatformSettlementBatches(
  */
 export async function getPlatformSettlementBatchById(
   batchId: string
-): Promise<{ data: PlatformSettlementBatch | null; errorCode?: string }> {
+): Promise<{ data: PlatformSettlementBatch | null; errorCode?: string; terminalLookupFailed?: boolean }> {
   await assertHQPermission('hq.merchant.transactions')
 
   // Only the lookup keys are read with elevated access; the figures and the
@@ -2133,7 +2184,9 @@ export async function getPlatformSettlementBatchById(
   }
 
   const row = ((data ?? []) as PlatformSettlementBatchRpcRow[]).find((batch) => batch.id === batchId)
-  return { data: row ? mapRpcRowToSettlementBatch(row) : null }
+  if (!row) return { data: null }
+  const { data: [batch], terminalLookupFailed } = await withBatchTerminals([mapRpcRowToSettlementBatch(row)])
+  return { data: batch, terminalLookupFailed }
 }
 
 export async function getPlatformSettlementBatchPayments(
@@ -2225,7 +2278,7 @@ export async function manualBatchout(
   // 4a. Load the batch; verify ownership and that it isn't already settled.
   const { data: batch, error: fetchError } = await admin
     .from('settlement_batches')
-    .select('id, merchant_id, status, closed_at, settlement_date, gross_amount, origin')
+    .select('id, merchant_id, location_id, batch_id, batch_number, acquirer, status, closed_at, settlement_date, gross_amount, origin')
     .eq('id', batchId)
     .maybeSingle()
 
@@ -2303,19 +2356,30 @@ export async function manualBatchout(
   //    Attribution of the *actor* (the HQ super-admin) is resolved from Clerk inside
   //    LogAuditEvent; the reason/count live in metadata since the direct-UPDATE path
   //    writes no per-payment payment_events rows.
-  void LogAuditEvent({
-    merchantId,
-    action: 'manual_mark_batch_settled',
-    actionCategory: 'settlement',
-    severity: 'warning',
-    resourceType: 'settlement_batch',
-    resourceId: batchId,
-    metadata: {
-      clerk_user_id: userId,
-      reason: cleanReason,
-      payments_settled: paymentsSettled,
-    },
-  })
+  try {
+    const auditResult = await LogAuditEvent({
+      merchantId,
+      locationId: batch.location_id,
+      action: 'manual_mark_batch_settled',
+      actionCategory: 'settlement',
+      severity: 'warning',
+      resourceType: 'settlement_batch',
+      resourceId: batchId,
+      resourceName: batch.batch_id,
+      metadata: {
+        clerk_user_id: userId,
+        reason: cleanReason,
+        payments_settled: paymentsSettled,
+        batch_number: batch.batch_number,
+        acquirer: batch.acquirer,
+        // No payment_terminal_id: LogAuditEvent strips `*_id` keys. Audit views
+        // resolve the terminal from the batch FK (attachSettlementTerminals).
+      },
+    })
+    if (auditResult.error) console.error('[manualBatchout] audit error:', auditResult.error)
+  } catch (error) {
+    console.error('[manualBatchout] audit exception:', error)
+  }
 
   return { success: true, payments_settled: paymentsSettled }
 }

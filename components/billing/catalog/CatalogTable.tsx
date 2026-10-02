@@ -20,8 +20,9 @@ type CatalogColumn = { label: string; className: string; srOnly?: boolean }
  * Service columns by tier (§5.3). The essentials, shown from `md`, are the
  * phone card's fields: service, monthly price and status, plus the edit
  * control. Pricing model and extra-unit price join at `lg`, included quantity
- * and card surcharge at `xl`, category and code at `2xl`. Fixed widths let
- * `table-fixed` truncate the name rather than scroll sideways.
+ * at `xl`, category and code at `2xl`. Fixed widths let `table-fixed` truncate
+ * the name rather than scroll sideways. No card-surcharge column: the
+ * surcharge is one platform-wide rate, not per service.
  */
 export const SERVICE_COLUMNS = {
   service: { label: 'Service', className: '' },
@@ -31,7 +32,6 @@ export const SERVICE_COLUMNS = {
   monthly: { label: 'Monthly', className: 'w-28 text-right' },
   included: { label: 'Included', className: 'hidden w-24 text-right xl:table-cell' },
   extra: { label: 'Extra unit', className: 'hidden w-36 text-right lg:table-cell' },
-  surcharge: { label: 'Card surcharge', className: 'hidden w-32 text-right xl:table-cell' },
   status: { label: 'Status', className: 'w-24' },
   actions: { label: 'Actions', className: 'w-12', srOnly: true },
 } satisfies Record<string, CatalogColumn>

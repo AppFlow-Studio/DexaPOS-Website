@@ -1,5 +1,6 @@
 'use client'
 
+import Link from "next/link";
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -44,10 +45,11 @@ import {
   X,
 } from "lucide-react";
 import { useAuditLogs } from "@/app/dashboard/hooks/useAuditLogs";
+import { describeSettlementActivity } from "@/lib/audit/settlement-activity";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuditCategory, AuditSeverity } from "@/types/audit-log";
+import { AuditCategory, AuditSeverity, type AuditLogWithLocation } from "@/types/audit-log";
 import { DateRange } from "react-day-picker";
 import { MerchantInfoModel } from "@/types/db-modles";
 import { PaginationBar } from "@/components/dashboard/PaginationBar";
@@ -84,6 +86,8 @@ const downloadCsv = (filename: string, content: string): void => {
   URL.revokeObjectURL(url)
 }
 
+const EMPTY_LOGS: AuditLogWithLocation[] = [];
+
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   menu: <FileText className="h-3.5 w-3.5" />,
   staff: <User className="h-3.5 w-3.5" />,
@@ -92,6 +96,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   merchant: <Shield className="h-3.5 w-3.5" />,
   user_management: <User className="h-3.5 w-3.5" />,
   device: <Activity className="h-3.5 w-3.5" />,
+  settlement: <Activity className="h-3.5 w-3.5" />,
   notes: <FileText className="h-3.5 w-3.5" />,
   settings: <Shield className="h-3.5 w-3.5" />,
   authentication: <Shield className="h-3.5 w-3.5" />,
@@ -145,16 +150,60 @@ function readSavedState(merchantId: string | undefined): SavedAuditTabState | nu
   }
 }
 
-interface AuditLogsTabProps {
-    merchantInfo: MerchantInfoModel;
+/**
+ * The table's action cell. Batch events read as words (title, batch, linked
+ * terminal) with a jump to the terminal; the terminal is resolved server-side
+ * from the batch FK (GetAuditLogs).
+ */
+function AuditActionSummary({
+  log,
+  href,
+  merchantId,
+}: {
+  log: AuditLogWithLocation;
+  href: string;
+  merchantId: string;
+}) {
+  const settlement = describeSettlementActivity(log);
+  return (
+    <div className="flex flex-col">
+      <RowLink href={href} className="text-sm font-medium">
+        {settlement?.title ?? log.action}
+      </RowLink>
+      {settlement ? (
+        <>
+          <span className="text-xs text-muted-foreground">
+            {[settlement.batchLabel, settlement.terminalLabel].filter(Boolean).join(" · ")}
+          </span>
+          {settlement.terminalSerial && (
+            <Link
+              href={`/manage/merchants/${merchantId}/devices/terminal/${encodeURIComponent(settlement.terminalSerial)}`}
+              onClick={(event) => event.stopPropagation()}
+              className="w-fit text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              View terminal and its batches
+            </Link>
+          )}
+        </>
+      ) : log.resource_name ? (
+        <span className="text-xs text-muted-foreground">
+          {log.resource_type}: {log.resource_name}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
-export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
+interface AuditLogsTabProps {
+    merchantInfo: MerchantInfoModel;
+    initialCategory?: AuditCategory;
+    merchantLocations?: { id: string; name: string }[];
+}
+
+export function AuditLogsTab({ merchantInfo, initialCategory, merchantLocations = [] }: AuditLogsTabProps) {
   const router = useRouter();
-  // Admin view assumes all locations for now
-  const locations: {id: string, name: string}[] = [];
+  const locations = merchantLocations;
   const isAllLocations = true;
-  const selectedLocationId = null;
 
   const [saved] = useState(() => readSavedState(merchantInfo?.id));
 
@@ -167,7 +216,12 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
   );
 
   const [filters, setFilters] = useState<AuditTabFilters>(
-    () => ({ ...DEFAULT_FILTERS, ...saved?.filters }),
+    // A deep link's category (e.g. "Settlement activity") wins over the saved one.
+    () => ({
+      ...DEFAULT_FILTERS,
+      ...saved?.filters,
+      ...(initialCategory ? { action_category: initialCategory } : {}),
+    }),
   );
 
   const [page, setPage] = useState(saved?.page ?? 1);
@@ -231,6 +285,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
       const headers = [
         'Timestamp',
         'Action',
+        'Batch Terminal',
+        'Terminal Serial',
         'Category',
         'Actor',
         'Severity',
@@ -241,20 +297,25 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
         'Metadata',
       ]
 
-      const rowsCsv = logs.map((log) => [
-        log.created_at,
-        log.action,
-        log.action_category,
-        log.actor_name,
-        log.severity,
-        log.resource_type,
-        log.resource_name,
-        log.location?.name || 'Global',
-        log.changes ? JSON.stringify(log.changes) : '',
-        log.metadata ? JSON.stringify(log.metadata) : '',
-      ].map(escapeCsvValue).join(','))
+      const rowsCsv = logs.map((log) => {
+        const settlement = describeSettlementActivity(log)
+        return [
+          log.created_at,
+          settlement?.title ?? formatKey(log.action),
+          settlement?.terminalLabel ?? '',
+          settlement?.terminalSerial ?? '',
+          log.action_category,
+          log.actor_name,
+          log.severity,
+          log.resource_type,
+          log.resource_name,
+          log.location?.name || 'Global',
+          log.changes ? JSON.stringify(log.changes) : '',
+          log.metadata ? JSON.stringify(log.metadata) : '',
+        ].map(escapeCsvValue).join(',')
+      })
 
-      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\\n')
+      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\n')
       const timestamp = format(new Date(), 'yyyy-MM-dd_HHmm')
       downloadCsv(`DEXA_Merchant_Audit_${timestamp}.csv`, csv)
     } finally {
@@ -262,7 +323,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     }
   }
 
-  const logs = data?.data || [];
+  const logs = data?.data ?? EMPTY_LOGS;
   const total = data?.total || 0;
 
   // Get unique actors from logs for the actor filter
@@ -314,7 +375,11 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
       <PanelSection
         icon={Activity}
         label="Audit Logs"
-        caption={`Track all administrative actions for ${merchantInfo.name}`}
+        caption={
+          filters.action_category === "settlement"
+            ? "Terminal details identify the reader linked to a batch, not necessarily who initiated its settlement."
+            : `Track all administrative actions for ${merchantInfo.name}`
+        }
         action={
           <div className="flex items-center gap-2">
             <span className="hidden text-sm text-muted-foreground tabular-nums sm:inline">
@@ -486,6 +551,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 <SelectItem value="merchant">Merchant</SelectItem>
                 <SelectItem value="user_management">User Management</SelectItem>
                 <SelectItem value="device">Device</SelectItem>
+                <SelectItem value="settlement">Settlements & Batches</SelectItem>
                 <SelectItem value="notes">Notes</SelectItem>
                 <SelectItem value="settings">Settings</SelectItem>
                 <SelectItem value="authentication">Authentication</SelectItem>
@@ -689,16 +755,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col">
-                          <RowLink href={href} className="text-sm font-medium">
-                            {log.action}
-                          </RowLink>
-                          {log.resource_name && (
-                            <span className="text-xs text-muted-foreground">
-                              {log.resource_type}: {log.resource_name}
-                            </span>
-                          )}
-                        </div>
+                        <AuditActionSummary log={log} href={href} merchantId={merchantInfo.id} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={cn(CELL_BADGE, "capitalize")}>
@@ -766,7 +823,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 <RecordLinkCard
                   key={log.id}
                   href={merchantAuditLogHref(merchantInfo.id, log.id)}
-                  title={log.action}
+                  title={describeSettlementActivity(log)?.title ?? log.action}
                   subtitle={[log.actor_name, formatKey(log.action_category)]
                     .filter(Boolean)
                     .join(" · ")}

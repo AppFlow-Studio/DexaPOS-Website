@@ -12,6 +12,7 @@ import {
   TicketStatus,
   TicketCategory,
 } from "@/types/support-ticket";
+import { DeviceSupportTicketLink } from "@/types/device-registry";
 import { LogAuditEvent } from "./audit-logs";
 import {
   requestSupportTicketCreatedNotification,
@@ -70,6 +71,66 @@ export async function GetMyTickets(
 
   if (error) return { error: error.message };
   return { data: data || [], total: count || 0 };
+}
+
+// ============================================================================
+// GET OPEN TICKETS BY DEVICE (Merchant)
+// ============================================================================
+
+/**
+ * The still-open ticket for each device the merchant has reported on, newest
+ * first, keyed by device id. Feeds the band on the Devices page so a merchant
+ * who already asked for help sees that, rather than filing the same report
+ * twice.
+ *
+ * Tickets carry their device in `metadata.device_id`; open ticket volume per
+ * merchant is small, so the rows are filtered here rather than in a JSON query.
+ */
+export async function GetDeviceTicketLinks(
+  clerkOrgId: string,
+): Promise<{ data?: Record<string, DeviceSupportTicketLink>; error?: string }> {
+  if (!clerkOrgId) return { error: "Organization ID is required" };
+
+  const supabase = createServiceRoleClient();
+
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) return { error: "Merchant not found" };
+
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .select("id, ticket_number, subject, status, created_at, metadata")
+    .eq("merchant_id", merchant.id)
+    .in("status", ["open", "in_progress", "waiting_on_merchant"])
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) return { error: error.message };
+
+  const byDevice: Record<string, DeviceSupportTicketLink> = {};
+
+  for (const ticket of data ?? []) {
+    const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
+    const deviceId = metadata.device_id;
+
+    if (typeof deviceId !== "string" || !deviceId) continue;
+    // Rows arrive newest first, so the first hit for a device is the one to show.
+    if (byDevice[deviceId]) continue;
+
+    byDevice[deviceId] = {
+      ticket_id: ticket.id,
+      ticket_number: ticket.ticket_number,
+      subject: ticket.subject,
+      status: ticket.status,
+      created_at: ticket.created_at,
+    };
+  }
+
+  return { data: byDevice };
 }
 
 // ============================================================================
@@ -319,6 +380,57 @@ interface CreateTicketInput {
   locationId?: string;
   metadata?: Record<string, unknown>;
   attachments?: AttachmentInput[];
+  /**
+   * Set when the report was opened from a specific device. The id arrives from
+   * a query string, so it is re-checked against the merchant before it is used.
+   */
+  deviceId?: string;
+}
+
+/**
+ * Writes the ticket into the device's own append-only history.
+ *
+ * device_notes is HQ-insert-only under RLS and guarded against UPDATE/DELETE,
+ * so this runs on the service-role client and never rewrites an existing note —
+ * a later state change appends another row instead.
+ *
+ * A failure here never fails the ticket: the merchant's report is already
+ * filed, and the note is a convenience for whoever picks the ticket up.
+ */
+async function linkTicketToDevice(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  params: {
+    merchantId: string;
+    deviceId: string;
+    ticketNumber: string;
+    subject: string;
+    userId: string;
+    userName: string;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: device, error: deviceError } = await supabase
+    .from("device_inventory")
+    .select("id")
+    .eq("id", params.deviceId)
+    .eq("merchant_id", params.merchantId)
+    .maybeSingle();
+
+  if (deviceError) return { ok: false, error: deviceError.message };
+  if (!device) {
+    return { ok: false, error: "Device does not belong to this merchant" };
+  }
+
+  const { error } = await supabase.from("device_notes").insert({
+    device_id: params.deviceId,
+    note_type: "support",
+    content: params.subject,
+    created_by: params.userId,
+    created_by_name: params.userName,
+    external_ticket_id: params.ticketNumber,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function CreateTicket(
@@ -365,7 +477,9 @@ export async function CreateTicket(
     p_submitted_by_name: userName,
     p_submitted_by_email: userEmail,
     p_carrier_id: merchant.carrier_id || null,
-    p_metadata: input.metadata || {},
+    p_metadata: input.deviceId
+      ? { ...(input.metadata || {}), device_id: input.deviceId }
+      : input.metadata || {},
     p_attachments: attachmentValidation.data,
   });
 
@@ -383,6 +497,25 @@ export async function CreateTicket(
     resourceId: data.ticket_id,
     resourceName: input.subject,
   });
+
+  if (input.deviceId) {
+    const link = await linkTicketToDevice(supabase, {
+      merchantId: merchant.id,
+      deviceId: input.deviceId,
+      ticketNumber: data.ticket_number,
+      subject: input.subject,
+      userId: user.id,
+      userName,
+    });
+
+    if (!link.ok) {
+      console.error("[CreateTicket] Device link failed", {
+        ticketId: data.ticket_id,
+        deviceId: input.deviceId,
+        error: link.error,
+      });
+    }
+  }
 
   const notificationResult =
     await requestSupportTicketCreatedNotification(data.ticket_id);

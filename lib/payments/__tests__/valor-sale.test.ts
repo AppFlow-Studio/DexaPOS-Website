@@ -192,13 +192,17 @@ describe("buildSaleRequestBody", () => {
     expect("tip" in body).toBe(false);
   });
 
-  it("includes tax but leaves tip inside the grand total", () => {
+  it("charges exactly the grand total, never adding tax or tip on top", () => {
+    // Valor adds tax_amount / tip on top of amount, so sending either with a
+    // grand-total amount double-charges the customer (2026-10-01 incident).
     const body = buildSaleRequestBody(credentials, {
       ...baseParams,
-      taxMinor: 225,
-      tipMinor: 500,
+      money: { amountMinor: 1516, currency: "USD" },
+      tipMinor: 215,
     });
-    expect(body.tax_amount).toBe("2.25");
+    expect(body.amount).toBe("15.16");
+    expect("tax_amount" in body).toBe(false);
+    expect("tax" in body).toBe(false);
     expect("tip" in body).toBe(false);
   });
 

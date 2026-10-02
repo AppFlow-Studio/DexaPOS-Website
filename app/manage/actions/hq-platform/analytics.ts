@@ -8,6 +8,8 @@ import {
   isOrderReportable,
   RECOGNIZED_PAYMENT_STATUSES,
 } from '@/lib/reporting/recognized-order'
+import { attachSettlementTerminals } from '@/lib/audit/attach-settlement-terminals'
+import type { SettlementBatchIdentity, SettlementTerminalAttribution } from '@/types/audit-log'
 
 // ============================================================================
 // TYPES
@@ -286,6 +288,10 @@ export interface PlatformAuditLogRow {
   pii_access_type?: string | null
   /** Performed by an HQ admin through View as merchant. */
   is_impersonation?: boolean
+  /** Settlement rows only — the batch's linked terminal, resolved from its FK. */
+  settlement_terminal?: SettlementTerminalAttribution
+  /** Settlement batch rows only — the batch's own label fields. */
+  settlement_batch?: SettlementBatchIdentity
 }
 
 export interface PlatformAuditLogsResult {
@@ -756,7 +762,9 @@ export async function getPlatformAuditLogById(
     return { data: null, error: error.message }
   }
 
-  return { data: data ? toPlatformAuditLogRow(data) : null }
+  if (!data) return { data: null }
+  const [row] = await attachSettlementTerminals([toPlatformAuditLogRow(data)])
+  return { data: row }
 }
 
 /**
@@ -862,7 +870,7 @@ export async function getPlatformAuditLogs(
   const rows: PlatformAuditLogRow[] = (data || []).map(toPlatformAuditLogRow)
 
   return {
-    data: rows,
+    data: await attachSettlementTerminals(rows),
     total: count || 0
   }
 }

@@ -40,7 +40,7 @@ import { detectTemplateConflicts } from "@/lib/scheduling-rules";
 import { PublishModal } from "./PublishModal";
 import { OpenShiftsSheet } from "./OpenShiftsSheet";
 import { FiltersPanel } from "./FiltersPanel";
-import { DollarSign, Trash2 } from "lucide-react";
+import { Clock3, Trash2 } from "lucide-react";
 import { Role } from "@/types/schedule";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import {
@@ -308,26 +308,24 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             </Button>
           </div>
 
-          {/* Compact Labor Cost Badge */}
+          {/* Planned time is available here; labor cost needs actual pay rates. */}
           {schedule && schedule.shifts && schedule.shifts.length > 0 && (
             <div className="flex items-center gap-2 rounded-full bg-muted/45 px-3 py-2">
-              <DollarSign className="h-4 w-4 text-primary" />
+              <Clock3 className="h-4 w-4 text-primary" />
               <div className="text-sm">
-                <span className="text-muted-foreground">Labor:</span>{" "}
+                <span className="text-muted-foreground">Planned hours:</span>{" "}
                 <span className="font-semibold">
-                  $
                   {(() => {
                     const totalMinutes = schedule.shifts.reduce(
                       (acc, shift) => {
                         const start = new Date(shift.start_time).getTime();
                         const end = new Date(shift.end_time).getTime();
-                        return acc + (end - start) / (1000 * 60);
+                        const duration = Math.max(0, (end - start) / (1000 * 60));
+                        return acc + Math.max(0, duration - (shift.break_minutes ?? 0));
                       },
                       0
                     );
-                    return Math.round(
-                      (totalMinutes / 60) * 18.5
-                    ).toLocaleString();
+                    return `${(totalMinutes / 60).toLocaleString(undefined, { maximumFractionDigits: 1 })}h`;
                   })()}
                 </span>
               </div>
@@ -405,7 +403,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             onClick={() => setIsPublishModalOpen(true)}
           >
             <Send className="h-4 w-4" />
-            Publish
+            Mark as Published
           </Button>
         </div>
       </div>

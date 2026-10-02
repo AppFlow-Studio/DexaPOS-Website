@@ -1,9 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Banknote, TrendingUp, AlertTriangle, Layers, CreditCard } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { usePlatformSettlementBatches } from '@/lib/queries/use-platform-analytics'
 import { BatchReconciliationSection } from '@/app/manage/transactions/components/BatchReconciliationSection'
@@ -122,9 +124,9 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
         },
         {
             icon: TrendingUp,
-            label: 'Net deposit',
+            label: 'Batch net total',
             value: known ? formatCurrency(totals.net) : '—',
-            meta: 'Funded to bank',
+            meta: 'Across visible batches; not bank deposits',
         },
         {
             icon: AlertTriangle,
@@ -133,7 +135,9 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
             meta: known
                 ? totals.discrepancies > 0
                     ? 'Review flagged batches'
-                    : 'All matched'
+                    : totals.count > 0
+                      ? 'No mismatches in visible batches'
+                      : 'No batches yet'
                 : undefined,
         },
     ]
@@ -154,8 +158,18 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
         <div className="space-y-6">
             <Panel>
                 <PanelSection
-                    label="TSYS Settlements"
-                    caption="Acquiring batches from TSYS alongside our local reconciliation."
+                    label="Batches & Deposits"
+                    caption="Match POS batches to their terminals, then compare processor records and bank deposits."
+                    action={
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/manage/merchants/${merchantId}?tab=devices`}>Payment devices</Link>
+                            </Button>
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/manage/merchants/${merchantId}?tab=audit&category=settlement`}>Settlement activity</Link>
+                            </Button>
+                        </div>
+                    }
                 >
                     <KpiStrip cells={cells} loading={isLoading} />
                 </PanelSection>
@@ -164,11 +178,11 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
             <Tabs value={tab} onValueChange={setTab} className="gap-0">
                 <div ref={railRef} className="w-full min-w-0 overflow-x-auto pb-1">
                     <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
-                        <TabsTrigger value="ours" className={TAB_PILL_CLASS}>Our batches</TabsTrigger>
-                        <TabsTrigger value="payments" className={TAB_PILL_CLASS}>Payments</TabsTrigger>
-                        <TabsTrigger value="luqra" className={TAB_PILL_CLASS}>TSYS transactions</TabsTrigger>
-                        <TabsTrigger value="batches" className={TAB_PILL_CLASS}>TSYS batches</TabsTrigger>
-                        <TabsTrigger value="deposits" className={TAB_PILL_CLASS}>Deposits</TabsTrigger>
+                        <TabsTrigger value="ours" className={TAB_PILL_CLASS}>POS batches</TabsTrigger>
+                        <TabsTrigger value="payments" className={TAB_PILL_CLASS}>Card payments</TabsTrigger>
+                        <TabsTrigger value="luqra" className={TAB_PILL_CLASS}>Processor transactions</TabsTrigger>
+                        <TabsTrigger value="batches" className={TAB_PILL_CLASS}>Processor batches</TabsTrigger>
+                        <TabsTrigger value="deposits" className={TAB_PILL_CLASS}>Bank deposits</TabsTrigger>
                     </TabsList>
                 </div>
 
@@ -186,7 +200,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 <TabsContent value="payments" className="mt-4">
                     <Panel>
                         <PanelSection
-                            label="Payments"
+                            label="Card payments"
                             caption="Card payments recorded against this merchant's orders."
                         >
                             <MerchantPaymentsTab merchantId={merchantId} locations={allLocations} />
@@ -197,7 +211,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 <TabsContent value="luqra" className="mt-4">
                     <Panel>
                         <PanelSection
-                            label="TSYS transactions"
+                            label="Processor transactions"
                             caption="Transactions cached locally from Luqra."
                         >
                             {locations.length === 0 ? (
@@ -212,8 +226,8 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 <TabsContent value="batches" className="mt-4">
                     <Panel>
                         <PanelSection
-                            label="TSYS batches"
-                            caption="Settlement batches cached from Luqra. Open a batch to see its transactions."
+                            label="Processor batches"
+                            caption="Settlement batches cached from Luqra, grouped by merchant ID and location. Open a batch to see its transactions. This view does not identify the linked payment terminal; use POS batches for terminal-level reconciliation."
                         >
                             {locations.length === 0 ? (
                                 <NoMids body="Assign a Luqra MID to a location and run Sync to pull batches." />
@@ -227,7 +241,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 <TabsContent value="deposits" className="mt-4">
                     <Panel>
                         <PanelSection
-                            label="Deposits"
+                            label="Bank deposits"
                             caption="Bank deposits cached from Luqra. Open a deposit to see its transactions."
                         >
                             {locations.length === 0 ? (

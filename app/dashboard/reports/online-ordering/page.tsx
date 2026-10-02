@@ -2,7 +2,6 @@
 
 import { useMemo, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { subDays } from "date-fns";
 import {
   Bar,
   BarChart,
@@ -27,10 +26,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import { Badge } from "@/components/ui/badge";
-import {
-  DateRangePicker,
-  DatePreset,
-} from "@/components/dashboard/orders/DateRangePicker";
+import { DateRangePicker } from "@/components/dashboard/orders/DateRangePicker";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useOnlineOrderingAnalytics } from "../../hooks/useOrderAnalytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { DollarSign, ShoppingCart, TrendingUp, Truck, Ban } from "lucide-react";
@@ -43,24 +40,6 @@ import {
   type PlatformSlug,
 } from "@/lib/orderout/platform";
 import { formatCurrency } from "@/lib/utils";
-
-function parseDateParam(value: string | null): Date | null {
-  if (!value) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const [, y, m, d] = match;
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-// Inverse of parseDateParam: serialize a Date to a local "YYYY-MM-DD" string
-// (local components, not UTC, so the day never shifts across timezones).
-function formatDateParam(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
 
 // Synthetic tab value for the "All platforms" view (real slugs never collide).
 const ALL_PLATFORMS = "__all__";
@@ -343,21 +322,11 @@ function OnlineOrderingReportsContent() {
       ? platformParam
       : ALL_PLATFORMS;
 
-  // ---- Date range + preset ----
-  const dateRange = useMemo(() => {
-    const from = parseDateParam(searchParams.get("from"));
-    const to = parseDateParam(searchParams.get("to"));
-    if (from && to) return { from, to };
-    return { from: subDays(new Date(), 30), to: new Date() };
-  }, [searchParams]);
+  // ---- Date range + preset: shared with every report page ----
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
 
-  const preset = (searchParams.get("preset") as DatePreset) || "last_30_days";
-
-  // Single helper so platform and date writes share one param set and don't
-  // clobber each other. Multiple mutations in the same tick — e.g. the picker's
-  // Apply calls onDateRangeChange AND onPresetChange synchronously — are
-  // buffered onto one URLSearchParams and flushed once on a microtask, so they
-  // compose into a single router.replace instead of overwriting each other.
+  // Buffers same-tick URL writes onto one URLSearchParams and flushes them in a
+  // single router.replace, so writes never overwrite each other.
   const pendingParamsRef = useRef<URLSearchParams | null>(null);
   const updateParams = useCallback(
     (mutate: (p: URLSearchParams) => void) => {
@@ -383,13 +352,6 @@ function OnlineOrderingReportsContent() {
         if (next === ALL_PLATFORMS) p.delete("platform");
         else p.set("platform", next);
       });
-    },
-    [updateParams]
-  );
-
-  const setPreset = useCallback(
-    (next: DatePreset) => {
-      updateParams((p) => p.set("preset", next));
     },
     [updateParams]
   );
@@ -433,12 +395,7 @@ function OnlineOrderingReportsContent() {
   );
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
-    if (from && to) {
-      updateParams((p) => {
-        p.set("from", formatDateParam(from));
-        p.set("to", formatDateParam(to));
-      });
-    }
+    if (from && to) setDateRange(from, to);
   };
 
   return (

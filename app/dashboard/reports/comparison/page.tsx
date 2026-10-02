@@ -19,6 +19,11 @@ import { PerformanceRadarChart } from "./components/PerformanceRadarChart";
 import { SalesHeatMap } from "./components/SalesHeatMap";
 import { LocationLeaderboard } from "./components/LocationLeaderboard";
 import { useComparisonData } from "./hooks/useComparisonData";
+import {
+  DateRangePicker,
+  type DatePreset,
+} from "@/components/dashboard/orders/DateRangePicker";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { Button } from "@/components/ui/button";
 import { ReportPanel as Card, ReportPanelContent as CardContent } from "@/components/dashboard/reports/ReportPanel";
 import { PageHeader, PageShell } from "@/components/dashboard/shell";
@@ -33,6 +38,18 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type RangePreset = "today" | "yesterday" | "7d" | "30d";
+const RANGE_TO_PRESET: Record<RangePreset, DatePreset> = {
+  today: "today",
+  yesterday: "yesterday",
+  "7d": "last_7_days",
+  "30d": "last_30_days",
+};
+const PRESET_TO_RANGE: Partial<Record<DatePreset, RangePreset>> = {
+  today: "today",
+  yesterday: "yesterday",
+  last_7_days: "7d",
+  last_30_days: "30d",
+};
 type MetricType = "gross_sales" | "net_sales" | "order_count" | "avg_ticket";
 
 export default function ComparisonDashboardPage() {
@@ -45,7 +62,11 @@ export default function ComparisonDashboardPage() {
   );
 
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
-  const [activeRange, setActiveRange] = useState<RangePreset>("30d");
+  // Date range shared with every other report page; the toolbar pills are
+  // shortcuts onto it, and the picker in the header covers any other range.
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
+  const activeRange = PRESET_TO_RANGE[preset] ?? null;
+  const handleRangeChange = (range: RangePreset) => setPreset(RANGE_TO_PRESET[range]);
   const [selectedMetric, setSelectedMetric] = useState<MetricType>("net_sales");
   const [compareMode, setCompareMode] = useState<"previous" | "year">(
     "previous"
@@ -79,7 +100,7 @@ export default function ComparisonDashboardPage() {
   } = useComparisonData(
     clerkOrgId,
     effectiveLocationIds,
-    activeRange,
+    dateRange,
     effectiveLocationIds.length > 0
   );
 
@@ -99,6 +120,15 @@ export default function ComparisonDashboardPage() {
         backLabel="Back to Reports"
         actions={
           <>
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={(from, to) => {
+              if (from && to) setDateRange(from, to);
+            }}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
           <Button
             variant="outline"
             size="sm"
@@ -183,7 +213,7 @@ export default function ComparisonDashboardPage() {
 
           <ComparisonToolbar
             activeRange={activeRange}
-            onRangeChange={setActiveRange}
+            onRangeChange={handleRangeChange}
             compareMode={compareMode}
             onCompareModeChange={setCompareMode}
             showComparison={showComparison}

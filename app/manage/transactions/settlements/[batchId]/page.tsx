@@ -31,6 +31,8 @@ import {
     formatLabel,
     getOriginLabel,
     SettlementBatchPanel,
+    batchTerminalHref,
+    batchTerminalLabel,
 } from '../../components/SettlementBatchPanel'
 
 const BACK_HREF = transactionsTabHref('settlements')
@@ -73,6 +75,8 @@ export default function SettlementBatchDetailPage() {
     }
 
     const originLabel = getOriginLabel(batch.origin)
+    const terminalLookupFailed = !!query.data?.terminalLookupFailed
+    const terminalHref = batchTerminalHref(batch)
 
     return (
         <PageShell as="div">
@@ -89,7 +93,7 @@ export default function SettlementBatchDetailPage() {
             <Panel padded>
                 <StatRow columns={4}>
                     <StatTile label="Gross" value={formatCurrency(batch.gross_amount)} meta="Submitted for settlement" />
-                    <StatTile label="Net deposit" value={formatCurrency(batch.net_deposit)} meta="Paid to the merchant's bank" />
+                    <StatTile label="Batch net" value={formatCurrency(batch.net_deposit)} meta="After refunds and fees; not a bank deposit" />
                     <StatTile
                         label="Transactions"
                         value={batch.transaction_count.toLocaleString()}
@@ -122,6 +126,18 @@ export default function SettlementBatchDetailPage() {
                                     }
                                 />
                                 <DetailRow label="Location" value={batch.location_name} />
+                                <DetailRow
+                                    label="Linked terminal"
+                                    value={
+                                        terminalHref ? (
+                                            <Link href={terminalHref} className="underline-offset-2 hover:underline">
+                                                {batchTerminalLabel(batch, terminalLookupFailed)} · Serial {batch.terminal_serial}
+                                            </Link>
+                                        ) : (
+                                            batchTerminalLabel(batch, terminalLookupFailed)
+                                        )
+                                    }
+                                />
                                 <DetailRow label="Status" value={formatLabel(batch.status)} />
                                 <DetailRow label="Business date" value={formatDateOnly(batch.business_date)} />
                                 <DetailRow label="Opened" value={batch.opened_at ? formatDateTime(batch.opened_at) : null} />
@@ -157,6 +173,7 @@ export default function SettlementBatchDetailPage() {
                     <SettlementBatchPanel
                         batch={batch}
                         showSummary={false}
+                        terminalLookupFailed={terminalLookupFailed}
                         onBatchChanged={() => query.refetch()}
                     />
                 </PanelSection>

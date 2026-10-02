@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useKitchenPerformance } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
@@ -36,7 +37,7 @@ import {
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import type { KitchenStationStats } from "@/types/analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import {
@@ -75,11 +76,8 @@ const chartConfig = {
 };
 
 export default function KitchenPerformancePage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [stationSort, setStationSort] = useState<StationSort>("total_items");
   const [stationDir, setStationDir] = useState<SortDir>("desc");
   const [hiddenCols, setHiddenCols] = useState(() =>
@@ -91,7 +89,6 @@ export default function KitchenPerformancePage() {
   const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
   const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
   const { data: kitchen, isLoading, isError } = useKitchenPerformance(queryDateRange.from, queryDateRange.to);
 
@@ -160,12 +157,11 @@ export default function KitchenPerformancePage() {
       <ReportPageHeader
         title="Kitchen Performance"
         description="Ticket times, throughput and station efficiency"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
-            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange(from, to); }}
             preset={preset}
             onPresetChange={setPreset}
           />

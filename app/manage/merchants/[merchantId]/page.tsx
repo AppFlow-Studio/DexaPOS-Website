@@ -94,17 +94,17 @@ const SECTIONS: SectionDef[] = [
     { value: 'overview', group: 'Account', icon: LayoutDashboard, label: 'Overview' },
     { value: 'business-info', group: 'Account', icon: Building2, label: 'Business' },
     { value: 'notes', group: 'Account', icon: StickyNote, label: 'Notes' },
-    { value: 'audit', group: 'Account', icon: History, label: 'Audit' },
-    { value: 'mids', group: 'Processing', icon: CreditCard, label: 'MIDs' },
-    { value: 'valor-boarding', group: 'Processing', icon: CreditCard, label: 'Valor Boarding', shortLabel: 'Valor' },
-    { value: 'settlements', group: 'Processing', icon: Banknote, label: 'Settlements' },
+    { value: 'audit', group: 'Account', icon: History, label: 'Activity Log', shortLabel: 'Activity' },
+    { value: 'mids', group: 'Processing', icon: CreditCard, label: 'Merchant IDs (MIDs)', shortLabel: 'MIDs' },
+    { value: 'devices', group: 'Processing', icon: Monitor, label: 'Stations & Terminals', shortLabel: 'Devices', requires: 'devices' },
+    { value: 'valor-boarding', group: 'Processing', icon: CreditCard, label: 'Valor Setup', shortLabel: 'Valor' },
+    { value: 'settlements', group: 'Processing', icon: Banknote, label: 'Batches & Deposits', shortLabel: 'Batches' },
     { value: 'disputes', group: 'Processing', icon: ShieldCheck, label: 'Disputes' },
     { value: 'billing', group: 'Processing', icon: Receipt, label: 'Billing' },
     { value: 'platform-billing', group: 'Processing', icon: FileText, label: 'Platform Billing' },
     { value: 'subscriptions', group: 'Processing', icon: CircleDollarSign, label: 'Subscriptions', requires: 'billing' },
     { value: 'online-store', group: 'Operations', icon: Globe, label: 'Online Store' },
     { value: 'support', group: 'Operations', icon: LifeBuoy, label: 'Support' },
-    { value: 'devices', group: 'Operations', icon: Monitor, label: 'Devices', requires: 'devices' },
     { value: 'locations', group: 'Operations', icon: MapPin, label: 'Locations' },
 ]
 
@@ -378,7 +378,11 @@ export default function MerchantDetailsPage() {
                 {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
 
                 {activeTab === 'audit' && (
-                    <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                    <AuditLogsTab
+                        merchantInfo={merchantDetails as unknown as MerchantInfoModel}
+                        initialCategory={searchParams.get('category') === 'settlement' ? 'settlement' : undefined}
+                        merchantLocations={merchantDetails.locations?.map((location) => ({ id: location.id, name: location.name })) ?? []}
+                    />
                 )}
 
                 {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}

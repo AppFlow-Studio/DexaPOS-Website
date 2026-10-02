@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { useSalesByItemReport } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
@@ -97,11 +98,8 @@ function SortIcon({
 }
 
 export default function SalesByItemsPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("net_sales");
@@ -162,7 +160,9 @@ export default function SalesByItemsPage() {
   const summary = useMemo(() => {
     const src = items ?? [];
     return {
-      totalItems: src.length,
+      // Rows are (item, category) pairs; the same item rung under two
+      // categories is still one item.
+      totalItems: new Set(src.map((r) => r.item_name)).size,
       totalQty: src.reduce((s, r) => s + r.quantity_sold, 0),
       totalGross: src.reduce((s, r) => s + r.gross_sales, 0),
       totalNet: src.reduce((s, r) => s + r.net_sales, 0),
@@ -223,13 +223,12 @@ export default function SalesByItemsPage() {
       <ReportPageHeader
         title="Sales by Items"
         description="Menu item performance breakdown"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
             onDateRangeChange={(from, to) => {
-              if (from && to) setDateRange({ from, to });
+              if (from && to) setDateRange(from, to);
             }}
             preset={preset}
             onPresetChange={setPreset}

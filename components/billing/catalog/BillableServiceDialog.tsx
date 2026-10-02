@@ -22,7 +22,6 @@ import {
   PRICING_MODEL_LABELS,
   SERVICE_CATEGORY_LABELS,
   parseMoneyInput,
-  parsePercentInput,
   parsePositiveInteger,
 } from './catalog-format'
 
@@ -34,7 +33,6 @@ type ServiceForm = {
   basePriceMonthly: string
   additionalUnitPrice: string
   includedQuantity: string
-  cardSurchargePct: string
   unitLabel: string
   isActive: boolean
 }
@@ -51,7 +49,6 @@ function toForm(service: BillableServiceRecord | null): ServiceForm {
         ? ''
         : String(service.additional_unit_price),
     includedQuantity: String(service?.included_quantity ?? 0),
-    cardSurchargePct: String(service?.card_surcharge_pct ?? 4),
     unitLabel: service?.unit_label ?? 'unit',
     isActive: service?.is_active ?? true,
   }
@@ -88,7 +85,6 @@ export function BillableServiceDialog({
         additionalUnitPrice:
           form.additionalUnitPrice.trim().length > 0 ? parseMoneyInput(form.additionalUnitPrice) : null,
         includedQuantity: parsePositiveInteger(form.includedQuantity),
-        cardSurchargePct: parsePercentInput(form.cardSurchargePct),
         unitLabel: form.unitLabel.trim() || 'unit',
         isActive: form.isActive,
         metadata: { source: 'hq_billing_catalog' },
@@ -219,19 +215,12 @@ export function BillableServiceDialog({
             onChange={(event) => set('additionalUnitPrice', event.target.value)}
           />
         </FormField>
-        <FormField id="service-surcharge" label="Card surcharge">
-          <AffixedNumberInput
-            id="service-surcharge"
-            affix="%"
-            position="end"
-            min={0}
-            max={100}
-            step="0.01"
-            value={form.cardSurchargePct}
-            onChange={(event) => set('cardSurchargePct', event.target.value)}
-          />
-        </FormField>
       </FormGroup>
+
+      <p className="text-xs text-muted-foreground">
+        Card surcharge is one platform-wide rate applied to the whole invoice. It is not set per
+        service.
+      </p>
     </CatalogFormDialog>
   )
 }

@@ -5,7 +5,6 @@ import { subDays } from "date-fns";
 import {
   PageShell,
   PageHeader,
-  LocationIndicator,
   Panel,
   StatRow,
   StatTile,
@@ -13,7 +12,6 @@ import {
 import { useFinancialKPIs } from "../hooks/useOrderAnalytics";
 import { useOrders } from "../hooks/useOrder";
 import { FinancialHeroChart } from "../transactions/components/FinancialHeroChart";
-import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
 import {
   DatePreset,
   DateRangePicker,
@@ -41,8 +39,6 @@ export default function FinancialOverviewPage() {
   // Chart-specific time range state
   const [chartTimeRange, setChartTimeRange] = useState<TimeRangeType>("7d");
 
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const queryDateRange = useReportingQueryRange(dateRange);
 
   // 1. Fetch data for Left Column (Summary) based on Picker Date
@@ -171,16 +167,6 @@ export default function FinancialOverviewPage() {
       <PageHeader
         title="Financial Overview"
         subtitle="Revenue, orders, and payment activity"
-        indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={
-              selectedLocation?.id && !Array.isArray(selectedLocation)
-                ? selectedLocation.name
-                : undefined
-            }
-          />
-        }
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

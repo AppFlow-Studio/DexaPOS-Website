@@ -88,7 +88,6 @@ import {
   VendorWithStats,
 } from "./hooks/useInventoryManagement";
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -688,14 +687,6 @@ export default function InventoryPage() {
             : isAllLocations
               ? "Manage the shared inventory catalog and vendor network."
               : `Manage inventory for ${selectedLocation?.name || "the selected location"}.`
-        }
-        indicator={
-          !isSingleLocation ? (
-            <LocationIndicator
-              isAllLocations={isAllLocations}
-              locationName={selectedLocation?.name}
-            />
-          ) : undefined
         }
         stackActionsBelowIndicatorOnMobile
         actions={

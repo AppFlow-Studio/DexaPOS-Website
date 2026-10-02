@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, subDays } from 'date-fns'
@@ -39,6 +40,8 @@ import {
 import {
   batchErrorDetail,
   batchErrorTitle,
+  batchTerminalHref,
+  batchTerminalLabel,
   DiscrepancyValue,
   formatBatchLabel,
   formatCurrency,
@@ -107,6 +110,7 @@ export function BatchReconciliationSection({
 
   const batches = useMemo(() => batchesResult?.data || [], [batchesResult])
   const batchErrorCode = batchesResult?.errorCode
+  const terminalLookupFailed = !!batchesResult?.terminalLookupFailed
 
   const selectedBatch = useMemo(
     () => (selectsInPlace ? batches.find((batch) => batch.id === selectedBatchId) || null : null),
@@ -225,6 +229,13 @@ export function BatchReconciliationSection({
         />
       )}
 
+      {/* Said in words on a neutral callout, never a tinted banner (§3.5). */}
+      {terminalLookupFailed && (
+        <div role="alert" className="rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+          Batch totals loaded, but terminal details could not be loaded. Device attribution is unavailable until you refresh.
+        </div>
+      )}
+
       <div>
         {/* A table from `md`; open/close times, tip and refund join at `xl`. */}
         <Table
@@ -238,7 +249,7 @@ export function BatchReconciliationSection({
               <TableHead>
                 <span className="inline-flex items-center gap-1">Batch ID <InfoIcon tip="The settlement batch identifier, composed of acquirer prefix and batch number (e.g. TSYS-009)." side="bottom" /></span>
               </TableHead>
-              <TableHead>Merchant</TableHead>
+              <TableHead>{scopedMerchantId ? 'Batch terminal / location' : 'Merchant'}</TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Business date <InfoIcon tip="The processing date the batch belongs to. Usually the calendar date of the settlement run." side="bottom" /></span>
               </TableHead>
@@ -257,7 +268,7 @@ export function BatchReconciliationSection({
                 <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
               </TableHead>
               <TableHead className="text-right tabular-nums">
-                <span className="inline-flex items-center justify-end gap-1">Net deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
+                <span className="inline-flex items-center justify-end gap-1">Batch net <InfoIcon tip="Net amount recorded for this batch after refunds and fees. Check the funded status and processor deposit record before treating it as money received in the bank." side="bottom" /></span>
               </TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>
@@ -300,8 +311,14 @@ export function BatchReconciliationSection({
                       {selectsInPlace ? label : <RowLink href={settlementBatchDetailHref(batch.id)}>{label}</RowLink>}
                     </TableCell>
                     <TableCell className="min-w-[9rem] whitespace-normal">
-                      <div className="font-medium">{batch.merchant_name}</div>
-                      <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
+                      {scopedMerchantId ? (
+                        <BatchTerminalCell batch={batch} terminalLookupFailed={terminalLookupFailed} />
+                      ) : (
+                        <>
+                          <div className="font-medium">{batch.merchant_name}</div>
+                          <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell>{formatDateOnly(batch.business_date)}</TableCell>
                     <TableCell className={`${XL_ONLY} whitespace-normal text-xs text-muted-foreground`}>{formatDateTime(batch.opened_at)}</TableCell>
@@ -346,7 +363,7 @@ export function BatchReconciliationSection({
                 selected={selectsInPlace && selectedBatchId === batch.id}
                 title={<span className="font-mono">{formatBatchLabel(batch)}</span>}
                 figure={formatCurrency(batch.net_deposit)}
-                subtitle={batch.merchant_name}
+                subtitle={scopedMerchantId ? batchTerminalLabel(batch, terminalLookupFailed) : batch.merchant_name}
                 status={
                   batch.has_discrepancy ? (
                     <DiscrepancyValue batch={batch} />
@@ -377,10 +394,40 @@ export function BatchReconciliationSection({
           <SettlementBatchPanel
             batch={selectedBatch}
             renderBatchPayments={renderBatchPayments}
+            terminalLookupFailed={terminalLookupFailed}
             onBatchChanged={() => refetchBatches()}
           />
         </div>
       )}
     </div>
+  )
+}
+
+/** Merchant-scoped list: the batch's linked terminal, then serial and location. */
+function BatchTerminalCell({
+  batch,
+  terminalLookupFailed,
+}: {
+  batch: PlatformSettlementBatch
+  terminalLookupFailed: boolean
+}) {
+  const href = batchTerminalHref(batch)
+  return (
+    <>
+      {href ? (
+        <Link
+          href={href}
+          onClick={(event) => event.stopPropagation()}
+          className="font-medium underline-offset-2 hover:underline"
+        >
+          {batch.terminal_name || 'Payment terminal'}
+        </Link>
+      ) : (
+        <div className="font-medium text-muted-foreground">{batchTerminalLabel(batch, terminalLookupFailed)}</div>
+      )}
+      <div className="text-xs text-muted-foreground">
+        {batch.terminal_serial ? `Serial ${batch.terminal_serial} · ` : ''}{batch.location_name || 'No location'}
+      </div>
+    </>
   )
 }

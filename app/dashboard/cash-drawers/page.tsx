@@ -33,7 +33,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  LocationIndicator,
   PageHeader,
   PageShell,
   Panel,
@@ -120,7 +119,6 @@ export default function CashDrawersPage() {
         <PageHeader
           title="Cash Drawers"
           subtitle="Define and run drawer sessions for each location."
-          indicator={<LocationIndicator isAllLocations />}
         />
         <Panel padded>
           <div className="flex min-h-52 flex-col items-center justify-center text-center">
@@ -145,12 +143,6 @@ export default function CashDrawersPage() {
         <PageHeader showSubtitleOnMobile
           title="Cash Drawers"
           subtitle="Drawer sessions could not be loaded."
-          indicator={
-            <LocationIndicator
-              isAllLocations={false}
-              locationName={selectedLocation?.name}
-            />
-          }
         />
         <Panel padded>
           <div className="flex min-h-52 flex-col items-center justify-center text-center">
@@ -183,12 +175,6 @@ export default function CashDrawersPage() {
       <PageHeader
         title="Cash Drawers"
         subtitle="Monitor drawer assignments and open sessions from one workspace."
-        indicator={
-          <LocationIndicator
-            isAllLocations={false}
-            locationName={selectedLocation?.name}
-          />
-        }
         actions={
           <Button className="h-9 rounded-full px-4" onClick={handleAdd} disabled={!clerkOrgId}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -386,12 +372,6 @@ function PageSkeleton({ title }: { title?: string } = {}) {
       <PageHeader
         title="Cash Drawers"
         subtitle="Monitor drawer assignments and open sessions from one workspace."
-        indicator={
-          <LocationIndicator
-            isAllLocations={!title}
-            locationName={title}
-          />
-        }
         actions={<Skeleton className="h-9 w-40 rounded-full" />}
       />
       <Panel className="overflow-hidden">

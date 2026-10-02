@@ -50,7 +50,7 @@ export async function sendSubscriptionPlanDecisionEmail(params: {
       params.reason
         ? infoCallout({ html: `<strong>Note from Dexa HQ:</strong> ${escapeHtml(params.reason)}`, tone: approved ? 'neutral' : 'warn' })
         : '',
-      emailButton({ href: `${appUrl || 'https://dexaposai.com'}/dashboard/subscriptions/billing`, label: 'View billing & payments' }),
+      emailButton({ href: `${appUrl || 'https://dexaposai.com'}/dashboard/subscriptions?section=billing`, label: 'View billing & payments' }),
     ]
       .filter(Boolean)
       .join('\n'),

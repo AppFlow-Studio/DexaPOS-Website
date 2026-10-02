@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import type { PlatformAuditLogRow } from '@/app/manage/actions/hq-platform/analytics'
-import type { AuditLogWithLocation } from '@/types/audit-log'
+import type { AuditCategory, AuditLogWithLocation } from '@/types/audit-log'
+import { CATEGORY_LABELS } from '@/types/audit-log'
 
 /*
  * What the platform audit list (/manage/audit-logs) and one entry's page
@@ -41,6 +42,11 @@ export function formatActionLabel(value?: string): string {
   if (!value) return '—'
   return value.replace(/\./g, ' ').replace(/_/g, ' ').split(' ').filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+}
+
+export function categoryLabel(value?: string): string {
+  if (!value) return '—'
+  return CATEGORY_LABELS[value as AuditCategory] ?? formatActionLabel(value)
 }
 
 export function normalizeStatus(value?: string): 'success' | 'failed' | 'unknown' {
@@ -92,6 +98,8 @@ export function rowToFakeLog(row: PlatformAuditLogRow): AuditLogWithLocation {
     location: row.location_name
       ? { id: row.location_id ?? '', name: row.location_name }
       : undefined,
+    settlement_terminal: row.settlement_terminal,
+    settlement_batch: row.settlement_batch,
   } as AuditLogWithLocation
 }
 

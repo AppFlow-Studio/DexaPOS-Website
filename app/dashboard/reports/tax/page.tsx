@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import { startOfMonth } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
@@ -22,7 +23,7 @@ import {
 } from "./components/TaxBreakdownTable";
 import { TaxCategoryChart } from "./components/TaxCategoryChart";
 import { TaxLocationTable } from "./components/TaxLocationTable";
-import { useSelectedLocation } from "@/stores/location-store";
+
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
 import { PageShell } from "@/components/dashboard/shell";
@@ -30,11 +31,8 @@ import { PageShell } from "@/components/dashboard/shell";
 const PAGE_SIZE = 10;
 
 export default function TaxReportPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: startOfMonth(new Date()),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("this_month");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
   const [activeTab, setActiveTab] = useState("breakdown");
   const [page, setPage] = useState(0);
   const [filterOrderType, setFilterOrderType] = useState("all");
@@ -46,12 +44,11 @@ export default function TaxReportPage() {
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
     if (from && to) {
-      setDateRange({ from, to });
+      setDateRange(from, to);
       setPage(0);
     }
   }
@@ -97,7 +94,6 @@ export default function TaxReportPage() {
       <ReportPageHeader
         title="Tax Report"
         description="Tax collected, refunded and net liability"
-        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
         actions={
           <DateRangePicker
             dateFrom={dateRange.from}

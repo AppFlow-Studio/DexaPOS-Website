@@ -25,6 +25,7 @@ import { usePlatformAuditLogs } from '@/lib/queries/use-platform-analytics'
 import type { PlatformAuditLogFilters, PlatformAuditLogRow } from '@/app/manage/actions/hq-platform/analytics'
 import { MerchantSearchSelect } from '@/components/admin/MerchantSearchSelect'
 import { buildAuditSentence } from '@/lib/audit/sentence-templates'
+import { describeSettlementActivity } from '@/lib/audit/settlement-activity'
 import { PII_ACCESS_TYPES, PII_ACCESS_TYPE_LABELS, type PiiAccessType } from '@/types/audit-log'
 import {
   CardGridEmpty,
@@ -42,8 +43,8 @@ import {
   STATUS_LABELS,
   absoluteTime,
   auditLogHref,
+  categoryLabel,
   detectAnomalies,
-  formatActionLabel,
   inferOrgType,
   normalizeStatus,
   relativeTime,
@@ -82,7 +83,7 @@ const COMMON_ACTION_CATEGORIES = [
 
 const CATEGORY_OPTIONS = COMMON_ACTION_CATEGORIES.map((value) => ({
   value,
-  label: formatActionLabel(value),
+  label: categoryLabel(value),
 }))
 
 const SEVERITY_OPTIONS = [
@@ -137,12 +138,15 @@ function escapeCsv(value: unknown): string {
 
 function buildCsv(rows: PlatformAuditLogRow[]): string {
   const headers = ['Timestamp', 'Actor Name', 'Actor Email', 'Actor Role', 'Action', 'Category',
+    'Batch Terminal', 'Terminal Serial',
     'Resource Type', 'Resource Name', 'Resource ID', 'Merchant', 'Location', 'Org Type',
     'Severity', 'Status', 'Error Message', 'Changes', 'Metadata']
   const lines = rows.map((row) => {
     const status = normalizeStatus(row.status)
+    const settlement = describeSettlementActivity(rowToFakeLog(row))
     return [row.created_at, row.actor_name, row.actor_email, row.actor_role, row.action,
-      row.action_category, row.resource_type, row.resource_name, row.resource_id,
+      row.action_category, settlement?.terminalLabel ?? '', settlement?.terminalSerial ?? '',
+      row.resource_type, row.resource_name, row.resource_id,
       row.merchant_name || row.merchant_id, row.location_name || row.location_id,
       inferOrgType(row), row.severity, status, row.error_message,
       row.changes ? JSON.stringify(row.changes) : '',
@@ -642,7 +646,7 @@ function AuditLogsPageInner() {
 
                             <TableCell className={XL_UP}>
                               <Badge variant="outline" className="whitespace-nowrap">
-                                {formatActionLabel(row.action_category)}
+                                {categoryLabel(row.action_category)}
                               </Badge>
                             </TableCell>
 

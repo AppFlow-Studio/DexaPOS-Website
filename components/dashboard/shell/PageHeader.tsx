@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, Globe, MapPin } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -24,7 +24,10 @@ interface PageHeaderProps {
   backLabel?: string
   /** Rendered directly after the title — e.g. a record's status pill. */
   titleBadge?: React.ReactNode
-  /** Right-aligned chip beside the title — usually `<LocationIndicator />`. */
+  /**
+   * Right-aligned chip beside the title, e.g. a status badge. Never the
+   * current location — the dashboard top bar already shows it.
+   */
   indicator?: React.ReactNode
   /** Right-aligned buttons. Sits after `indicator` on the same row. */
   actions?: React.ReactNode
@@ -133,36 +136,5 @@ export function PageHeader({
         )}
       </div>
     </div>
-  )
-}
-
-/**
- * The "All Locations" / location-name chip that sits beside a page title.
- *
- * Pass the values from `useIsAllLocations()` and `useSelectedLocation()`; this
- * component deliberately reads no store of its own so it stays usable in the
- * HQ `/manage` surface, where location scoping works differently.
- */
-export function LocationIndicator({
-  isAllLocations,
-  locationName,
-}: {
-  isAllLocations: boolean
-  locationName?: string | null
-}) {
-  return (
-    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      {isAllLocations ? (
-        <>
-          <Globe className="h-4 w-4" />
-          All Locations
-        </>
-      ) : (
-        <>
-          <MapPin className="h-4 w-4" />
-          {locationName}
-        </>
-      )}
-    </p>
   )
 }

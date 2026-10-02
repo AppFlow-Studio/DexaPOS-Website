@@ -74,7 +74,11 @@ export default async function OrderTrackingRoute({ params }: PageProps) {
             .join(", ")}
           storeLat={(location as { latitude?: number | null }).latitude ?? null}
           storeLng={(location as { longitude?: number | null }).longitude ?? null}
-          storeHours={(location as { business_hours?: unknown }).business_hours ?? null}
+          storeHours={
+            site?.online_ordering_config?.operatingHours ||
+            (location as { business_hours?: unknown }).business_hours ||
+            null
+          }
           storeTimezone={(location as { timezone?: string | null }).timezone ?? null}
           taxRate={taxRate}
         />

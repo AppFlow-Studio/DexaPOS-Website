@@ -16,6 +16,14 @@ import {
 import { EmptySection } from './EmptySection'
 import { AcquirerProfileSheet } from './AcquirerProfileSheet'
 
+/**
+ * Automatic boarding (Valor /create, then a store + EPI per location) is parked:
+ * locations are boarded manually for now and show up below once their Valor
+ * account exists. Status and "Set live" stay available. Flip to `true` to bring
+ * back the processing-credentials and "Board on Valor" steps.
+ */
+const AUTO_BOARDING_ENABLED = false
+
 export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
   const { data, isLoading, error: queryError, refetch } = useMerchantValorBoardingStatus(merchantId)
   const { data: acquirer } = useMerchantAcquirerProfile(merchantId)
@@ -118,11 +126,12 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
 
   const heading = {
     label: 'Valor Boarding',
-    caption:
-      'Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO.',
+    caption: AUTO_BOARDING_ENABLED
+      ? 'Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO.'
+      : 'Valor status per location for online-order checkout. Locations are boarded manually for now, then set live here.',
   }
 
-  const sheet = acquirer && (
+  const sheet = AUTO_BOARDING_ENABLED && acquirer && (
     <AcquirerProfileSheet
       merchantId={merchantId}
       profile={acquirer}
@@ -171,8 +180,22 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
       <Panel>
         <PanelSection {...heading}>
           <div className="space-y-3">
+            {!AUTO_BOARDING_ENABLED && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 bg-muted/45 p-4">
+                <div className="min-w-0 flex-1 basis-60 space-y-1">
+                  <div className="font-medium">Board on Valor</div>
+                  <div className="text-xs text-muted-foreground">
+                    Automatic boarding is coming soon. Locations are boarded manually for now and
+                    appear below once their Valor account is added.
+                  </div>
+                </div>
+                {/* On a muted card the state is plain text, not a pill (§3.5). */}
+                <span className="shrink-0 text-sm text-muted-foreground">Coming soon</span>
+              </div>
+            )}
+
             {/* Step 1 — processing credentials (gates boarding) */}
-            {acquirer && (
+            {AUTO_BOARDING_ENABLED && acquirer && (
               <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border-0 bg-muted/45 p-4">
                 <div className="min-w-0 flex-1 basis-60 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
@@ -214,6 +237,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
             )}
 
             {/* Step 2 — board on Valor */}
+            {AUTO_BOARDING_ENABLED && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 bg-muted/45 p-4">
               <div className="min-w-0 flex-1 basis-60 space-y-1">
                 <div className="font-medium">
@@ -250,8 +274,9 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                     : 'Board on Valor'}
               </Button>
             </div>
+            )}
 
-            {blockers && blockers.length > 0 && (
+            {AUTO_BOARDING_ENABLED && blockers && blockers.length > 0 && (
               <div className="rounded-2xl bg-muted/60 px-4 py-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -334,7 +359,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                           (setPrimary.isPending && setPrimary.variables === row.locationId)
                         }
                         onClick={() => handleSetLive(row.locationId, row.locationName)}
-                        title={row.hasApiKeys ? undefined : 'Missing API keys — re-provision this location first'}
+                        title={row.hasApiKeys ? undefined : 'Missing API keys — add this location’s Valor keys first'}
                       >
                         {setPrimary.isPending && setPrimary.variables === row.locationId
                           ? 'Setting live…'

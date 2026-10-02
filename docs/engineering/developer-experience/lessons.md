@@ -529,3 +529,30 @@ Rule: to shrink or cap a shadcn primitive, use a plain scale class that is alrea
 elsewhere in the repo (`max-h-48`, `max-h-60`), not a nested `min()`/`var()` arbitrary value.
 If an arbitrary value is truly needed, confirm the rule exists in the compiled CSS before
 calling it fixed, because a class that does not compile still displaces the default it replaces.
+## Read `UI-DESIGN-SYSTEM.md` before proposing a visual change (2026-09-23)
+
+Context: the subscription page redesign. My audit's headline finding was "colour-code invoice
+status so a failed payment stands out" — a direct contradiction of **`DS-CTL-09`** (decisions
+D-11, D-12): *"Status is never colour-coded… no red for inactive/failed/critical."* The flat grey
+badge I called a defect is a deliberate, app-wide law with a written rationale, and the comment
+in the component (*"Flat, uncoloured status badge — no per-status tint or dot"*) was the rule
+being obeyed, not an oversight.
+
+Lesson: a comment that looks like a mistake is often a rule you haven't read yet. Grep
+`docs/UI-DESIGN-SYSTEM.md` for the component recipe (`DS-CTL-*`) before proposing to change how
+anything looks, and check §10's decision log for *why*. The real fix was already sanctioned by the
+same document: colour is barred from **status display** but allowed on a **tinted banner**, which
+is an action prompt rather than a description of state — so the urgency moved into a "Needs
+attention" region and the badges stayed neutral. Reversing the law would have been a separate,
+app-wide piece of work, not a line item in one page's ticket.
+
+Two mechanical traps from the same change:
+
+- **Every export of a `'use client'` module is a client reference.** I exported a pure
+  `parseSubscriptionSection()` helper from the card and called it in the server page:
+  *"Attempted to call parseSubscriptionSection() from the server but it is on the client."* Types
+  are erased so `import { type X }` is fine; runtime helpers a server component calls must live in
+  a module without the directive.
+- **`TableCell` ships `whitespace-nowrap`.** A Valor failure reason rendered inside a cell ran on
+  one line and dragged Status, Amount and Actions off the right edge at 1440px. Any cell holding
+  free text needs an explicit `max-w-*` plus `whitespace-normal`.

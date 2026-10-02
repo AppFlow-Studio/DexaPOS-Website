@@ -24,6 +24,8 @@ export function useCartSync() {
           cartItemId: item.cartItemId,
           name: item.name,
           price: item.price,
+          menu_id: item.menu_id,
+          category_id: item.category_id,
           quantity: item.quantity,
           totalPrice: item.totalPrice,
           notes: item.notes,

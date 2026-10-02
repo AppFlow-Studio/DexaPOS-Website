@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { usePlatformAuditLog } from '@/lib/queries/use-platform-analytics'
 import { buildAuditSentence } from '@/lib/audit/sentence-templates'
+import { describeSettlementActivity } from '@/lib/audit/settlement-activity'
 import { PII_ACCESS_TYPE_LABELS, type PiiAccessType } from '@/types/audit-log'
 import {
     DetailPageSkeleton,
@@ -26,6 +27,7 @@ import {
     STATUS_LABELS,
     absoluteTime,
     auditLogsListHref,
+    categoryLabel,
     describeAnomaly,
     formatActionLabel,
     inferOrgType,
@@ -76,7 +78,9 @@ export default function PlatformAuditLogPage() {
 
     const status = normalizeStatus(log.status)
     const isFlagged = flaggedIds.has(log.id)
-    const { sentence, highlight } = buildAuditSentence(rowToFakeLog(log))
+    const fakeLog = rowToFakeLog(log)
+    const { sentence, highlight } = buildAuditSentence(fakeLog)
+    const settlement = describeSettlementActivity(fakeLog)
     const resource = log.resource_type ? formatKey(log.resource_type).toLowerCase() : 'record'
     const changes = readChanges(log.changes)
     const metadata = log.metadata && Object.keys(log.metadata).length > 0 ? log.metadata : null
@@ -153,7 +157,7 @@ export default function PlatformAuditLogPage() {
                             }
                         />
                         <Fact label="Location" value={log.location_name} />
-                        <Fact label="Category" value={log.action_category ? formatActionLabel(log.action_category) : null} />
+                        <Fact label="Category" value={log.action_category ? categoryLabel(log.action_category) : null} />
                         <Fact label="Severity" value={formatKey(log.severity || 'info')} />
                         <Fact label="Status" value={STATUS_LABELS[status]} />
                         {piiAccess && <Fact label="PII access" value={piiAccess} />}
@@ -173,6 +177,37 @@ export default function PlatformAuditLogPage() {
                     </FactGrid>
                 </PanelSection>
             </Panel>
+
+            {/* Batch events: readable facts from metadata + the batch's linked terminal. */}
+            {settlement && settlement.details.length > 0 && (
+                <Panel>
+                    <PanelSection
+                        label="Batch details"
+                        caption={
+                            settlement.terminalSerial
+                                ? 'The linked terminal is the reader this batch belongs to, not necessarily the device that initiated settlement.'
+                                : 'What the batch looked like when this was recorded.'
+                        }
+                        action={
+                            settlement.terminalSerial && log.merchant_id ? (
+                                <Button variant="outline" className="h-9 px-4 text-[0.8125rem] font-medium" asChild>
+                                    <Link
+                                        href={`/manage/merchants/${encodeURIComponent(log.merchant_id)}/devices/terminal/${encodeURIComponent(settlement.terminalSerial)}`}
+                                    >
+                                        View terminal and its batches
+                                    </Link>
+                                </Button>
+                            ) : undefined
+                        }
+                    >
+                        <FactGrid className="lg:grid-cols-4">
+                            {settlement.details.map((detail) => (
+                                <Fact key={detail.label} label={detail.label} value={detail.value} />
+                            ))}
+                        </FactGrid>
+                    </PanelSection>
+                </Panel>
+            )}
 
             {log.error_message && (
                 <Panel>

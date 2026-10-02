@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
@@ -126,6 +127,23 @@ export function DiscrepancyValue({ batch }: { batch: PlatformSettlementBatch }) 
   )
 }
 
+/**
+ * The batch's linked payment terminal, in words. It is the reader the batch
+ * belongs to (resolved from the batch FK), not necessarily the device that
+ * initiated settlement.
+ */
+export function batchTerminalLabel(batch: PlatformSettlementBatch, terminalLookupFailed?: boolean): string {
+  if (terminalLookupFailed) return 'Terminal details unavailable'
+  return batch.terminal_name || batch.terminal_serial ||
+    (batch.payment_terminal_id ? 'Terminal record unavailable' : 'Not recorded')
+}
+
+/** The terminal's own page under the merchant, or null without a serial. */
+export function batchTerminalHref(batch: PlatformSettlementBatch): string | null {
+  if (!batch.terminal_serial) return null
+  return `/manage/merchants/${batch.merchant_id}/devices/terminal/${encodeURIComponent(batch.terminal_serial)}`
+}
+
 export function batchErrorTitle(code: string): string {
   if (code === '57014') return 'Batch reconciliation timed out'
   if (code === 'PGRST202' || code === '42883') return 'Batch reconciliation is not installed on this database'
@@ -138,12 +156,22 @@ export function batchErrorDetail(code: string): string {
   return `Error ${code}`
 }
 
-function buildBatchExportCsv(batch: PlatformSettlementBatch, rows: PlatformSettlementBatchPayment[]): string {
+function buildBatchExportCsv(
+  batch: PlatformSettlementBatch,
+  rows: PlatformSettlementBatchPayment[],
+  terminalLookupFailed: boolean,
+): string {
+  const terminalAttribution = terminalLookupFailed
+    ? 'lookup unavailable'
+    : batch.terminal_serial ? 'linked' : batch.payment_terminal_id ? 'terminal record missing' : 'not recorded'
   const headers = [
     'batch_id',
     'business_date',
     'merchant',
     'location',
+    'terminal_name',
+    'terminal_serial',
+    'terminal_attribution',
     'batch_status',
     'batch_gross_amount',
     'linked_payment_amount',
@@ -166,6 +194,9 @@ function buildBatchExportCsv(batch: PlatformSettlementBatch, rows: PlatformSettl
     batch.business_date,
     batch.merchant_name,
     batch.location_name || '',
+    batch.terminal_name || '',
+    batch.terminal_serial || '',
+    terminalAttribution,
     batch.status,
     batch.gross_amount,
     batch.linked_payment_amount,
@@ -206,8 +237,11 @@ export function SettlementBatchPanel({
   renderBatchPayments,
   onBatchChanged,
   showSummary = true,
+  terminalLookupFailed = false,
 }: {
   batch: PlatformSettlementBatch
+  /** The batch list loaded, but its terminal attribution did not. */
+  terminalLookupFailed?: boolean
   /** Replaces the linked-payments list (merchant detail shows its own). */
   renderBatchPayments?: (batch: PlatformSettlementBatch) => React.ReactNode
   /** Called after a manual batchout so the host can refetch the batch. */
@@ -244,9 +278,11 @@ export function SettlementBatchPanel({
 
   const handleExport = () => {
     if (batchPayments.length === 0) return
-    const csv = buildBatchExportCsv(batch, batchPayments)
+    const csv = buildBatchExportCsv(batch, batchPayments, terminalLookupFailed)
     downloadCsv(csv, `DEXA_Batch_${formatBatchLabel(batch)}_${batch.business_date}.csv`)
   }
+
+  const terminalHref = batchTerminalHref(batch)
 
   const handleBatchoutSuccess = async (): Promise<void> => {
     await onBatchChanged?.()
@@ -260,6 +296,17 @@ export function SettlementBatchPanel({
           <span>
             <span className="text-muted-foreground">Selected batch </span>
             <span className="font-mono font-medium">{formatBatchLabel(batch)}</span>
+          </span>
+          <span>
+            <span className="text-muted-foreground">Batch terminal </span>
+            {terminalHref ? (
+              <Link href={terminalHref} className="font-medium underline-offset-2 hover:underline">
+                {batchTerminalLabel(batch, terminalLookupFailed)}
+                <span className="font-normal text-muted-foreground"> · Serial {batch.terminal_serial}</span>
+              </Link>
+            ) : (
+              <span className="font-medium">{batchTerminalLabel(batch, terminalLookupFailed)}</span>
+            )}
           </span>
           <span>
             <span className="text-muted-foreground">Linked payments </span>
@@ -296,10 +343,10 @@ export function SettlementBatchPanel({
             disabled={SETTLED_BATCH_STATUSES.has(batch.status.toLowerCase())}
           >
             <ShieldCheck className="mr-2 h-4 w-4" />
-            Manual batchout
+            Mark settled in Dexa
           </Button>
           <span className="text-xs text-muted-foreground">
-            Super-admin only · marks this batch settled (reconciliation, not a terminal batchout).
+            Super-admin only · records a reconciliation; does not close the batch on the terminal.
           </span>
         </PermissionGate>
       </div>
@@ -423,6 +470,7 @@ export function SettlementBatchPanel({
 
       <ManualBatchoutDialog
         batch={batch}
+        terminalLookupFailed={terminalLookupFailed}
         open={manualBatchoutOpen}
         onOpenChange={setManualBatchoutOpen}
         onSuccess={handleBatchoutSuccess}

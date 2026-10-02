@@ -23,6 +23,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { getPaymentDeviceDetail } from '@/app/manage/actions/admin-merchant/payment-device-detail'
+import { describeSettlementActivity } from '@/lib/audit/settlement-activity'
 import type {
     DeviceBatch, DevicePayment, DeviceUnsettledSummary, DeviceIdentity, DeviceWebhookEvent,
 } from '@/app/manage/actions/admin-merchant/payment-device-detail'
@@ -1160,19 +1161,31 @@ export function PaymentDeviceDetailView({ merchantId, serial }: { merchantId: st
                             <TableBody>
                                 {audit.length === 0 ? (
                                     <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No activity</TableCell></TableRow>
-                                ) : audit.map((a) => (
-                                    <TableRow key={a.id}>
-                                        <TableCell className="text-sm text-muted-foreground" title={a.created_at}>{dateTime(a.created_at)}</TableCell>
-                                        <TableCell><span className="text-sm font-medium">{a.action}</span></TableCell>
-                                        <TableCell>{a.severity === 'warning'
-                                            ? <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">warning</Badge>
-                                            : <Badge variant="outline">{a.severity || 'info'}</Badge>}</TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">{a.actor_role || '—'}</TableCell>
-                                        <TableCell className="max-w-[300px] truncate text-sm text-muted-foreground" title={typeof a.metadata?.reason === 'string' ? a.metadata.reason : ''}>
-                                            {typeof a.metadata?.reason === 'string' ? a.metadata.reason : (a.action_category || '—')}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                ) : audit.map((a) => {
+                                    // Events on this terminal's batches read as "Batch TSYS-009
+                                    // closed"; no terminal label — the terminal is this page.
+                                    const settlement = describeSettlementActivity(a)
+                                    const detail = settlement?.highlight
+                                        ?? (typeof a.metadata?.reason === 'string' ? a.metadata.reason : (a.action_category || '—'))
+                                    return (
+                                        <TableRow key={a.id}>
+                                            <TableCell className="text-sm text-muted-foreground" title={a.created_at}>{dateTime(a.created_at)}</TableCell>
+                                            <TableCell>
+                                                <span className="text-sm font-medium">{settlement?.title ?? a.action}</span>
+                                                {settlement && (
+                                                    <span className="block text-xs text-muted-foreground">{settlement.batchLabel}</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{a.severity === 'warning'
+                                                ? <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">warning</Badge>
+                                                : <Badge variant="outline">{a.severity || 'info'}</Badge>}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">{a.actor_role || '—'}</TableCell>
+                                            <TableCell className="max-w-[300px] truncate text-sm text-muted-foreground" title={detail}>
+                                                {detail}
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })}
                             </TableBody>
                         </Table>
                     </div>

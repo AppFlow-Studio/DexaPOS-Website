@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { isScheduleDayOpen } from "../lib/business-hours";
 
 const DAYS = [
   "sunday",
@@ -132,7 +133,7 @@ export function StoreHoursModal({
                   {DAYS.map((day, idx) => {
                     const schedule = parsed[day];
                     const isToday = idx === todayIndex;
-                    const isEnabled = schedule ? (schedule.enabled ?? !schedule.closed) : false;
+                    const isEnabled = schedule ? isScheduleDayOpen(schedule) : false;
                     const is24h = schedule?.is24Hours;
                     const openTime = schedule?.from || schedule?.open;
                     const closeTime = schedule?.to || schedule?.close;

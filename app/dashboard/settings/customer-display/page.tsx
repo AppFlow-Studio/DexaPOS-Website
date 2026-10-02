@@ -30,7 +30,6 @@ import {
     uploadCdnAsset,
 } from '@/lib/cdn/client'
 import {
-    LocationIndicator,
     PageHeader,
     PageShell,
     Panel,
@@ -359,7 +358,6 @@ export default function CustomerDisplaySettingsPage() {
                 <PageHeader
                     title="Customer display"
                     subtitle="Manage images shown on the customer-facing display."
-                    indicator={<LocationIndicator isAllLocations locationName={null} />}
                 />
 
                 <Panel padded>
@@ -385,12 +383,6 @@ export default function CustomerDisplaySettingsPage() {
             <PageHeader
                 title="Customer display"
                 subtitle="Upload and manage the carousel shown to customers."
-                indicator={
-                    <LocationIndicator
-                        isAllLocations={false}
-                        locationName={selectedLocation?.name}
-                    />
-                }
             />
 
             {/* Upload Section */}

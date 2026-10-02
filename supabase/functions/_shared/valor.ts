@@ -177,7 +177,7 @@ async function postWithBodyCredentials(
   }
   // Keep the raw payload so callers can persist/diagnose responses Valor returns
   // without a recognizable JSON body (e.g. an HTTP 200 with an empty body, which
-  // add_subscription can return when an EPI is not provisioned for recurring).
+  // add_subscription returns when its processing step fails after validation).
   return { status: response.status, body, rawText: text ?? '', contentType }
 }
 
@@ -246,14 +246,18 @@ export interface ValorProductLine {
 }
 
 export interface ValorSaleParams {
-  /** Grand-total charge amount in integer minor units. */
+  /**
+   * Grand-total charge amount in integer minor units - exactly what the card is
+   * charged. Tax and tip are already inside it. There is deliberately no tax
+   * param: Valor adds `tax_amount` on top of `amount`, which double-charged
+   * tax on storefront orders (2026-10-01).
+   */
   amountMinor: number
   /** Card token from Passage.js onTokenReceived. */
   token: string
   /** Merchant-facing reference; also aligns Valor's duplicate check with ours. */
   invoiceNumber: string
   productLines: ValorProductLine[]
-  taxMinor?: number
   tipMinor?: number
   orderDescription?: string
   email?: string
@@ -276,7 +280,6 @@ export interface ValorSaleRequestBody {
   surchargeIndicator: ValorSurchargeIndicator
   shipping_country: string
   productIds?: ValorProductLine[]
-  tax_amount?: string
   orderdescription?: string
   email?: string
   phone?: string
@@ -360,7 +363,6 @@ export function buildSaleRequestBody(
     surchargeIndicator,
     shipping_country: params.shippingCountry ?? 'US',
     ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
-    ...(params.taxMinor !== undefined ? { tax_amount: formatMinorUnits(params.taxMinor) } : {}),
     ...(orderDescription ? { orderdescription: orderDescription } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
@@ -511,7 +513,9 @@ function buildValorRecurringBody(
     subscription_starts_from: formatValorSubscriptionDate(params.startsOn),
     charge_until: 'never_expired',
     charge_on: String(params.chargeOn),
-    failure_notification: '1',
+    // Valor rejects failure_notification "1" with no email or phone to notify
+    // (`SUB21`), so only ask for it when there is somewhere to send it.
+    failure_notification: params.email ? '1' : '0',
     // Valor owns recurring retries. Dexa records and enforces the resulting
     // grace/suspension state but must not independently charge the same cycle.
     retry_count: '1',
@@ -533,12 +537,14 @@ function toRecurringResult(
     extractValorError(body)
 
   // A 2xx with no recognizable JSON body is NOT a silent success: Valor returns
-  // this for add_subscription when the EPI is not provisioned for native
-  // recurring. Surface an actionable message and keep the raw response so the
-  // failure is diagnosable instead of a generic "request failed".
+  // this for add_subscription when the request passes validation but its
+  // processing step fails (sandbox, 2026-09-29: every valid request, including
+  // Valor's own documented example; nothing was created). Surface an actionable
+  // message and keep the raw response so the failure is diagnosable instead of
+  // a generic "request failed".
   const emptyBodyMessage =
     status < 400
-      ? `Valor returned HTTP ${status} with ${rawText.trim() ? 'an unrecognized' : 'an empty'} response body — the recurring charge was not confirmed. This EPI may not be provisioned for native recurring.${
+      ? `Valor returned HTTP ${status} with ${rawText.trim() ? 'an unrecognized' : 'an empty'} response body — the recurring charge was not confirmed.${
           rawText.trim() ? ` Raw response: ${rawText.trim().slice(0, 500)}` : ''
         }`
       : `Valor recurring request failed with HTTP ${status}.${

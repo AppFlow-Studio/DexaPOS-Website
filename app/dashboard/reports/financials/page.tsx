@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useReportDateRange } from "@/stores/report-date-range-store";
 import {
   differenceInCalendarDays,
   endOfDay,
@@ -16,7 +17,6 @@ import { cn } from "@/lib/utils";
 import {
   useFinancialKPIs,
   useWaterfallReport,
-  useRevenueBreakdown,
   useDualPricingComparison,
 } from "../../hooks/useOrderAnalytics";
 import { useOrders } from "../../hooks/useOrder";
@@ -64,11 +64,8 @@ const financialSummaryColumns: ExportColumn<FinancialSummaryRow>[] = [
 ];
 
 export default function FinancialsPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  // Shared across every report page (stores/report-date-range-store.ts).
+  const { dateRange, preset, setDateRange, setPreset } = useReportDateRange();
 
   const [activeTab, setActiveTab] = useState("overview");
   /** Tabs with no left-column summary render across the full page width. */
@@ -90,11 +87,7 @@ export default function FinancialsPage() {
     queryDateRange.to
   );
 
-  // Service charge + dual-pricing totals for a complete financial export
-  const { data: revenueBreakdown } = useRevenueBreakdown(
-    queryDateRange.from,
-    queryDateRange.to
-  );
+  // Dual-pricing totals for a complete financial export
   const { data: dualPricing } = useDualPricingComparison(
     queryDateRange.from,
     queryDateRange.to
@@ -115,7 +108,7 @@ export default function FinancialsPage() {
   const chartData = useMemo(() => {
     return fillDailyFinancialStats(kpis?.daily_stats ?? [], dateRange).map((stat) => ({
         ...stat,
-        gross_sales: stat.net_sales, // Placeholder as backend data is missing
+        gross_sales: (stat as { gross_sales?: number }).gross_sales ?? stat.net_sales,
         payments_collected: stat.net_sales, // Placeholder as backend data is missing
       }));
   }, [dateRange, kpis?.daily_stats]);
@@ -140,7 +133,7 @@ export default function FinancialsPage() {
       // cover any merchant's history without an extra round-trip to find it.
       days == null ? ALL_TIME_START : subDays(to, days - 1)
     );
-    setDateRange({ from, to });
+    setDateRange(from, to);
     setPreset(
       range === "7d"
         ? "last_7_days"
@@ -186,20 +179,25 @@ export default function FinancialsPage() {
     paid_in_total: 0,
   };
 
-  const serviceCharges = revenueBreakdown?.serviceCharges ?? 0;
-
-  // Calculated Total Amount (Revenue) — net sales + tax + service charge + tips
-  const totalAmount =
-    summary.net_sales + summary.tax_total + serviceCharges + summary.tip_total;
+  // Everything below comes from one get_financial_kpis call, so the two cards
+  // foot:  gross − discounts − refunds = net sales, and
+  //        net sales + tax + service charge + tips − refunded non-sales = total.
+  const serviceCharges = summary.service_charge_total ?? 0;
+  const refundsMoney = summary.refunds_money_total ?? summary.refunds_total;
+  // Tax, service charge and tips returned with refunds (net sales already
+  // carries the sales part of every refund).
+  const refundedNonSales = Math.max(0, refundsMoney - summary.refunds_total);
+  const totalAmount = summary.paid_in_total - refundsMoney;
 
   const exportRows: FinancialSummaryRow[] = [
     { metric: "Gross sales", amount: summary.gross_sales },
     { metric: "Discounts", amount: -summary.discounts_total },
+    { metric: "Refunds", amount: -summary.refunds_total },
     { metric: "Net sales", amount: summary.net_sales },
     { metric: "Tax collected", amount: summary.tax_total },
     { metric: "Service charge", amount: serviceCharges },
     { metric: "Tips", amount: summary.tip_total },
-    { metric: "Refunds", amount: summary.refunds_total },
+    { metric: "Tax, service charge & tips refunded", amount: -refundedNonSales },
     { metric: "Total collected", amount: totalAmount },
     // Dual-pricing (cash discount) breakdown — only when enabled for this merchant
     ...(dualPricing?.hasDualPricing
@@ -228,7 +226,7 @@ export default function FinancialsPage() {
               dateTo={dateRange.to}
               onDateRangeChange={(from, to) => {
                 if (from && to) {
-                  setDateRange({ from, to });
+                  setDateRange(from, to);
                 }
               }}
               preset={preset}
@@ -252,7 +250,7 @@ export default function FinancialsPage() {
                   value: summary.tax_total.toLocaleString("en-US", { style: "currency", currency: "USD" }),
                 },
                 {
-                  label: "Total Amount",
+                  label: "Total Collected",
                   value: totalAmount.toLocaleString("en-US", { style: "currency", currency: "USD" }),
                 },
               ]}
@@ -321,15 +319,6 @@ export default function FinancialsPage() {
 
                   <div className="flex justify-between items-center group">
                     <span className="text-sm text-muted-foreground">
-                      Gratuity
-                    </span>
-                    <span className="font-medium tabular-nums">
-                      $0.00
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center group">
-                    <span className="text-sm text-muted-foreground">
                       Tax amount
                     </span>
                     <span className="font-medium tabular-nums">
@@ -364,21 +353,24 @@ export default function FinancialsPage() {
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center group">
-                    <span className="text-sm font-medium text-foreground">
-                      Paid in total
-                    </span>
-                    <span className="font-mono text-base font-bold text-foreground">
-                      {totalAmount.toLocaleString("en-US", {
-                        style: "currency",
-                        currency: "USD",
-                      })}
-                    </span>
-                  </div>
+                  {refundedNonSales > 0 && (
+                    <div className="flex justify-between items-center group">
+                      <span className="text-sm text-muted-foreground">
+                        Tax, service charge &amp; tips refunded
+                      </span>
+                      <span className="font-medium tabular-nums">
+                        -
+                        {refundedNonSales.toLocaleString("en-US", {
+                          style: "currency",
+                          currency: "USD",
+                        })}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between items-center pt-1">
                     <span className="font-semibold">
-                      Total amount
+                      Total collected
                     </span>
                     <span className="text-lg font-semibold tabular-nums">
                       {totalAmount.toLocaleString("en-US", {
@@ -413,7 +405,7 @@ export default function FinancialsPage() {
                     <span className="text-sm text-muted-foreground">
                       Discounts
                     </span>
-                    <span className="font-mono text-base font-bold text-foreground">
+                    <span className="font-medium tabular-nums">
                       -
                       {summary.discounts_total.toLocaleString("en-US", {
                         style: "currency",
@@ -427,6 +419,7 @@ export default function FinancialsPage() {
                       Refunds
                     </span>
                     <span className="font-medium tabular-nums">
+                      -
                       {summary.refunds_total.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",

@@ -9,6 +9,7 @@
  * value — the word carries the meaning (UI-DESIGN-SYSTEM §4.6b).
  */
 import type { MerchantBillingProfileRecord } from '@/app/manage/actions/merchant-billing'
+import { formatBillingCard } from '@/lib/subscription-billing/card-display'
 
 export function formatMoney(amount: number | null | undefined): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(amount || 0))
@@ -31,13 +32,8 @@ export function buildPaymentMethodLabel(profile: MerchantBillingProfileRecord | 
   if (!profile) return 'No card on file'
 
   if (profile.billing_method === 'card') {
-    const brand = profile.card_brand || 'Card'
-    const suffix = profile.card_last_four ? `•••• ${profile.card_last_four}` : ''
-    const exp =
-      profile.card_exp_month && profile.card_exp_year
-        ? ` · ${String(profile.card_exp_month).padStart(2, '0')}/${String(profile.card_exp_year).slice(-2)}`
-        : ''
-    return `${[brand, suffix].filter(Boolean).join(' ')}${exp}`
+    const card = formatBillingCard(profile)
+    return card.expiry ? `${card.label} · ${card.expiry}` : card.label
   }
 
   if (profile.billing_method === 'ach') {
