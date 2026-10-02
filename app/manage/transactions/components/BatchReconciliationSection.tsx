@@ -498,7 +498,17 @@ export function BatchReconciliationSection({
                   className={`cursor-pointer ${selectedBatchId === batch.id ? 'bg-muted/30' : ''}`}
                   onClick={() => setSelectedBatchId(batch.id)}
                 >
-                  <TableCell className="font-mono text-xs">{formatBatchLabel(batch)}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {scopedMerchantId ? (
+                      <Link
+                        href={`/manage/merchants/${batch.merchant_id}/batches/${batch.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="text-primary hover:underline"
+                      >
+                        {formatBatchLabel(batch)}
+                      </Link>
+                    ) : formatBatchLabel(batch)}
+                  </TableCell>
                   <TableCell>
                     {scopedMerchantId ? (
                       <div>
@@ -567,6 +577,12 @@ export function BatchReconciliationSection({
               <Badge variant="outline" className="font-mono text-xs">{formatBatchLabel(selectedBatch)}</Badge>
               {scopedMerchantId && (
                 <>
+                  <Link
+                    href={`/manage/merchants/${selectedBatch.merchant_id}/batches/${selectedBatch.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    View batch story
+                  </Link>
                   <span className="text-muted-foreground">Batch terminal:</span>
                   <span className="font-medium">
                     {terminalLookupFailed
