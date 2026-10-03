@@ -787,8 +787,9 @@ export async function getPlatformAuditLogs(
   if (filters?.search) {
     const term = filters.search.trim()
     if (term.length > 0) {
+      // The page's one search box: action, actor (name, email or user id) and resource.
       query = query.or(
-        `action.ilike.%${term}%,actor_name.ilike.%${term}%,actor_email.ilike.%${term}%,resource_name.ilike.%${term}%,resource_type.ilike.%${term}%`
+        `action.ilike.%${term}%,actor_name.ilike.%${term}%,actor_email.ilike.%${term}%,actor_user_id.ilike.%${term}%,resource_name.ilike.%${term}%,resource_type.ilike.%${term}%`
       )
     }
   }

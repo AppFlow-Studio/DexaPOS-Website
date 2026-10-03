@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
-import { Bookmark, BookmarkCheck, Download, Search } from 'lucide-react'
+import { Bookmark, BookmarkCheck, CircleCheck, CircleHelp, CircleX, Download, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboard/shell'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import type { PaginationMeta } from '@/types/pagination'
@@ -45,10 +46,12 @@ import {
   auditLogHref,
   categoryLabel,
   detectAnomalies,
+  formatActionLabel,
   inferOrgType,
   normalizeStatus,
   relativeTime,
   rowToFakeLog,
+  shortRelativeTime,
   toggleAuditLogFlag,
   useFlaggedAuditLogIds,
 } from './audit-log-shared'
@@ -113,7 +116,7 @@ type TabId = 'all' | 'flagged'
  * in the URL so Back from an entry's page lands on the same page of 10 (§5.9).
  */
 const FILTER_PARAMS = [
-  'q', 'actor', 'resource', 'merchant', 'category', 'severity', 'status', 'pii', 'from', 'to', 'error',
+  'q', 'merchant', 'category', 'severity', 'status', 'pii', 'from', 'to', 'error',
 ] as const
 
 /** Typing settles for this long before the text filters reach the URL and the query. */
@@ -161,6 +164,24 @@ function downloadCsv(filename: string, content: string): void {
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * A phone card's result as a small glyph (requested over the word). Neutral
+ * (§3.5): success is muted, a failure takes the foreground, and the word is
+ * kept for screen readers and the hover title.
+ */
+function StatusIcon({ status }: { status: 'success' | 'failed' | 'unknown' }) {
+  const Icon = status === 'success' ? CircleCheck : status === 'failed' ? CircleX : CircleHelp
+  return (
+    <span title={STATUS_LABELS[status]} className="inline-flex">
+      <Icon
+        aria-hidden
+        className={cn('h-4 w-4', status === 'failed' ? 'text-foreground' : 'text-muted-foreground')}
+      />
+      <span className="sr-only">{STATUS_LABELS[status]}</span>
+    </span>
+  )
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -212,25 +233,18 @@ function AuditLogsPageInner() {
     [listQuery, router]
   )
 
-  // Text filters type into local state and reach the URL once typing settles.
+  // The one search box (it matches action, actor and resource) types into local
+  // state and reaches the URL once typing settles.
   const [searchInput, setSearchInput] = useState(() => params.get('q') ?? '')
-  const [actorInput, setActorInput] = useState(() => params.get('actor') ?? '')
-  const [resourceInput, setResourceInput] = useState(() => params.get('resource') ?? '')
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      updateParams({
-        q: searchInput.trim() || null,
-        actor: actorInput.trim() || null,
-        resource: resourceInput.trim() || null,
-      })
+      updateParams({ q: searchInput.trim() || null })
     }, TEXT_FILTER_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [searchInput, actorInput, resourceInput, updateParams])
+  }, [searchInput, updateParams])
 
   const search = params.get('q') ?? ''
-  const actor = params.get('actor') ?? ''
-  const resourceType = params.get('resource') ?? ''
   const merchantId = params.get('merchant') ?? 'all'
   const actionCategory = params.get('category') ?? 'all'
   const severity = params.get('severity') ?? 'all'
@@ -255,19 +269,17 @@ function AuditLogsPageInner() {
   const filters = useMemo<PlatformAuditLogFilters>(
     () => ({
       search: search.trim() || undefined,
-      actor: actor.trim() || undefined,
       actionCategory: actionCategory === 'all' ? undefined : actionCategory,
       severity: severity === 'all' ? undefined : severity,
       status: status === 'all' ? undefined : status,
       merchantIds: merchantId === 'all' ? undefined : [merchantId],
       dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
       dateTo: dateTo ? new Date(`${dateTo}T23:59:59.999`).toISOString() : undefined,
-      resourceType: resourceType.trim() || undefined,
       hasError: hasError || undefined,
       piiAccessOnly: piiAccess === 'any' ? true : undefined,
       piiAccessType: piiAccess !== 'all' && piiAccess !== 'any' ? piiAccess : undefined,
     }),
-    [search, actor, actionCategory, severity, status, merchantId, dateFrom, dateTo, resourceType, hasError, piiAccess]
+    [search, actionCategory, severity, status, merchantId, dateFrom, dateTo, hasError, piiAccess]
   )
 
   const windowIndex = Math.floor((page - 1) / PAGES_PER_WINDOW)
@@ -341,15 +353,10 @@ function AuditLogsPageInner() {
     : `events ${(windowOffset + 1).toLocaleString()}–${Math.min(windowOffset + WINDOW_SIZE, total).toLocaleString()} of ${total.toLocaleString()}`
 
   const hasActiveFilters =
-    FILTER_PARAMS.some((key) => params.has(key)) ||
-    searchInput !== '' ||
-    actorInput !== '' ||
-    resourceInput !== ''
+    FILTER_PARAMS.some((key) => params.has(key)) || searchInput !== ''
 
   function clearFilters() {
     setSearchInput('')
-    setActorInput('')
-    setResourceInput('')
     updateParams(Object.fromEntries(FILTER_PARAMS.map((key) => [key, null])))
   }
 
@@ -403,6 +410,7 @@ function AuditLogsPageInner() {
       marker: anomaly ? 'Anomaly' : isFlagged ? 'Flagged' : null,
       needsAttention: statusValue === 'failed' || !!anomaly || isFlagged,
       isFlagged,
+      status: statusValue,
       statusLabel: STATUS_LABELS[statusValue],
       actor: row.actor_name || row.actor_email || '—',
     }
@@ -470,8 +478,7 @@ function AuditLogsPageInner() {
               ? `Anomalies and entries you flagged, among ${windowLabel}. Anomaly checks run on ${WINDOW_SIZE} loaded events at a time.`
               : undefined
           }
-          // The caption says which events the tab covers — scope, not decoration (§13.4).
-          showCaptionOnMobile
+          // The caption hides below `sm` (PanelSection's default): phones keep the list only.
         >
           <div className="min-w-0 space-y-4">
             {/* Toolbar (§5.2): muted borderless fields; two per row on phones. */}
@@ -489,20 +496,6 @@ function AuditLogsPageInner() {
                   className="h-9 pl-9 text-[0.8125rem]"
                 />
               </div>
-              <Input
-                value={actorInput}
-                onChange={(e) => setActorInput(e.target.value)}
-                placeholder="Actor name or email"
-                aria-label="Filter by actor"
-                className="h-9 w-full min-w-0 text-[0.8125rem] sm:w-48"
-              />
-              <Input
-                value={resourceInput}
-                onChange={(e) => setResourceInput(e.target.value)}
-                placeholder="Resource type, e.g. order"
-                aria-label="Filter by resource type"
-                className="h-9 w-full min-w-0 text-[0.8125rem] sm:w-48"
-              />
               <MerchantSearchSelect
                 value={merchantId}
                 onChange={(value) => updateParams({ merchant: value === 'all' ? null : value })}
@@ -514,6 +507,7 @@ function AuditLogsPageInner() {
                 onValueChange={(value) => updateParams({ category: value === 'all' ? null : value })}
                 options={CATEGORY_OPTIONS}
                 allLabel="All categories"
+                triggerAllLabel="Category"
                 ariaLabel="Category"
               />
               <FilterSelect
@@ -521,6 +515,7 @@ function AuditLogsPageInner() {
                 onValueChange={(value) => updateParams({ severity: value === 'all' ? null : value })}
                 options={SEVERITY_OPTIONS}
                 allLabel="All severities"
+                triggerAllLabel="Severity"
                 ariaLabel="Severity"
               />
               <FilterSelect
@@ -528,6 +523,7 @@ function AuditLogsPageInner() {
                 onValueChange={(value) => updateParams({ status: value === 'all' ? null : value })}
                 options={STATUS_OPTIONS}
                 allLabel="All statuses"
+                triggerAllLabel="Status"
                 ariaLabel="Status"
               />
               <FilterSelect
@@ -535,17 +531,22 @@ function AuditLogsPageInner() {
                 onValueChange={(value) => updateParams({ pii: value === 'all' ? null : value })}
                 options={PII_OPTIONS}
                 allLabel="No PII filter"
+                triggerAllLabel="PII access"
                 ariaLabel="PII access"
               />
+              {/* The dates sit at the right end of the toolbar, so the calendar
+                  hangs left under its field instead of pressing on the page edge. */}
               <FilterDate
                 value={dateFrom}
                 onChange={(value) => updateParams({ from: value || null })}
                 placeholder="From date"
+                align="end"
               />
               <FilterDate
                 value={dateTo}
                 onChange={(value) => updateParams({ to: value || null })}
                 placeholder="To date"
+                align="end"
               />
               {/* A toggle filter chip (DS-CTL-03); pressed reads as the pill-rail active state. */}
               <Button
@@ -661,23 +662,30 @@ function AuditLogsPageInner() {
                             </TableCell>
 
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-full p-0"
-                                aria-label={item.isFlagged ? 'Remove flag' : 'Flag for review'}
-                                aria-pressed={item.isFlagged}
-                                title={item.isFlagged ? 'Remove flag' : 'Flag for review'}
-                                onClick={(event) => {
-                                  // The row opens the entry; the flag must not.
-                                  event.stopPropagation()
-                                  toggleAuditLogFlag(row.id)
-                                }}
-                              >
-                                {item.isFlagged
-                                  ? <BookmarkCheck className="h-4 w-4" />
-                                  : <Bookmark className="h-4 w-4" />}
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-full p-0"
+                                    aria-label={item.isFlagged ? 'Remove flag' : 'Flag for review'}
+                                    aria-pressed={item.isFlagged}
+                                    onClick={(event) => {
+                                      // The row opens the entry; the flag must not.
+                                      event.stopPropagation()
+                                      toggleAuditLogFlag(row.id)
+                                    }}
+                                  >
+                                    {item.isFlagged
+                                      ? <BookmarkCheck className="h-4 w-4" />
+                                      : <Bookmark className="h-4 w-4" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                {/* Centred under the button, a small pill rather than the browser's title box. */}
+                                <TooltipContent side="bottom" align="center" sideOffset={6} className="rounded-full px-3 py-1 font-medium">
+                                  {item.isFlagged ? 'Remove flag' : 'Flag for review'}
+                                </TooltipContent>
+                              </Tooltip>
                             </TableCell>
                           </TableRow>
                         )
@@ -686,8 +694,10 @@ function AuditLogsPageInner() {
                   </TableBody>
                 </Table>
 
-                {/* Phones (§5.3): what happened and its result, then who and when.
-                    The card opens the entry's page, where it can also be flagged. */}
+                {/* Phones (§5.3): the action and its result, then who and when. The
+                    action leads, not the sentence: the sentence starts with the actor,
+                    so truncated it made every card read the same. The card opens the
+                    entry's page, where it can also be flagged. */}
                 <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                   {showSkeleton ? (
                     <RecordLinkCardSkeletons count={4} />
@@ -700,10 +710,20 @@ function AuditLogsPageInner() {
                         <RecordLinkCard
                           key={row.id}
                           href={item.href}
-                          title={item.marker ? `${item.marker} · ${item.sentence}` : item.sentence}
-                          figure={item.statusLabel}
+                          // `text-sm`: a log is scanned in volume, so its cards stay a step
+                          // smaller than the shared card's default title.
+                          title={
+                            <span className="text-sm">
+                              {item.marker
+                                ? `${item.marker} · ${formatActionLabel(row.action)}`
+                                : formatActionLabel(row.action)}
+                            </span>
+                          }
+                          figure={<StatusIcon status={item.status} />}
                           subtitle={item.actor}
-                          status={relativeTime(row.created_at)}
+                          status={
+                            <span title={absoluteTime(row.created_at)}>{shortRelativeTime(row.created_at)}</span>
+                          }
                         />
                       )
                     })

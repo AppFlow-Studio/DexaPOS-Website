@@ -6,7 +6,29 @@ import {
   describeAnomaly,
   detectAnomalies,
   parseAnomaly,
+  shortRelativeTime,
 } from '../audit-log-shared'
+
+describe('shortRelativeTime', () => {
+  const now = new Date(2026, 9, 3, 12, 0)
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString()
+
+  it('is compact, with no "about"', () => {
+    expect(shortRelativeTime(ago(20_000), now)).toBe('just now')
+    expect(shortRelativeTime(ago(5 * 60_000), now)).toBe('5m ago')
+    expect(shortRelativeTime(ago(16 * 3_600_000), now)).toBe('16h ago')
+    expect(shortRelativeTime(ago(3 * 86_400_000), now)).toBe('3d ago')
+  })
+
+  it('falls back to the date after a week, with the year only when it differs', () => {
+    expect(shortRelativeTime(new Date(2026, 8, 12, 9).toISOString(), now)).toBe('Sep 12')
+    expect(shortRelativeTime(new Date(2025, 11, 30, 9).toISOString(), now)).toBe('Dec 30, 2025')
+  })
+
+  it('reads a clock-skewed future time as just now', () => {
+    expect(shortRelativeTime(new Date(now.getTime() + 60_000).toISOString(), now)).toBe('just now')
+  })
+})
 
 function row(id: string, action: string, createdAt: string, actor = 'user-1'): PlatformAuditLogRow {
   return { id, action, created_at: createdAt, actor_user_id: actor }

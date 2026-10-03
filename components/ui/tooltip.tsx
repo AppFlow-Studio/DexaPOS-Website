@@ -59,8 +59,10 @@ function TooltipContent({
         {...props}
       >
         {children}
+        {/* The arrow takes the content's fill; without it the SVG falls back
+            to black, which shows as a dark notch on the light dark-mode tooltip. */}
         <TooltipPrimitive.Arrow
-          className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]"
+          className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground"
           style={arrowColor ? { backgroundColor: arrowColor, fill: arrowColor } : undefined}
         />
       </TooltipPrimitive.Content>

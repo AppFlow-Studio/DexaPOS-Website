@@ -73,6 +73,22 @@ export function relativeTime(dateStr: string): string {
   return formatDistanceToNow(new Date(dateStr), { addSuffix: true })
 }
 
+/**
+ * Compact time for phone cards: "just now", "5m ago", "16h ago", "3d ago",
+ * then the date. No "about", which costs a phone line its width.
+ */
+export function shortRelativeTime(dateStr: string, now: Date = new Date()): string {
+  const date = new Date(dateStr)
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return format(date, date.getFullYear() === now.getFullYear() ? 'MMM d' : 'MMM d, yyyy')
+}
+
 export function absoluteTime(dateStr: string): string {
   return format(new Date(dateStr), 'MMM d, yyyy h:mm:ss a')
 }

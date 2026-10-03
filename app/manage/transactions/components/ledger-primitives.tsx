@@ -300,6 +300,7 @@ export function FilterSelect({
     onValueChange,
     options,
     allLabel,
+    triggerAllLabel,
     ariaLabel,
     disabled,
     className,
@@ -308,6 +309,12 @@ export function FilterSelect({
     onValueChange: (value: string) => void
     options: FilterOption[]
     allLabel: string
+    /**
+     * A short name for the trigger while no filter is set ("Category"), muted
+     * like a placeholder, so it fits a half-width phone field without an
+     * ellipsis. The menu still offers `allLabel` ("All categories").
+     */
+    triggerAllLabel?: string
     ariaLabel: string
     disabled?: boolean
     className?: string
@@ -321,7 +328,11 @@ export function FilterSelect({
                     className
                 )}
             >
-                <SelectValue placeholder={allLabel} />
+                <SelectValue placeholder={allLabel}>
+                    {value === 'all' && triggerAllLabel ? (
+                        <span className="text-muted-foreground">{triggerAllLabel}</span>
+                    ) : undefined}
+                </SelectValue>
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="all">{allLabel}</SelectItem>
@@ -343,12 +354,15 @@ export function FilterDate({
     value,
     onChange,
     placeholder,
+    align,
     className,
 }: {
     value: string
     onChange: (value: string) => void
     /** Names the field while it is empty, e.g. "From date". */
     placeholder: string
+    /** `end` hangs the calendar left under a field that sits to the right of a toolbar. */
+    align?: 'start' | 'center' | 'end'
     className?: string
 }) {
     return (
@@ -357,6 +371,7 @@ export function FilterDate({
                 value={value}
                 onChange={(next) => onChange(next ?? '')}
                 placeholder={placeholder}
+                align={align}
                 className="h-9 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none hover:bg-muted"
             />
         </div>

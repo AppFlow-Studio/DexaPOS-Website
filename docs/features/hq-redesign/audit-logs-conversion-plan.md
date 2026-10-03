@@ -151,3 +151,36 @@ store, so flagging on the entry page shows on the list when you go back. A flag 
 - [ ] Browser: not run (the chrome-devtools MCP failed to connect). Worth checking: 768px, where the table shows 5
   columns and the sentence truncates; Back from an entry restoring page 3 with filters; the flag toggle on a row not
   opening the entry; the anomaly callout; dark mode
+
+### Review follow-ups — 2026-10-03
+
+- [x] **Flag tooltip.** The row's flag button used the browser's native `title` box. It now uses the app `Tooltip`: a small neutral pill centred below the button (`side="bottom"`, `align="center"`). Fixed in `components/ui/tooltip.tsx` at the same time: the arrow had no fill, so its SVG fell back to black, which showed as a dark notch on the light dark-mode tooltip. It now takes `bg-foreground fill-foreground`. This affects every tooltip in the app, and an inline `backgroundColor` still overrides it
+- [x] **Calendar on the page edge.** The From/To date fields sit at the right end of the toolbar, so the start-aligned calendar was pushed flush against the 16px collision gutter. `FilterDate` takes an `align` prop, and the audit log passes `end`, so the calendar hangs left under its field. Other `FilterDate` callers are unchanged
+- [x] **Repeated "nothing changed".** `describeChanges` returns no caption when nothing changed, since `AuditChanges` already says "This action didn't change any data." This applies to both entry pages (platform and merchant)
+- Verification: a scoped `tsc` shows 0 errors in the touched files (2 errors in untouched files reached through imports). ESLint is clean. Not checked in a browser (chrome-devtools unavailable)
+
+### Changes section redesign — 2026-10-03
+
+**Problem.** The diff stopped at top-level keys. One changed setting inside `kiosk_settings` printed the whole object twice, side by side: seat mode `ask` → `fixed` sat among 7 identical seat options with their UUIDs. Values were raw codes. Separately, the `{ field: { old, new } }` format was misread as a bare snapshot.
+
+**Design (approved in chat).** A flat list of the values that actually changed, each labelled by its path, with old (struck through) → new. Added, removed and reordered are said in words. Lists of records are matched by `id` and named by label. Stored codes are humanised, with the raw value in `title`. Unchanged values and the raw JSON sit behind toggles. Single column, so phones need no separate layout. Rejected: highlighted two-column diff (needs red/green, §3.5, and stays long); one sentence per change (hard to scan at ten changes).
+
+- [x] `app/manage/components/audit-diff.ts` (new, pure): `diffChanges`, `readChanges` (now also reads `{ field: { old, new } }`), `formatKey`, `formatScalar`, `itemLabel`, `summarizeValue`
+- [x] `app/manage/components/audit-detail-parts.tsx`: `UpdateDiff` renders the flat list. "N fields changed" counts changed values, not top-level keys. Created and removed entries keep the field list, but a list of records collapses to its names or a count. Every shape has "Show raw data". It still re-exports `formatKey` / `readChanges`, so importers are unchanged
+- [x] Tests: `app/manage/components/__tests__/audit-diff.test.ts`, 16 cases, written first and seen failing (nested leaves, added/removed, empty-equivalence, list match by id, list add/remove/reorder, plain lists, id-less fallback, both stored formats, humanising, summaries)
+- [x] Scoped `tsc`: 0 errors in touched files. ESLint clean. A server-render probe on the kiosk example (since deleted) printed: "3 fields changed · Kiosk settings › Seat mode: Ask → Fixed · Kiosk settings › Table label: Removed 1 · Kiosk settings › Fixed seat label: Added Seat 7 · Show 2 unchanged fields · Show raw data"
+- [ ] Browser check, light and dark (chrome-devtools unavailable)
+- [x] **Review, 2026-10-03.** "Show raw data" is removed from every shape. The unchanged-fields toggle is hidden below `sm` (`max-sm:hidden`, §13.4). For clarity:
+  - Rows are grouped once under their parent instead of repeating the path.
+  - Each change sits in its own `bg-muted/40` well, with the field on the left and before → after on the right.
+  - Added and removed fields read "Not set → X" and "X → Not set". List entries read "Added X" or "Removed X" (the diff now marks those rows `item: true`, with tests updated first).
+  - Strike-through is gone, because it made short values like "1" unreadable.
+
+  26/26 tests pass, ESLint is clean, and scoped tsc is clean in the touched files. A render probe (deleted) shows: "Kiosk settings / Seat mode Ask → Fixed / Table label 1 → Not set / Seat selection enabled Yes → No / Seat options Added Patio / Fixed seat label Not set → Seat 7"
+- [x] **Mobile review, 2026-10-03.**
+  - **One search box.** The "Actor name or email" and "Resource type" inputs duplicated the main search, which already matched actor name/email and resource type. Both are gone, with their `actor` / `resource` URL params. The main search now also matches `actor_user_id`, the one thing only the actor box covered. Resource type is a substring match now, not exact.
+  - **Placeholders no longer cut off.** `FilterSelect` has a `triggerAllLabel` that shows a short, muted name ("Category", "Severity", "Status", "PII access") while no filter is set. The menu still says "All categories".
+  - **Phone cards.** They lead with the action, not the sentence: the sentence starts with the actor, so truncated it made every card identical. The time is compact (`shortRelativeTime`: "16h ago", "3d ago", then the date; tested). The result is a neutral glyph (check, cross or question mark) with the word for screen readers and in `title`, as requested.
+  - **Flagged caption** is hidden below `sm` (`showCaptionOnMobile` removed).
+
+  Lint is clean, 29/29 tests pass, and scoped tsc is clean in the touched files.
