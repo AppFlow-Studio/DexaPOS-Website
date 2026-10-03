@@ -15,6 +15,8 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+// Shared with the queue UI, so it never offers a retry this action refuses.
+import { resolveReplayTarget, stripEnrichmentKeys } from '@/app/manage/dlq/replay'
 
 // ============================================================================
 // TYPES
@@ -54,39 +56,6 @@ export interface DlqListResult {
 // ============================================================================
 // INTERNAL HELPERS
 // ============================================================================
-
-function resolveTargetFunction(
-  source: string,
-  eventType: string | null
-): { path: string | null; reason?: string } {
-  if (source !== 'orderout') {
-    return { path: null, reason: 'Unknown DLQ source — retry not supported' }
-  }
-  if (eventType === 'push_menu') {
-    return { path: 'orderout-push-menu-webhook' }
-  }
-  // All other orderout event types are order webhook payloads.
-  return { path: 'orderout-orders-webhook' }
-}
-
-function stripEnrichmentKeys(payload: unknown): unknown {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return payload
-  }
-  const out: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(payload as Record<string, unknown>)) {
-    if (
-      k.startsWith('_matched_') ||
-      k === '_rpc_error' ||
-      k === '_error' ||
-      k === '_raw'
-    ) {
-      continue
-    }
-    out[k] = v
-  }
-  return out
-}
 
 function sanitizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, '')
@@ -238,7 +207,7 @@ export async function retryDeadLetterEntry(
     }
 
     // 3. Route to target edge function
-    const target = resolveTargetFunction(entry.source, entry.event_type)
+    const target = resolveReplayTarget(entry.source, entry.event_type)
     if (!target.path) {
       return { success: false, resolved: false, error: target.reason || 'Unknown source' }
     }

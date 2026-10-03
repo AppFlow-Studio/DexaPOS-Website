@@ -296,7 +296,7 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
 
   /** Row actions, shared by the table row and the phone card. */
   const renderRowActions = (row: DlqRow) => {
-    const { isTerminal, canRetry } = dlqRowState(row)
+    const { isTerminal, canRetry, replayable } = dlqRowState(row)
     const label = `${row.source}${row.event_type ? ` ${row.event_type}` : ''}`
     return (
       <DropdownMenu>
@@ -320,6 +320,8 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
           >
             <RotateCcw className="mr-2 h-4 w-4" />
             Retry
+            {/* A disabled item says why, rather than leaving a guess. */}
+            {!replayable && <span className="ml-auto pl-2 text-xs">OrderOut only</span>}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canMutate || isTerminal || resolveMutation.isPending}
@@ -353,15 +355,15 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
           <StatRow columns={4}>
             {statusTiles.map((tile) => {
               const count = countsData?.[tile.key]
-              const alarm = tile.key === 'pending' && !!count
               return (
                 <StatTile
                   key={tile.key}
                   label={tile.label}
                   value={count == null ? '—' : count.toLocaleString()}
                   meta={countsLoading ? undefined : count == null ? 'Count unavailable' : tile.meta}
-                  // Alarm text and the reason for a "—" are not detail a phone drops.
-                  showMetaOnMobile={alarm || (count == null && !countsLoading)}
+                  // Phones keep only the reason for a "—"; the tile label
+                  // already names the state, so the other metas drop (§13.4).
+                  showMetaOnMobile={count == null && !countsLoading}
                   isLoading={countsLoading}
                   onClick={() => setStatus((current) => (current === tile.key ? 'all' : tile.key))}
                   isActive={status === 'all' || status === tile.key}
@@ -535,12 +537,13 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                             className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           />
                           <div className="pointer-events-none relative">
+                            {/* The identity line gets the full width; status
+                                sits with Retries below, where it reads as a
+                                pair instead of squeezing the title. */}
                             <div className="flex items-center gap-2">
-                              <p className="min-w-0 flex-1 truncate font-semibold">{label}</p>
-                              {/* Plain text on the muted card, not a pill (§3.5). */}
-                              <span className="shrink-0 text-sm text-muted-foreground">
-                                {STATUS_LABELS[row.status] ?? row.status}
-                              </span>
+                              <p className="min-w-0 flex-1 truncate font-semibold" title={label}>
+                                {label}
+                              </p>
                               <div className="pointer-events-auto -my-1 -mr-1 shrink-0">
                                 {renderRowActions(row)}
                               </div>
@@ -555,6 +558,8 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
                                   </span>
                                 }
                               />
+                              {/* Plain text on the muted card, not a pill (§3.5). */}
+                              <CardField label="Status" value={STATUS_LABELS[row.status] ?? row.status} />
                               <CardField label="Retries" value={<RetryFigure row={row} />} />
                             </CardFields>
                           </div>

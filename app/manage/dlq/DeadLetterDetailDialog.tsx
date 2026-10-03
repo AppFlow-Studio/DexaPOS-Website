@@ -1,6 +1,5 @@
 'use client'
 
-import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { AlertOctagon, Ban, CheckCircle2, Copy, RotateCcw } from 'lucide-react'
@@ -21,6 +20,7 @@ import { getDeadLetterEntry, type DlqRow } from '@/app/manage/actions/dead-lette
 import { LoadError } from '@/app/manage/transactions/components/ledger-primitives'
 
 import { RetryFigure, STATUS_LABELS, dlqRowState } from './dlq-row'
+import { PayloadView } from './PayloadView'
 
 interface Props {
   id: string | null
@@ -32,8 +32,6 @@ interface Props {
   retryPending: boolean
   resolvePending: boolean
 }
-
-const STRIPPED_KEY_PATTERNS = ['_matched_*', '_rpc_error', '_error', '_raw']
 
 function absoluteTime(dateStr: string | null): string {
   if (!dateStr) return '—'
@@ -73,15 +71,6 @@ export function DeadLetterDetailDialog({
 
   const entry = data?.data ?? null
   const loadError = data?.error ?? (data && !entry ? 'This entry no longer exists.' : null)
-
-  const prettyPayload = useMemo(() => {
-    if (!entry) return ''
-    try {
-      return JSON.stringify(entry.raw_payload, null, 2)
-    } catch {
-      return String(entry.raw_payload)
-    }
-  }, [entry])
 
   const state = entry ? dlqRowState(entry) : null
   const retryDisabled = !entry || !canMutate || !state?.canRetry || retryPending
@@ -134,9 +123,6 @@ export function DeadLetterDetailDialog({
                         </span>
                       )}
                     </p>
-                    <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={entry.id}>
-                      {entry.id}
-                    </p>
                   </div>
                   <Button
                     variant="ghost"
@@ -175,36 +161,36 @@ export function DeadLetterDetailDialog({
                 </pre>
               </div>
 
-              {state?.exhausted && (
+              {state && !state.isTerminal && !state.replayable && (
+                <p className="text-sm text-muted-foreground">
+                  Retry isn&apos;t available for {entry.source} entries: only OrderOut
+                  webhooks can be replayed. Resolve the entry once the cause is fixed,
+                  or abandon it with a reason.
+                </p>
+              )}
+
+              {state?.replayable && state.exhausted && (
                 <p className="text-sm text-muted-foreground">
                   Retries are exhausted. Resolve the entry if the cause is fixed
                   elsewhere, or abandon it with a reason.
                 </p>
               )}
 
-              <div className="rounded-2xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
-                <p className="mb-1 text-sm font-medium text-foreground">On replay</p>
-                <p>
-                  These internal annotation keys are stripped from the payload before
-                  re-POSTing to the receiver:{' '}
-                  <code className="font-mono">{STRIPPED_KEY_PATTERNS.join(', ')}</code>
-                </p>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm text-muted-foreground">Raw payload</p>
-                {/* No inner height cap: the dialog body already scrolls, and a
-                    second scroll area inside it traps the wheel (§5.7). */}
-                <pre className="thin-scrollbar overflow-x-auto rounded-2xl bg-muted/40 p-4 font-mono text-[11px] leading-relaxed">
-                  {prettyPayload}
-                </pre>
+              {/* Labelled fields by default, exact JSON one tab away. Which
+                  keys a replay strips is said beside each key there. Tablets
+                  and laptops only: on phones the panel keeps to the summary,
+                  the error and the actions (same `md` split as the table). */}
+              <div className="hidden md:block">
+                <PayloadView payload={entry.raw_payload} />
               </div>
             </>
           )}
         </div>
 
-        {/* Stacked full-width on phones, so each is a 44px target (§13.6). */}
-        <DialogFooter className="shrink-0 px-6 pb-6 pt-2">
+        {/* From `sm` the three sit centred on one row. On phones they do not
+            fit, so Retry takes its own row on top and Resolve and Abandon
+            share the row below. 44px targets on phones (§13.6). */}
+        <DialogFooter className="grid shrink-0 grid-cols-2 px-6 pb-6 pt-2 sm:flex sm:justify-center">
           <Button
             variant="outline"
             className="h-11 sm:h-9"
@@ -223,7 +209,11 @@ export function DeadLetterDetailDialog({
             <Ban className="mr-2 h-4 w-4" />
             Abandon
           </Button>
-          <Button className="h-11 sm:h-9" disabled={retryDisabled} onClick={() => entry && onRetry(entry.id)}>
+          <Button
+            className="order-first col-span-2 h-11 sm:order-none sm:col-span-1 sm:h-9"
+            disabled={retryDisabled}
+            onClick={() => entry && onRetry(entry.id)}
+          >
             <RotateCcw className="mr-2 h-4 w-4" />
             {retryPending ? 'Retrying…' : 'Retry'}
           </Button>

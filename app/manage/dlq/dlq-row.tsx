@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import type { DlqRow } from '@/app/manage/actions/dead-letter-queue'
+import { isReplayable } from './replay'
 
 export const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
@@ -9,15 +10,21 @@ export const STATUS_LABELS: Record<string, string> = {
 }
 
 /** What an entry allows — shared by the table row, the phone card and the detail panel. */
-export function dlqRowState(row: Pick<DlqRow, 'status' | 'retry_count' | 'max_retries'>) {
+export function dlqRowState(
+  row: Pick<DlqRow, 'source' | 'event_type' | 'status' | 'retry_count' | 'max_retries'>
+) {
   const maxedOut = (row.retry_count ?? 0) >= (row.max_retries ?? 0)
   const isTerminal = row.status === 'resolved' || row.status === 'abandoned'
+  // The same rule the retry action applies, so Retry is never offered for an
+  // entry the server would refuse (valor, telnyx, the status relay, …).
+  const replayable = isReplayable(row.source, row.event_type)
   return {
     isTerminal,
+    replayable,
     // A live entry that can no longer retry is the failure an operator must
     // act on — the one per-row alarm on this page (§14.3 HQ-2).
     exhausted: maxedOut && !isTerminal,
-    canRetry: !maxedOut && !isTerminal && row.status !== 'retrying',
+    canRetry: replayable && !maxedOut && !isTerminal && row.status !== 'retrying',
   }
 }
 
