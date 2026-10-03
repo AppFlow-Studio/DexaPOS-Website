@@ -55,27 +55,25 @@ export function CatalogListSkeleton({ rows = 10 }: { rows?: number }) {
         </div>
       </div>
 
-      {/* The phone card: model and status, a muted manufacturer line, three
-          pairs, then the Edit pill and the actions menu. */}
+      {/* The phone card: model and a muted manufacturer line, the actions
+          menu at the top right, then four pairs (Status beside Monthly fee). */}
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {Array.from({ length: 4 }).map((_, card) => (
           <div key={card} className="min-w-0 rounded-2xl bg-muted/45 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-4 w-14" />
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+              <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
             </div>
-            <Skeleton className="mt-2 h-3 w-1/3" />
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
-              {Array.from({ length: 3 }).map((__, pair) => (
+              {Array.from({ length: 4 }).map((__, pair) => (
                 <div key={pair} className="space-y-1.5">
                   <Skeleton className="h-3 w-14" />
                   <Skeleton className="h-4 w-20" />
                 </div>
               ))}
-            </div>
-            <div className="mt-3 flex justify-end gap-1">
-              <Skeleton className="h-11 w-20 rounded-full sm:h-8" />
-              <Skeleton className="h-8 w-8 rounded-full" />
             </div>
           </div>
         ))}
@@ -85,31 +83,20 @@ export function CatalogListSkeleton({ rows = 10 }: { rows?: number }) {
 }
 
 /**
- * /manage/device-catalog: the registry header (title, subtitle, three actions,
- * the three-pill rail), four stat tiles, the callout, then the list panel.
+ * /manage/device-catalog: the header (title, subtitle, Add device), four stat
+ * tiles, the callout, then the list panel. No section rail.
  */
 export function CatalogPageSkeleton() {
   return (
     <PageShell as="div">
       <p role="status" className="sr-only">Loading the device catalog</p>
 
-      <div className="min-w-0 space-y-4" aria-hidden>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <Skeleton className="h-8 w-44" />
-            <Skeleton className="h-4 w-96 max-w-full max-sm:hidden" />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="h-9 w-28 rounded-full" />
-            ))}
-          </div>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3" aria-hidden>
+        <div className="min-w-0 space-y-2">
+          <Skeleton className="h-8 w-44" />
+          <Skeleton className="h-4 w-96 max-w-full max-sm:hidden" />
         </div>
-        <div className="inline-flex w-max gap-0.5 rounded-full bg-muted/70 p-1">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Skeleton key={index} className="h-9 w-24 rounded-full" />
-          ))}
-        </div>
+        <Skeleton className="h-11 w-32 rounded-full sm:h-9" />
       </div>
 
       <Panel padded>

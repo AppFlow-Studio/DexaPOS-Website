@@ -34,6 +34,7 @@ export function ConfirmDialog({
   destructive = false,
   pending = false,
   onConfirm,
+  footerClassName,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -45,6 +46,8 @@ export function ConfirmDialog({
   destructive?: boolean
   pending?: boolean
   onConfirm: () => void
+  /** Extra classes for the button row, e.g. `sm:justify-center` to centre it. */
+  footerClassName?: string
 }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
@@ -53,7 +56,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
+        <DialogFooter className={footerClassName}>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>

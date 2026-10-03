@@ -25,7 +25,6 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
 import {
   CardField,
   CardFields,
@@ -33,7 +32,15 @@ import {
   LoadError,
   RecordCard,
 } from '@/app/manage/transactions/components/ledger-primitives'
-import { ConfirmDialog, PageShell, Panel, PanelSection, StatRow, StatTile } from '@/components/dashboard/shell'
+import {
+  ConfirmDialog,
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+} from '@/components/dashboard/shell'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -447,23 +454,17 @@ export default function DeviceCatalogPage() {
 
   return (
     <PageShell as="div">
-      <DeviceRegistryPageHeader
+      {/* No section rail and no inventory/overview links: the sidebar and
+          the callout's "Go to registry" lead back to the registry. */}
+      <PageHeader
         title="Device catalog"
-        description="Supported hardware models, pricing defaults, and reusable specs for future inventory rows."
+        subtitle="Supported hardware models, pricing defaults, and reusable specs for future inventory rows."
         actions={
-          <>
-            <Button asChild variant="outline">
-              <Link href="/manage/devices">Open inventory</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/manage/devices/overview">Open overview</Link>
-            </Button>
-            {/* The page's primary action: 44px tall on phones (§13.6). */}
-            <Button onClick={openCreate} className="max-sm:h-11">
-              <Plus className="h-4 w-4" />
-              Add device
-            </Button>
-          </>
+          // The page's primary action: 44px tall on phones (§13.6).
+          <Button onClick={openCreate} className="max-sm:h-11">
+            <Plus className="h-4 w-4" />
+            Add device
+          </Button>
         }
       />
 
@@ -661,9 +662,10 @@ export default function DeviceCatalogPage() {
                   </TableBody>
                 </Table>
 
-                {/* Phones (§5.3, D-27): model and status lead, then the three
-                    figures a buyer compares. SKU and specs live in the edit
-                    dialog, which shows every field. */}
+                {/* Phones (§5.3, D-27): model and manufacturer lead, with the
+                    actions menu (Edit, Discontinue, Delete) at the top right;
+                    then four pairs, Status beside Monthly fee. SKU and specs
+                    live in the edit dialog, which shows every field. */}
                 <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                   {filtered.length === 0 ? (
                     <div className="col-span-full flex min-h-40 flex-col items-center justify-center rounded-2xl bg-muted/30 px-4 py-6 text-center">
@@ -679,24 +681,15 @@ export default function DeviceCatalogPage() {
                               <p className="truncate font-medium">{device.model_name}</p>
                               <p className="truncate text-sm text-muted-foreground">{device.manufacturer}</p>
                             </div>
-                            {/* On a muted card the status is plain text, not a pill (§3.5). */}
-                            <span className="shrink-0 text-sm font-medium">
-                              {device.is_active ? 'Active' : 'Discontinued'}
-                            </span>
+                            <div className="-mr-1 -mt-1 shrink-0">{rowActions(device)}</div>
                           </div>
                           <CardFields>
                             <CardField label="Category" value={CATEGORY_SINGULAR[category] ?? category} />
                             <CardField label="Unit cost" value={formatDollars(device.unit_cost)} />
                             <CardField label="Monthly fee" value={formatDollars(device.monthly_fee)} />
+                            {/* On a muted card the status is plain text, not a pill (§3.5). */}
+                            <CardField label="Status" value={device.is_active ? 'Active' : 'Discontinued'} />
                           </CardFields>
-                          <div className="mt-3 flex items-center justify-end gap-1">
-                            {/* The card's primary action: 44px tall on phones (§13.6). */}
-                            <Button variant="ghost" size="sm" className="h-11 px-3 sm:h-8" onClick={() => openEdit(device)}>
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </Button>
-                            {rowActions(device)}
-                          </div>
                         </RecordCard>
                       )
                     })
@@ -749,6 +742,7 @@ export default function DeviceCatalogPage() {
         destructive
         pending={deleteMutation.isPending}
         onConfirm={() => void handleDelete()}
+        footerClassName="sm:justify-center"
       />
     </PageShell>
   )
@@ -935,8 +929,11 @@ function DeviceFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* §12/§13.1: a form, so full-screen below `sm`. The content clips and
-          the body scrolls; header and footer carry no rule (§5.5). */}
-      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[90vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+          the body scrolls; header and footer carry no rule (§5.5).
+          `max-sm:overflow-hidden` overrides the primitive's phone-width
+          `max-sm:overflow-y-auto`: the body is the only scroller, so the
+          dialog never grows a second scrollbar. */}
+      <DialogContent className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-3xl">
         <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
           <DialogTitle className="text-xl">{isEdit ? 'Edit device' : 'Add device'}</DialogTitle>
           <DialogDescription>
@@ -947,8 +944,13 @@ function DeviceFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          {/* Sections are separated by spacing, not rules (§5.5). */}
-          <div className="thin-scrollbar min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-4">
+          {/* Sections are separated by spacing, not rules (§5.5). `relative`
+              makes the body the containing block for the hidden native inputs
+              that Radix Select, Switch and Checkbox render (absolutely
+              positioned) for form submission. Without it they anchor to the
+              dialog at their unscrolled offset and stretch its scroll height,
+              which showed as empty space below the buttons on phones. */}
+          <div className="thin-scrollbar relative min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-4">
             <section className="space-y-4">
               <h3 className="font-medium">Device info</h3>
 
@@ -1147,7 +1149,7 @@ function DeviceFormDialog({
             </section>
           </div>
 
-          <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
+          <DialogFooter className="shrink-0 px-6 pb-6 pt-4 sm:justify-center">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

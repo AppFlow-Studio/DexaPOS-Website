@@ -33,7 +33,7 @@ Reuses `FilterSelect`, `LoadError`, `RecordCard`, `CardFields`, `CardField` and 
 | # | Decision | Why |
 |---|---|---|
 | 1 | The grouped, collapsible list became a flat paged table sorted by category | §5.7 allows a grouped list only with every group closed by default, which would open the catalog on seven headers and no models. The category filter and the category sort already give the grouping; a table matches the converted inventory page next door and pages cleanly at 10. |
-| 2 | "Open inventory", "Open overview" and "Go to registry" were kept | They duplicate the section rail, but removing navigation was not requested (lessons: "remove only what was named"). Same call as the devices conversion. |
+| 2 | ~~"Open inventory", "Open overview" and "Go to registry" were kept~~ **2026-10-03:** at the user's request, the section rail and the "Open inventory" / "Open overview" buttons are removed. The page uses a plain `PageHeader` whose only action is Add device. "Go to registry" in the callout stays, since it was not named. | The rail and the two buttons duplicated the sidebar's Device Registry and Device Catalog entries. The parallel devices session had already removed the search trigger (⌘K still opens the palette) and hidden the rail on the inventory, overview and device pages. |
 
 ## Verification
 
@@ -75,3 +75,10 @@ An audit against the rules added after this conversion (D-25 table height, D-26 
 - §3.5, §8, §12 and §4.10 greps clean. §5.5 finds only the `DropdownMenuSeparator` above Delete, kept to match the users and organizations menus
 - The shared rail (`useRailAutoScroll`, `no-scrollbar`) and the palette's skeleton search state were fixed by the parallel devices session, so the audit's shared items are closed
 - [ ] Browser check not run: the Chrome DevTools MCP failed to connect. To check: two-line rows at 768px and one-line rows from 1024px (does "Price" read clearly with the "/mo" line under it?), then the 768/1024/1280/1536px column tiers with no sideways scroll and no inner scroll; the 375px card; the switch/checkbox fill in dark mode inside the dialog
+
+## Follow-up 2026-10-03 — user review
+
+- [x] Phone card: the Edit button is gone (Edit stays in the actions menu), the menu moves to the top right, and Status becomes the fourth pair beside Monthly fee. This is a user decision that departs from D-27's "identity and status lead": the status still shows on the card as a word, so nothing drops below `sm` (§13.4).
+- [x] Add/edit dialog on phones: there was a second vertical scrollbar, with empty space below the buttons. Cause: Radix `Select`, `Switch` and `Checkbox` render hidden native inputs for form submission (`position: absolute`). Their containing block was the dialog, not the scroll body, so they sat at their unscrolled offset (about 1000px down for Status) and stretched the dialog's scroll height. On phones the primitive's `max-sm:overflow-y-auto` let the dialog scroll to them. Fix: the scroll body is `relative`, and the dialog adds `max-sm:overflow-hidden`; `w-screen` became `w-full`.
+- [x] Footer buttons centred (`sm:justify-center`) in the add/edit dialog and the delete confirm. `ConfirmDialog` gained an optional `footerClassName` prop for this; its 13 other callers are unchanged.
+- [ ] Browser check still not run (Chrome DevTools MCP not connected)
