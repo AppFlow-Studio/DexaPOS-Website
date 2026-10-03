@@ -567,3 +567,10 @@ Rule: When tiering columns, any full-width row must span only the visible column
 measures its visible header cells and `TableCell` clamps `colSpan` (`components/ui/table.tsx`).
 Rule: When you spot a layout risk you cannot verify in a browser, write a DOM test for it (happy-dom, as in
 `components/ui/__tests__/table-colspan.test.tsx`) instead of reasoning that it is probably fine.
+
+## Read the vendor's source before restyling an embedded widget (2026-10-03)
+Context: Clerk's `<UserProfile>` in `components/profile/AccountProfile.tsx`, styled through `appearance.elements` with no browser available.
+Mistakes: (1) the active nav pill used `ring-border`, but Clerk's buttons define their own `--border` (brand blue on the active item), so the ring rendered blue; (2) `navbar: "!bg-transparent"` also hit Clerk's phone slide-in menu, which shares that hook, making it see-through so its items drew over the page ("doubled"); (3) Clerk's card is sized for a modal (`max-width: calc(100vw - 2rem)`, fixed 44rem height with an inner scroller), which caused sideways scroll and a second vertical scrollbar on phones. The user caught all of it from screenshots.
+Rule: Before overriding a third-party widget, read its layout source. Clerk's UI ships readable ESM: `npm pack @clerk/ui@1` (the major `@clerk/shared`'s `loadClerkJsScript` selects), then read `dist/elements/**`. Check which elements share an `elementDescriptor`, which CSS variables the vendor defines (`createCssVariables`), and every fixed size and media query.
+Rule: Inside an embed, never trust an app utility that reads a generic variable name (`--border`, `--accent`, `--background`). Capture the app value on the embed root (e.g. `.clerk-themed { --app-border: var(--border) }`) and read that.
+Rule: When a vendor control fights the design system (Clerk's hamburger drawer), replace it with our own primitive driven through the vendor's public interface (here, the hash router) instead of layering overrides on it. The user rejected the patched drawer; the pill rail replaced it.

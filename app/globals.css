@@ -699,6 +699,45 @@ html:has([data-template]) body[data-scroll-locked] {
   color: var(--card-foreground);
 }
 
+/* Clerk right-aligns a form's Cancel / Save row, and the row has no
+   `elements` hook of its own, so it is reached through the Save button it
+   holds (`cl-*` classes are Clerk's stable public names). */
+.clerk-themed div:has(> .cl-formButtonPrimary) {
+  justify-content: center;
+}
+
+/* Clerk's "Connect account" / "Add …" menus float under their trigger, but
+   Floating UI flips them upward whenever there is no room below inside the
+   overflow-hidden Panel — and these sit at the foot of their section, so they
+   always flipped. Laid out in flow instead, the list opens under its trigger
+   and the panel grows to fit (§7: opens in place, no slide-in). `!important`
+   beats Floating UI's inline `position`. Row "⋯" menus carry no id, so they
+   keep floating. */
+.clerk-themed
+  :is(
+    .cl-menuList__connectedAccounts,
+    .cl-menuList__enterpriseAccounts,
+    .cl-menuList__web3Wallets,
+    .cl-menuList__mfa
+  ) {
+  position: static !important;
+  width: 100%;
+  margin-top: 0.25rem;
+  animation: none;
+}
+
+.clerk-themed
+  div:has(
+    > :is(
+      .cl-menuList__connectedAccounts,
+      .cl-menuList__enterpriseAccounts,
+      .cl-menuList__web3Wallets,
+      .cl-menuList__mfa
+    )
+  ) {
+  flex-wrap: wrap;
+}
+
 /* Secondary copy keeps its hierarchy instead of flattening to one colour. */
 .clerk-themed :is([class*="cl-headerSubtitle"], [class*="cl-formFieldHintText"]) {
   color: var(--muted-foreground);

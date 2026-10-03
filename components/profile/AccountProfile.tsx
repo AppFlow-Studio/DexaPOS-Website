@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { UserProfile, useUser } from "@clerk/nextjs";
 import { useIsDarkTheme } from "@/app/sign-in/clerk-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
-  AccountPanelSkeleton,
+  AccountBodySkeleton,
   ProfileIdentitySkeleton,
 } from "@/components/profile/ProfileSkeletons";
 
@@ -127,15 +128,80 @@ export function ProfileIdentityPanel({
   );
 }
 
+/*
+ * Clerk's own section nav is a side rail on desktop and, below 768px, a
+ * hamburger that slides a drawer over the page (§12 bans both the drawer and
+ * the slide). It is hidden at every width; this DS-CTL-05 pill rail replaces
+ * it (§4.5, §13.2). `<UserProfile routing="hash">` reads its page from the URL
+ * hash (`#/security`) and re-renders on `hashchange`, so the rail drives it by
+ * setting the hash, and follows it when Clerk navigates itself.
+ *
+ * Clerk shows exactly these two pages for this app. A page enabled later in
+ * the Clerk dashboard (billing, API keys) needs adding here, or it is
+ * unreachable.
+ */
+const ACCOUNT_PAGES = [
+  { label: "Profile", hash: "/" },
+  { label: "Security", hash: "/security" },
+] as const;
+
+function subscribeToHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
+function readAccountPageHash() {
+  // `#/security`, or `#/security/...` on one of its sub-routes.
+  return window.location.hash.startsWith("#/security") ? "/security" : "/";
+}
+
+function AccountSectionRail() {
+  const activeHash = useSyncExternalStore(
+    subscribeToHash,
+    readAccountPageHash,
+    () => "/",
+  );
+
+  return (
+    <nav aria-label="Account sections" className="no-scrollbar w-full min-w-0 overflow-x-auto">
+      <div className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+        {ACCOUNT_PAGES.map((page) => {
+          const isActive = page.hash === activeHash;
+          return (
+            <button
+              key={page.hash}
+              type="button"
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => {
+                window.location.hash = page.hash;
+              }}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
+                isActive
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {page.label}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 /**
- * Clerk's account UI in a tier 1 panel. The Panel owns the surface, so Clerk's
- * own card is stripped bare — otherwise it renders a second bordered, shadowed
- * box inside ours. Its inputs are restyled to the DS-CTL-02 material (muted,
- * borderless, rounded) since Clerk ships bordered fields.
+ * Clerk's account UI in a tier 1 panel, under our own section rail. The Panel
+ * owns the surface, so Clerk's own card is stripped bare — otherwise it
+ * renders a second bordered, shadowed box inside ours. Its inputs are restyled
+ * to the DS-CTL-02 material (muted, borderless, rounded) since Clerk ships
+ * bordered fields.
  *
  * `!` throughout because Clerk injects its styles at runtime with higher
  * specificity than a plain utility class — the same failure the sign-in
- * Continue button hit.
+ * Continue button hit. Clerk's layout source (`npm pack @clerk/ui@1`,
+ * `dist/elements/**`) is the reference for every override below.
  */
 export function ClerkAccountPanel() {
   const isDark = useIsDarkTheme();
@@ -191,76 +257,144 @@ export function ClerkAccountPanel() {
 
   return (
     <Panel padded>
-      <div className="relative min-w-0">
-        {!isProfilePainted ? (
-          // The same blocks as the route's `loading.tsx` (§4.10).
-          <div aria-busy="true">
-            <p role="status" className="sr-only">
-              Loading your account details
-            </p>
-            <AccountPanelSkeleton />
+      <div className="min-w-0 space-y-6">
+        <AccountSectionRail />
+        {/* `overflow-x-clip`, not `hidden`: opening an inline editor makes
+            Clerk call `scrollIntoView`, which scrolls every scrollable
+            ancestor, and an `overflow-hidden` box (our Panel) is still
+            scrollable by script. Anything of Clerk's that overhangs then slid
+            the whole panel sideways. A `clip` box can't be scrolled, and what
+            it clips adds no scrollable overflow to the Panel. Vertical stays
+            visible for the in-flow menus. `-mx-2 px-2` moves the clip edge
+            8px out into the Panel's padding without moving the content, so
+            glyphs that overhang their box (the bold "P" of "Profile details")
+            are not trimmed by it. */}
+        <div className="relative -mx-2 min-w-0 overflow-x-clip px-2">
+          {!isProfilePainted ? (
+            // The same blocks as the route's `loading.tsx` (§4.10).
+            <div aria-busy="true">
+              <p role="status" className="sr-only">
+                Loading your account details
+              </p>
+              <AccountBodySkeleton />
+            </div>
+          ) : null}
+          <div
+            ref={profileWidgetRef}
+            aria-hidden={!isProfilePainted}
+            className={
+              isProfilePainted
+                ? "min-w-0"
+                : "invisible pointer-events-none absolute inset-0 min-w-0"
+            }
+          >
+            <UserProfile
+              routing="hash"
+              appearance={{
+                variables: {
+                  ...clerkColors,
+                  borderRadius: "0.625rem",
+                },
+                elements: {
+                  // `clerk-themed` hands text colour back to the app's tokens —
+                  // Clerk bakes its palette into generated classes and honours
+                  // neither `baseTheme` nor `variables` here, so in dark mode its
+                  // near-black type sat on our dark card. Rule lives in
+                  // globals.css, scoped to this class so it cannot leak.
+                  //
+                  // `!w-full`: Clerk gives the root `width: fit-content`
+                  // (`InvisibleRootBox`), so without `!` the widget shrank to
+                  // its widest row and grew whenever an inline editor with a
+                  // long sentence opened, dragging "Update profile" and every
+                  // right-aligned control sideways.
+                  rootBox: "!w-full clerk-themed",
+                  // Clerk sizes this card for a modal: 55rem wide, a fixed 44rem
+                  // tall around an inner scroller, and capped at
+                  // `calc(100vw - 2rem)` — wider than our padded Panel on a
+                  // phone. In a page the Panel sets the width and the page
+                  // itself scrolls (§13.3).
+                  //
+                  // `!overflow-visible` here and on `scrollBox`: both are
+                  // `overflow: hidden` in Clerk, which only served the inner
+                  // scroller and phone drawer we removed. With our zero
+                  // padding they trimmed the bold "P" of "Profile details",
+                  // whose glyph overhangs its box. Our wrapper's
+                  // `overflow-x-clip` is the one sideways guard.
+                  cardBox:
+                    "!w-full !max-w-full !h-auto !overflow-visible !shadow-none !border-0 !bg-transparent",
+                  card: "!w-full !shadow-none !border-0 !bg-transparent",
+                  // Both of Clerk's navs — the desktop rail and the phone
+                  // hamburger drawer — give way to `AccountSectionRail`.
+                  navbar: "!hidden",
+                  navbarMobileMenuRow: "!hidden",
+                  // Clerk draws this as a second card: an opaque fill, a 1px
+                  // border and -1px margins, which read as a clipped edge just
+                  // inside the Panel. The Panel is the only surface.
+                  scrollBox:
+                    "!m-0 !overflow-visible !border-0 !bg-transparent !shadow-none !rounded-none",
+                  // No second scroll area inside the page.
+                  pageScrollBox:
+                    "!p-0 !h-auto !overflow-visible ![scrollbar-gutter:auto]",
+                  // Clerk pads each page as if it were a standalone card; the
+                  // Panel already does, so the inset doubled.
+                  profilePageContent: "!p-0",
+                  // An inline editor (Update profile, Add email…) is a card
+                  // nested in the Panel: tier 2 (§3.1), no shadow.
+                  actionCard:
+                    "!rounded-2xl !border !border-border/60 !bg-card !shadow-none",
+                  // Clerk keeps names, emails and account ids to one truncated
+                  // line, which cut them off on phones. Let them wrap instead.
+                  userPreviewMainIdentifierText:
+                    "!whitespace-normal ![overflow-wrap:anywhere]",
+                  userPreviewSecondaryIdentifier:
+                    "!whitespace-normal ![overflow-wrap:anywhere]",
+                  // The email text has no hook of its own; reach it via its row.
+                  profileSectionItem:
+                    "[&_p]:!whitespace-normal [&_p]:![overflow-wrap:anywhere]",
+                  // Avatars beside a name drop below `sm` (§13.4).
+                  userPreviewAvatarContainer: "max-sm:!hidden",
+                  // DS-CTL-02: muted, borderless, rounded fields.
+                  formFieldInput:
+                    "!rounded-full !border-0 !bg-muted/60 !shadow-none focus-visible:!bg-background",
+                  // The phone field is a bordered box around a country picker
+                  // and an input; the box takes the field material instead, and
+                  // the input inside it goes clear so it isn't tinted twice.
+                  phoneInputBox:
+                    "!rounded-full !border-0 !bg-muted/60 !shadow-none focus-within:!bg-background [&_input]:!bg-transparent",
+                  // A pill like every other button (§4), and like Cancel beside it.
+                  // The row they sit in is centred in globals.css (no hook here).
+                  formButtonPrimary:
+                    "!rounded-full !bg-foreground hover:!bg-foreground/90 !text-background !border-0 !shadow-none normal-case text-sm font-medium",
+                  formButtonReset:
+                    "!rounded-full !border-0 !bg-muted/60 !text-foreground !shadow-none",
+                  // "Update profile", "+ Add email address", "+ Connect account":
+                  // Clerk's ghost buttons turn brand blue on hover and while
+                  // their menu is open, which `.clerk-themed`'s `inherit` loses
+                  // to. Actions are neutral (§3.5).
+                  profileSectionPrimaryButton: "!rounded-full !text-foreground",
+                  badge:
+                    "!rounded-full !border-0 !bg-muted/60 !text-xs !font-medium",
+                  // Clerk draws a rule under every section; §5.5 bans them.
+                  //
+                  // The content column is capped — 28rem, 24rem on laptops
+                  // (`lg`) — so a row's control ("Update profile", "⋯") sits
+                  // near its text rather than at the far edge of a full-width
+                  // panel. The cap is fixed, so an
+                  // opening editor can't move it. Clerk lays the row out
+                  // `row-reverse` (title on the left from 62em up), where
+                  // `flex-start` is the RIGHT edge; `justify-end` packs
+                  // title + column from the left instead. Stacked below 62em,
+                  // it has no effect.
+                  profileSection: "!border-0 !justify-end",
+                  profileSectionContent: "!border-0 !max-w-md lg:!max-w-sm",
+                  accordionTriggerButton: "!rounded-full",
+                  // "Secured by Clerk". Clerk re-shows it below 768px with a
+                  // media query, which a plain `hidden` loses to.
+                  footer: "!hidden",
+                },
+              }}
+            />
           </div>
-        ) : null}
-        <div
-          ref={profileWidgetRef}
-          aria-hidden={!isProfilePainted}
-          className={
-            isProfilePainted
-              ? "min-w-0"
-              : "invisible pointer-events-none absolute inset-0 min-w-0"
-          }
-        >
-          <UserProfile
-            routing="hash"
-            appearance={{
-              variables: {
-                ...clerkColors,
-                borderRadius: "0.625rem",
-              },
-              elements: {
-                // `clerk-themed` hands text colour back to the app's tokens —
-                // Clerk bakes its palette into generated classes and honours
-                // neither `baseTheme` nor `variables` here, so in dark mode its
-                // near-black type sat on our dark card. Rule lives in
-                // globals.css, scoped to this class so it cannot leak.
-                rootBox: "w-full clerk-themed",
-                cardBox: "w-full !shadow-none !border-0 !bg-transparent",
-                card: "w-full !shadow-none !border-0 !bg-transparent",
-                navbar: "!border-0 !bg-transparent",
-                // §5.5 — no dividing lines anywhere.
-                navbarMobileMenuRow: "!border-0",
-                // Clerk paints this opaque white, so it ignores the dark palette
-                // and reads as a second card sitting inside the Panel.
-                scrollBox: "!bg-transparent !shadow-none !rounded-none",
-                pageScrollBox: "!p-0",
-                // DS-CTL-02: muted, borderless, rounded fields.
-                formFieldInput:
-                  "!rounded-full !border-0 !bg-muted/60 !shadow-none focus-visible:!bg-background",
-                // A pill like every other button (§4), and like Cancel beside it.
-                formButtonPrimary:
-                  "!rounded-full !bg-foreground hover:!bg-foreground/90 !text-background !border-0 !shadow-none normal-case text-sm font-medium",
-                formButtonReset:
-                  "!rounded-full !border-0 !bg-muted/60 !text-foreground !shadow-none",
-                profileSectionPrimaryButton: "!rounded-full",
-                badge:
-                  "!rounded-full !border-0 !bg-muted/60 !text-xs !font-medium",
-                // Clerk draws a rule under every section; §5.5 bans them.
-                profileSection: "!border-0",
-                profileSectionContent: "!border-0",
-                accordionTriggerButton: "!rounded-full",
-                // Clerk tints the active item with a hardcoded black alpha that
-                // does not track the theme; use the muted token instead.
-                navbarButton:
-                  "!rounded-full !text-muted-foreground hover:!bg-muted/60 hover:!text-foreground",
-                // The DS-CTL-05 active pill (§4.5). Clerk adds this class on
-                // top of `navbarButton`, whose `!` colour would otherwise win:
-                // `[&&]` doubles the selector so these outrank it, hover included.
-                navbarButton__active:
-                  "[&&]:!bg-background [&&]:!text-foreground [&&]:!shadow-sm [&&]:!ring-1 [&&]:!ring-border",
-                footer: "hidden",
-              },
-            }}
-          />
         </div>
       </div>
     </Panel>

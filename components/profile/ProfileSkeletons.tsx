@@ -36,45 +36,52 @@ export function ProfileIdentitySkeleton() {
 }
 
 /**
- * `ClerkAccountPanel`'s contents while Clerk's script loads.
+ * Clerk's `<UserProfile>` body while its script loads — what
+ * `ClerkAccountPanel` shows under its (already rendered) section rail.
  *
  * `<UserProfile>` renders literally nothing until Clerk boots — measured at
  * ~2.9s on a cold load — so the surface holding it collapsed to an empty box
  * with no sign anything was coming. Route-level `loading.tsx` cannot cover
  * this: the gap is client-side, long after the server render has flushed.
  *
- * Shapes mirror the rendered widget: a titled nav rail with exactly two items
- * (Profile, Security) beside a "Profile details" heading over read-only
- * label / value / action rows — not a form.
+ * Shapes mirror the rendered widget: a "Profile details" heading over
+ * read-only rows — not a form. From 62em (Clerk's own breakpoint) a row is a
+ * 16.5rem title column beside a content column capped at 28rem (24rem from
+ * `lg`), with the
+ * row's control at the column's end; below that the title stacks on top.
+ */
+export function AccountBodySkeleton() {
+  return (
+    <div aria-hidden="true" className="min-w-0 space-y-5">
+      <Block className="h-6 w-36 max-w-full" />
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="flex min-w-0 flex-col gap-2 min-[62em]:flex-row min-[62em]:items-center min-[62em]:gap-6"
+        >
+          <div className="shrink-0 min-[62em]:w-[16.5rem]">
+            <Block className="h-4 w-28 rounded-full" />
+          </div>
+          <div className="flex min-w-0 max-w-md flex-1 items-center justify-between gap-4 lg:max-w-sm">
+            <Block className="h-4 w-48 min-w-0 rounded-full" />
+            <Block className="h-4 w-20 shrink-0 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The whole account panel for the route's `loading.tsx`: the Profile /
+ * Security pill rail (one block its size — two 36px pills in a padded rail),
+ * then the body.
  */
 export function AccountPanelSkeleton() {
   return (
-    <div aria-hidden="true" className="flex min-w-0 flex-col gap-6 sm:flex-row">
-      <div className="w-full shrink-0 space-y-4 sm:w-56">
-        <div className="space-y-2">
-          <Block className="h-6 w-28 max-w-full" />
-          <Block className="h-3 w-40 max-w-full rounded-full" />
-        </div>
-        <div className="space-y-1.5">
-          {Array.from({ length: 2 }).map((_, index) => (
-            <Block key={index} className="h-8 w-full rounded-full" />
-          ))}
-        </div>
-      </div>
-
-      <div className="min-w-0 flex-1 space-y-5">
-        <Block className="h-6 w-36 max-w-full" />
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div
-            key={index}
-            className="flex min-w-0 items-center justify-between gap-4"
-          >
-            <Block className="h-4 w-28 shrink-0 rounded-full" />
-            <Block className="h-4 min-w-0 flex-1 rounded-full" />
-            <Block className="hidden h-4 w-20 shrink-0 rounded-full sm:block" />
-          </div>
-        ))}
-      </div>
+    <div aria-hidden="true" className="min-w-0 space-y-6">
+      <Block className="h-11 w-44 max-w-full rounded-full" />
+      <AccountBodySkeleton />
     </div>
   )
 }
