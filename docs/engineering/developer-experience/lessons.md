@@ -574,3 +574,8 @@ Mistakes: (1) the active nav pill used `ring-border`, but Clerk's buttons define
 Rule: Before overriding a third-party widget, read its layout source. Clerk's UI ships readable ESM: `npm pack @clerk/ui@1` (the major `@clerk/shared`'s `loadClerkJsScript` selects), then read `dist/elements/**`. Check which elements share an `elementDescriptor`, which CSS variables the vendor defines (`createCssVariables`), and every fixed size and media query.
 Rule: Inside an embed, never trust an app utility that reads a generic variable name (`--border`, `--accent`, `--background`). Capture the app value on the embed root (e.g. `.clerk-themed { --app-border: var(--border) }`) and read that.
 Rule: When a vendor control fights the design system (Clerk's hamburger drawer), replace it with our own primitive driven through the vendor's public interface (here, the hash router) instead of layering overrides on it. The user rejected the patched drawer; the pill rail replaced it.
+
+## A one-field dialog is not a destination, so it stays a centred card on phones (2026-10-03)
+Context: `/manage/website-editor` "New page" dialog: a title, one Route field and two buttons.
+Mistake: I applied §13.1's literal test ("does the panel contain fields? Full screen.") and left it on the `DialogContent` default, which fills the phone screen. The user saw a short form floating at the top of an empty full-screen sheet: "don't make it full screen, it is already small".
+Rule: Full screen on phones is for panels you work through: editors, wizards, lists, multi-section forms. A dialog that already fits as a card (a question, or one or two short fields) takes `CENTRED_DIALOG` from the shell. Judge by size, not by whether it has an input. §13.1 now says so.

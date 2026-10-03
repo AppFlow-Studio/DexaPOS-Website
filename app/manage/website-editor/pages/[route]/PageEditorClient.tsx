@@ -118,31 +118,12 @@ export function PageEditorClient({
 
   const categoryValue = categories.some((c) => c.slug === data.category) ? data.category : "";
 
-  const saveActions = (
-    <>
-      <Button
-        variant="outline"
-        className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
-        onClick={() => void executeSave(false)}
-        disabled={!!saving}
-      >
-        {saving === "draft" ? "Saving…" : "Save draft"}
-      </Button>
-      <Button
-        className="h-9 px-4 text-[0.8125rem] font-medium"
-        onClick={() => void executeSave(true)}
-        disabled={!!saving}
-      >
-        {saving === "publish" ? "Publishing…" : "Publish"}
-      </Button>
-    </>
-  );
-
   return (
     <PageShell as="div">
       <PageHeader
         title={initial.isNew ? "New page" : initial.cms_title || initial.title || initial.route}
-        subtitle={data.route}
+        // The route is the page's address. A bare "/" reads as a stray mark, so say what it is.
+        subtitle={data.route === "/" ? "/ (home page)" : data.route}
         showSubtitleOnMobile
         subtitleClassName="font-mono"
         backHref={backHref}
@@ -166,6 +147,13 @@ export function PageEditorClient({
         }
         actions={
           <>
+            {/* One pill shape for every button; Publish is the only filled one.
+                Order: Cancel first, as far from Publish as it can be and a
+                little apart; then the page actions in rising commitment:
+                Preview (changes nothing), Save draft, Publish (goes live). */}
+            <Button variant="outline" className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm sm:mr-2" asChild>
+              <Link href={backHref}>Cancel</Link>
+            </Button>
             {!data.isNew && (
               <Button variant="outline" className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm" asChild>
                 <a href={pagePreviewHref(data.route)} target="_blank" rel="noopener noreferrer">
@@ -174,7 +162,21 @@ export function PageEditorClient({
                 </a>
               </Button>
             )}
-            {saveActions}
+            <Button
+              variant="outline"
+              className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => void executeSave(false)}
+              disabled={!!saving}
+            >
+              {saving === "draft" ? "Saving…" : "Save draft"}
+            </Button>
+            <Button
+              className="h-9 px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => void executeSave(true)}
+              disabled={!!saving}
+            >
+              {saving === "publish" ? "Publishing…" : "Publish"}
+            </Button>
           </>
         }
       />
@@ -262,12 +264,6 @@ export function PageEditorClient({
         </PanelSection>
       </Panel>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button variant="ghost" className="h-9 px-4 text-[0.8125rem] font-medium" asChild>
-          <Link href={backHref}>Cancel</Link>
-        </Button>
-        {saveActions}
-      </div>
     </PageShell>
   );
 }

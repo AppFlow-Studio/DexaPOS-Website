@@ -185,7 +185,7 @@ function ImageLibraryContents({ onChoose }: { onChoose: (url: string) => void })
         )}
       </div>
 
-      <DialogFooter className="px-6 pt-2 pb-6">
+      <DialogFooter className="px-6 pt-2 pb-6 sm:justify-center">
         {input}
         <Button onClick={openPicker} disabled={uploading}>
           <Upload className="h-4 w-4" aria-hidden />

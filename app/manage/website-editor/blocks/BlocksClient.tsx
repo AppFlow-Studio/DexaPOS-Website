@@ -176,6 +176,8 @@ export function BlocksClient({ initialBlocks }: { initialBlocks: Block[] }) {
                   label="Key"
                   htmlFor="block-key"
                   hint={keyError ? undefined : "How pages refer to this block. It can't be changed later."}
+                  // A warning, not an explanation, so it stays on phones.
+                  showHintOnMobile
                 >
                   <Input
                     id="block-key"
@@ -220,7 +222,7 @@ export function BlocksClient({ initialBlocks }: { initialBlocks: Block[] }) {
             </div>
           )}
 
-          <DialogFooter className="px-6 pt-2 pb-6">
+          <DialogFooter className="px-6 pt-2 pb-6 sm:justify-center">
             <Button type="button" variant="outline" onClick={() => setEditing(null)}>
               Cancel
             </Button>

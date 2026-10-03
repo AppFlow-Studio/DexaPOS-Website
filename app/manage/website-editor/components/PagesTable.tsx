@@ -373,8 +373,10 @@ export function PagesTable({
                 className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               <div className="flex min-w-0 items-start justify-between gap-2">
-                <div className="flex min-w-0 items-baseline gap-2">
-                  <p className="truncate font-semibold">{pageName(page)}</p>
+                {/* Wraps instead of truncating: a long name keeps the whole line
+                    and the status word drops beneath it; short names keep it beside. */}
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <p className="min-w-0 break-words font-semibold">{pageName(page)}</p>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {page.published ? "Published" : "Draft"}
                   </span>

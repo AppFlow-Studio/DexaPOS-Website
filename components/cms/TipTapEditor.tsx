@@ -18,6 +18,7 @@ import {
 
 import { ImageLibraryDialog } from "./ImageLibraryDialog";
 import { Field } from "./cms-fields";
+import { CENTRED_DIALOG } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,7 +59,7 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40",
+        "inline-flex h-8 min-w-7 items-center justify-center rounded-full px-1.5 text-xs sm:min-w-8 sm:px-2 font-medium transition-colors disabled:pointer-events-none disabled:opacity-40",
         // Neutral active state (UI-DESIGN-SYSTEM §4.5) — never a brand fill.
         active
           ? "bg-background text-foreground shadow-sm ring-1 ring-border"
@@ -99,7 +100,8 @@ function ToolbarFieldsDialog({
   const [values, setValues] = useState(initial);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      {/* One or two fields: a centred card on phones too (§13.1). */}
+      <DialogContent className={CENTRED_DIALOG}>
         <form
           className="space-y-6"
           onSubmit={(e) => {
@@ -126,9 +128,9 @@ function ToolbarFieldsDialog({
               </Field>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="sm:justify-center">
             {extraAction && (
-              <Button type="button" variant="ghost" className="sm:mr-auto" onClick={extraAction.onClick}>
+              <Button type="button" variant="ghost" onClick={extraAction.onClick}>
                 {extraAction.label}
               </Button>
             )}
@@ -191,7 +193,7 @@ export default function TipTapEditor({ content, onChange, placeholder }: TipTapE
 
   return (
     <div className="min-w-0 rounded-2xl bg-muted/60 transition-colors focus-within:bg-background focus-within:ring-[3px] focus-within:ring-ring/50">
-      <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5 p-1.5">
+      <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0 p-1.5 sm:gap-0.5">
         <ToolbarButton
           label="Bold"
           active={active?.bold}

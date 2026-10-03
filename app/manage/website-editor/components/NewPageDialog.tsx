@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { Field } from "@/components/cms/cms-fields";
+import { CENTRED_DIALOG } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,7 +61,8 @@ export function NewPageDialog() {
           New page
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {/* One field: a centred card on phones too, not a full-screen panel (§13.1). */}
+      <DialogContent className={CENTRED_DIALOG}>
         <form onSubmit={submit} className="space-y-6">
           <DialogHeader className="pr-10 text-left">
             <DialogTitle>New page</DialogTitle>
@@ -97,7 +99,7 @@ export function NewPageDialog() {
             )}
           </Field>
 
-          <DialogFooter>
+          <DialogFooter className="sm:justify-center">
             <Button type="button" variant="outline" onClick={() => reset(false)}>
               Cancel
             </Button>

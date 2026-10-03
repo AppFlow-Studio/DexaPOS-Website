@@ -1256,13 +1256,13 @@ keep the `rounded-3xl`.
 
 **Use [`ConfirmDialog`](../components/dashboard/shell/ConfirmDialog.tsx)** from the shell for a confirm/cancel question, and never `window.confirm`. For another short dialog that must stay a card, such as a one-time password, put `CENTRED_DIALOG` on its `DialogContent`.
 
-The dividing line is content, not component: **does the panel contain fields or a list the
-user works through?** Full screen. **Is it a question with two buttons?** Centred card.
+The dividing line is content, not component: **does the user work through the panel** (an editor, a wizard, a list, a form of several sections)? Full screen. **Does it already fit as a card**, as a question with two buttons or a form of one or two short fields does? Centred card, via `CENTRED_DIALOG`. Judge by size, not by whether the panel has an input: a single field floating at the top of an empty full-screen sheet reads as a broken layout (2026-10-03).
 
 | Panel | Mobile |
 |-------|--------|
 | Detail sheet, editor, wizard, filter panel, results table | Full screen |
 | "Deactivate 3 staff?", "Discard changes?", "Delete this item?" | Centred card |
+| One or two short fields: "New page" (a route), "Add link" (a URL), image alt text | Centred card |
 
 ### 13.2 The section selector bar auto-scrolls
 
@@ -1327,6 +1327,7 @@ Below `sm` (640px), a page drops detail that takes up space without changing wha
 | Panel and card captions and descriptions | **Automatic** in `PanelSection` and `AnalyticsPanel` |
 | Chart captions and subtitles | **Automatic** in `PanelSection` and `ChartCard`. The chart itself stays. |
 | A stat tile's meta line, including its delta (the tile's "subtitle") | **Automatic** in `StatTile` and `InsetTile` |
+| A form field's hint, the muted line under an input or select (added 2026-10-03) | **Automatic** in the website editor's `Field` (`components/cms/cms-fields.tsx`). A hint that warns ("It can't be changed later") opts back in with `showHintOnMobile`. Validation errors always show. |
 
 **The primitives do it by default.** Since 2026-09-28, `PageHeader`, `PanelSection`, `AnalyticsPanel`, `ChartCard`, `StatTile`, `InsetTile` and `DataPageSkeleton` put `max-sm:hidden` on those lines. A line that must stay opts back in:
 

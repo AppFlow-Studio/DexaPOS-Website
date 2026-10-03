@@ -46,6 +46,7 @@ export function MutedSelect({
   options,
   placeholder,
   ariaLabel,
+  side,
   className,
 }: {
   id?: string;
@@ -54,6 +55,8 @@ export function MutedSelect({
   options: MutedSelectOption[];
   placeholder?: string;
   ariaLabel?: string;
+  /** Which way the list opens. It still flips when there is no room that way. */
+  side?: "top" | "bottom";
   className?: string;
 }) {
   return (
@@ -68,7 +71,7 @@ export function MutedSelect({
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent side={side}>
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}
@@ -129,17 +132,24 @@ export function AddButton({ onClick, children }: { onClick: () => void; children
   );
 }
 
-/** A label above its control, with an optional muted hint below. */
+/**
+ * A label above its control, with an optional muted hint below. The hint is
+ * dropped below `sm` like any other caption (UI-DESIGN-SYSTEM §13.4); pass
+ * `showHintOnMobile` when it is a warning rather than an explanation.
+ * Validation errors are rendered by the caller and always show.
+ */
 export function Field({
   label,
   htmlFor,
   hint,
+  showHintOnMobile = false,
   className,
   children,
 }: {
   label: React.ReactNode;
   htmlFor?: string;
   hint?: React.ReactNode;
+  showHintOnMobile?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -147,7 +157,9 @@ export function Field({
     <div className={cn("min-w-0 space-y-2", className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && (
+        <p className={cn("text-xs text-muted-foreground", !showHintOnMobile && "max-sm:hidden")}>{hint}</p>
+      )}
     </div>
   );
 }

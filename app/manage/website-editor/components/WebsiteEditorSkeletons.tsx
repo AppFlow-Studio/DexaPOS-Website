@@ -181,7 +181,8 @@ export function PageEditorSkeleton() {
     <PageShell as="div">
       <p role="status" className="sr-only">Loading the page editor</p>
       <div className="space-y-6" aria-hidden>
-        <HeaderSkeleton actions={3} back indicator subtitleOnMobile />
+        {/* Cancel, Preview, Save draft, Publish. */}
+        <HeaderSkeleton actions={4} back indicator subtitleOnMobile />
 
         <Panel>
           <div className="space-y-6 px-4 py-8 sm:px-6">
@@ -208,9 +209,10 @@ export function PageEditorSkeleton() {
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="flex items-center gap-3 rounded-2xl border bg-card p-3">
-                  <Skeleton className="size-4 rounded-full" />
+                  <Skeleton className="size-4 rounded-full max-sm:hidden" />
                   <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-48 max-w-[40%]" />
+                  <Skeleton className="h-4 w-48 max-w-[40%] max-sm:hidden" />
+                  {/* Move up, move down, delete: visible at every width. */}
                   <div className="ml-auto flex gap-1">
                     <Skeleton className="size-8 rounded-full" />
                     <Skeleton className="size-8 rounded-full" />

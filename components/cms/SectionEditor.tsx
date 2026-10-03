@@ -5,7 +5,6 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
-  ChevronRight,
   GripVertical,
   Images,
   MoreHorizontal,
@@ -17,7 +16,6 @@ import TipTapEditor from "./TipTapEditor";
 import { ImageLibraryDialog, useCmsImageUpload } from "./ImageLibraryDialog";
 import { AddButton, Field, IconAction, MutedSelect, MutedTextarea } from "./cms-fields";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,12 +101,41 @@ export function SectionTypeIcon({ type, className }: { type: SectionType; classN
   );
 }
 
+/** A group heading inside a section: one step above a field label (`text-sm font-medium`). */
 function GroupLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-medium">{children}</p>;
+  return <h4 className="text-[0.9375rem] font-semibold">{children}</h4>;
 }
 
 /** Field types that take the full width of a section's two-column field grid. */
 const WIDE_FIELD_TYPES = new Set<SectionField["type"]>(["richtext", "textarea", "image", "buttons"]);
+
+/**
+ * Splits a section's fields into Content (words), Buttons and Appearance
+ * (images, alt text, colours, alignment), keeping their order within each
+ * group. Alt text travels with the images it describes.
+ */
+function groupFields(fields: SectionField[]) {
+  const content: SectionField[] = [];
+  const buttons: SectionField[] = [];
+  const appearance: SectionField[] = [];
+  for (const field of fields) {
+    if (field.type === "buttons") buttons.push(field);
+    else if (
+      field.type === "image" ||
+      field.type === "color" ||
+      field.type === "select" ||
+      field.key === "alt" ||
+      field.key.endsWith("_alt")
+    )
+      appearance.push(field);
+    else content.push(field);
+  }
+  return [
+    { title: "Content", fields: content },
+    { title: "Buttons", fields: buttons },
+    { title: "Appearance", fields: appearance },
+  ].filter((group) => group.fields.length > 0);
+}
 
 function sectionPreview(section: Section) {
   const text = section.heading || (section.body || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -210,47 +237,72 @@ export default function SectionEditor({ sections, onChange }: SectionEditorProps
                     onClick={() => setExpanded(isOpen ? null : section.id)}
                     className="flex min-w-0 flex-1 items-center gap-3 rounded-full px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
                   >
-                    <SectionTypeIcon type={section.type} className="text-muted-foreground" />
-                    <span className="shrink-0 text-sm font-medium">{meta.label}</span>
-                    <span className="min-w-0 truncate text-sm text-muted-foreground">{sectionPreview(section)}</span>
+                    {/* The type icon drops on phones to leave the width to the name. */}
+                    <SectionTypeIcon type={section.type} className="text-muted-foreground max-sm:hidden" />
+                    {/* The label truncates rather than pushing past the button;
+                        from `sm` it keeps most of the room and the preview gets the rest. */}
+                    <span className="min-w-0 truncate text-sm font-medium sm:max-w-[60%] sm:shrink-0">{meta.label}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground max-sm:hidden">
+                      {sectionPreview(section)}
+                    </span>
+                    {/* Phones drop the chevron: the row is narrow, and tapping the name opens it. */}
                     <ChevronDown
                       aria-hidden
                       className={cn(
-                        "ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                        "ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform max-sm:hidden",
                         isOpen && "rotate-180"
                       )}
                     />
                   </button>
-                  <IconAction label="Move section up" disabled={i === 0} onClick={() => moveSection(section.id, -1)}>
-                    <ArrowUp className="h-4 w-4" aria-hidden />
-                  </IconAction>
-                  <IconAction
-                    label="Move section down"
-                    disabled={i === sections.length - 1}
-                    onClick={() => moveSection(section.id, 1)}
-                  >
-                    <ArrowDown className="h-4 w-4" aria-hidden />
-                  </IconAction>
-                  <IconAction label="Delete section" destructive onClick={() => removeSection(section.id)}>
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </IconAction>
+
+                  {/* Move and delete stay one tap away at every width (§7). */}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <IconAction label="Move section up" disabled={i === 0} onClick={() => moveSection(section.id, -1)}>
+                      <ArrowUp className="h-4 w-4" aria-hidden />
+                    </IconAction>
+                    <IconAction
+                      label="Move section down"
+                      disabled={i === sections.length - 1}
+                      onClick={() => moveSection(section.id, 1)}
+                    >
+                      <ArrowDown className="h-4 w-4" aria-hidden />
+                    </IconAction>
+                    <IconAction label="Delete section" destructive onClick={() => removeSection(section.id)}>
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </IconAction>
+                  </div>
                 </div>
 
                 {isOpen && (
-                  <div id={bodyId} className="min-w-0 space-y-6 px-4 pt-2 pb-5 sm:px-5">
-                    {meta.fields.length > 0 && (
-                      <div className="grid min-w-0 gap-4 md:grid-cols-2">
-                        {meta.fields.map((field) => (
-                          <FieldRenderer
-                            key={field.key}
-                            section={section}
-                            field={field}
-                            className={WIDE_FIELD_TYPES.has(field.type) ? "md:col-span-2" : undefined}
-                            onChange={(val) => updateSection(section.id, { [field.key]: val })}
-                          />
-                        ))}
-                      </div>
-                    )}
+                  <div
+                    id={bodyId}
+                    // Below `md` the base Input and Textarea are 16px; here they take
+                    // the 14px they use from `md`, so a section's many fields fit a phone.
+                    className="min-w-0 space-y-8 px-3 pt-3 pb-4 max-md:[&_input]:text-sm max-md:[&_textarea]:text-sm sm:px-5 sm:pb-5"
+                  >
+                    {(() => {
+                      const groups = groupFields(meta.fields);
+                      // One group needs no heading; the section's own name says what it is.
+                      const titled = groups.length > 1;
+                      return groups.map((group) => (
+                        <div key={group.title} className="min-w-0 space-y-4">
+                          {titled && <GroupLabel>{group.title}</GroupLabel>}
+                          <div className="grid min-w-0 gap-4 md:grid-cols-2">
+                            {group.fields.map((field) => (
+                              <FieldRenderer
+                                key={field.key}
+                                section={section}
+                                field={field}
+                                // A buttons group carries its own heading.
+                                hideLabel={field.type === "buttons" && titled}
+                                className={WIDE_FIELD_TYPES.has(field.type) ? "md:col-span-2" : undefined}
+                                onChange={(val) => updateSection(section.id, { [field.key]: val })}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ));
+                    })()}
                     {hasEditableItems(section.type) && (
                       <CardsSubEditor
                         items={section.items || []}
@@ -261,15 +313,9 @@ export default function SectionEditor({ sections, onChange }: SectionEditorProps
                       <CompareEditor
                         columns={section.compare_columns || ["Capability", "DEXA", "Toast", "Square", "Clover"]}
                         rows={section.compare_rows || []}
-                        onChangeColumns={(compare_columns) => updateSection(section.id, { compare_columns })}
-                        onChangeRows={(compare_rows) => updateSection(section.id, { compare_rows })}
+                        onChange={(patch) => updateSection(section.id, patch)}
                       />
                     )}
-                    <RawSectionEditor
-                      key={`raw-${section.id}-${JSON.stringify(section)}`}
-                      section={section}
-                      onChange={(updated) => updateSection(section.id, updated)}
-                    />
                   </div>
                 )}
               </li>
@@ -286,10 +332,11 @@ export default function SectionEditor({ sections, onChange }: SectionEditorProps
               key={type}
               type="button"
               onClick={() => addSection(type)}
-              className="flex min-w-0 items-center gap-2.5 rounded-2xl bg-muted/45 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted"
+              className="flex min-w-0 items-center gap-2.5 rounded-2xl bg-muted/45 px-3 py-2.5 text-left text-sm leading-snug transition-colors hover:bg-muted"
             >
-              <SectionTypeIcon type={type} className="text-muted-foreground" />
-              <span className="truncate">{meta.label}</span>
+              {/* Phones drop the icon and let the name wrap, so no name is cut off. */}
+              <SectionTypeIcon type={type} className="text-muted-foreground max-sm:hidden" />
+              <span className="min-w-0 sm:truncate">{meta.label}</span>
             </button>
           ))}
         </div>
@@ -315,11 +362,14 @@ function hasEditableItems(type: SectionType) {
 function FieldRenderer({
   section,
   field,
+  hideLabel = false,
   className,
   onChange,
 }: {
   section: Section;
   field: SectionField;
+  /** Buttons only: the group heading already names them. */
+  hideLabel?: boolean;
   className?: string;
   onChange: (value: string | ButtonItem[]) => void;
 }) {
@@ -329,7 +379,7 @@ function FieldRenderer({
   if (field.type === "buttons") {
     return (
       <ButtonsEditor
-        label={field.label}
+        label={hideLabel ? undefined : field.label}
         buttons={section.buttons || []}
         className={className}
         onChange={(buttons) => onChange(buttons)}
@@ -364,21 +414,24 @@ function FieldRenderer({
   if (field.type === "color") {
     return (
       <Field label={field.label} htmlFor={id} className={className}>
+        {/* The text field leads so it starts at the left edge like every other
+            field. The swatch follows it with a ring, so an unset (white) colour
+            is still visible. */}
         <div className="flex min-w-0 items-center gap-2">
+          <Input
+            id={id}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="#ffffff"
+            className="font-mono"
+          />
           {/* The native swatch stays a raw input — `Input` cannot style it (§11.1). */}
           <input
             type="color"
             aria-label={`${field.label} swatch`}
             value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff"}
             onChange={(e) => onChange(e.target.value)}
-            className="size-9 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
-          />
-          <Input
-            id={id}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="#ffffff or var(--name)"
-            className="font-mono"
+            className="size-9 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 ring-1 ring-border [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
           />
         </div>
       </Field>
@@ -418,13 +471,57 @@ const BUTTON_STYLES = [
   { value: "ghost-light", label: "Light ghost" },
 ];
 
+/**
+ * One entry in a repeatable list (a button, a card, a comparison row): an
+ * inset well headed by its name and number, with its remove action beside
+ * it, so every list in the editor reads the same way at every width.
+ */
+function ItemCard({
+  title,
+  onRemove,
+  children,
+}: {
+  title: string;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 space-y-3 rounded-2xl bg-muted/30 p-3 sm:p-4">
+      <div className="-my-1 flex min-w-0 items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-muted-foreground tabular-nums">{title}</span>
+        <IconAction label={`Remove ${title.toLowerCase()}`} destructive onClick={onRemove}>
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </IconAction>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A small caption above a control inside an `ItemCard`. Placeholders alone
+ * vanish once a field is filled, which left "Link" and "Link text" unlabelled.
+ * The control carries its own `aria-label`, so this line is visual only.
+ */
+function MiniField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <span aria-hidden className="block text-xs text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 function ButtonsEditor({
   label,
   buttons,
   className,
   onChange,
 }: {
-  label: string;
+  /** Omitted when a group heading already names the buttons. */
+  label?: string;
   buttons: ButtonItem[];
   className?: string;
   onChange: (buttons: ButtonItem[]) => void;
@@ -443,37 +540,31 @@ function ButtonsEditor({
 
   return (
     <div className={cn("min-w-0 space-y-3", className)}>
-      <GroupLabel>{label}</GroupLabel>
+      {label && <GroupLabel>{label}</GroupLabel>}
       {buttons.length === 0 && <p className="text-sm text-muted-foreground">No buttons yet.</p>}
       {buttons.map((button, i) => (
-        <div
-          key={i}
-          className="grid min-w-0 gap-2 rounded-2xl bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9.5rem_auto] sm:items-center"
-        >
-          <Input
-            aria-label={`Button ${i + 1} text`}
-            value={button.text || ""}
-            onChange={(e) => updateButton(i, { text: e.target.value })}
-            placeholder="Button text"
-          />
-          <Input
-            aria-label={`Button ${i + 1} link`}
-            value={button.link || ""}
-            onChange={(e) => updateButton(i, { link: e.target.value })}
-            placeholder="/contact"
-          />
-          <MutedSelect
-            ariaLabel={`Button ${i + 1} style`}
-            value={button.style || "primary"}
-            onValueChange={(style) => updateButton(i, { style })}
-            options={BUTTON_STYLES}
-          />
-          <div className="justify-self-end">
-            <IconAction label={`Remove button ${i + 1}`} destructive onClick={() => removeButton(i)}>
-              <Trash2 className="h-4 w-4" aria-hidden />
-            </IconAction>
+        <ItemCard key={i} title={`Button ${i + 1}`} onRemove={() => removeButton(i)}>
+          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9.5rem]">
+            <Input
+              aria-label={`Button ${i + 1} text`}
+              value={button.text || ""}
+              onChange={(e) => updateButton(i, { text: e.target.value })}
+              placeholder="Button text"
+            />
+            <Input
+              aria-label={`Button ${i + 1} link`}
+              value={button.link || ""}
+              onChange={(e) => updateButton(i, { link: e.target.value })}
+              placeholder="Link, e.g. /contact"
+            />
+            <MutedSelect
+              ariaLabel={`Button ${i + 1} style`}
+              value={button.style || "primary"}
+              onValueChange={(style) => updateButton(i, { style })}
+              options={BUTTON_STYLES}
+            />
           </div>
-        </div>
+        </ItemCard>
       ))}
       <AddButton onClick={addButton}>Add button</AddButton>
     </div>
@@ -495,7 +586,7 @@ function ImagePicker({ id, value, onChange }: { id?: string; value: string; onCh
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Paste an image URL, upload, or choose from the library"
+        placeholder="Image URL"
       />
       {value ? (
         <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-muted/45">
@@ -530,78 +621,22 @@ function ImagePicker({ id, value, onChange }: { id?: string; value: string; onCh
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        // Two equal halves on phones, so neither label wraps or is cut off.
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          {/* Icons drop on phones; the words are enough there. */}
           <Button type="button" variant="outline" size="sm" onClick={openPicker} disabled={uploading}>
-            <Upload className="h-4 w-4" aria-hidden />
-            {uploading ? "Uploading…" : "Upload image"}
+            <Upload className="h-4 w-4 max-sm:hidden" aria-hidden />
+            {uploading ? "Uploading…" : "Upload"}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
-            <Images className="h-4 w-4" aria-hidden />
-            Choose from library
+            <Images className="h-4 w-4 max-sm:hidden" aria-hidden />
+            From library
           </Button>
         </div>
       )}
       {input}
       <ImageLibraryDialog open={libraryOpen} onOpenChange={setLibraryOpen} onSelect={onChange} />
     </div>
-  );
-}
-
-function RawSectionEditor({
-  section,
-  onChange,
-}: {
-  section: Section;
-  onChange: (section: Section) => void;
-}) {
-  const [draft, setDraft] = useState(() => JSON.stringify(section, null, 2));
-  const [error, setError] = useState("");
-
-  const apply = () => {
-    try {
-      const parsed = JSON.parse(draft) as Section;
-      if (!parsed.id || !parsed.type) {
-        setError("Section JSON must include id and type.");
-        return;
-      }
-      onChange(parsed);
-      setError("");
-    } catch {
-      setError("Invalid JSON.");
-    }
-  };
-
-  return (
-    <Collapsible className="min-w-0">
-      <CollapsibleTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          className="group -ml-3 h-8 px-3 text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground"
-        >
-          <ChevronRight className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-90" aria-hidden />
-          Advanced JSON
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="min-w-0 space-y-3 pt-3">
-        <p className="text-xs text-muted-foreground">
-          Edit any section field directly, including links, alt text, image sources, tags, form fields and settings.
-        </p>
-        <MutedTextarea
-          aria-label="Section JSON"
-          aria-invalid={!!error || undefined}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={12}
-          spellCheck={false}
-          className="field-sizing-fixed font-mono text-xs"
-        />
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="button" variant="outline" size="sm" onClick={apply}>
-          Apply JSON
-        </Button>
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -630,77 +665,82 @@ function CardsSubEditor({
       {items.length === 0 && <p className="text-sm text-muted-foreground">No cards yet.</p>}
       {items.map((item, i) => {
         const useIcon = !!item.icon;
+        const n = i + 1;
         return (
-          <div key={i} className="min-w-0 space-y-3 rounded-2xl bg-muted/30 p-3 sm:p-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="w-5 shrink-0 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+          <ItemCard key={i} title={`Card ${n}`} onRemove={() => removeItem(i)}>
+            <MiniField label="Title">
               <Input
-                aria-label={`Card ${i + 1} title`}
+                aria-label={`Card ${n} title`}
                 value={item.title || ""}
                 onChange={(e) => updateItem(i, { title: e.target.value })}
-                placeholder="Card title"
               />
-              <IconAction label={`Remove card ${i + 1}`} destructive onClick={() => removeItem(i)}>
-                <Trash2 className="h-4 w-4" aria-hidden />
-              </IconAction>
+            </MiniField>
+            <MiniField label="Description">
+              <MutedTextarea
+                aria-label={`Card ${n} description`}
+                value={item.description || ""}
+                onChange={(e) => updateItem(i, { description: e.target.value })}
+                rows={2}
+              />
+            </MiniField>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <MiniField label="Link">
+                <Input
+                  aria-label={`Card ${n} link`}
+                  value={item.link || ""}
+                  onChange={(e) => updateItem(i, { link: e.target.value })}
+                  placeholder="/features"
+                />
+              </MiniField>
+              <MiniField label="Link text">
+                <Input
+                  aria-label={`Card ${n} link text`}
+                  value={item.link_text || ""}
+                  onChange={(e) => updateItem(i, { link_text: e.target.value })}
+                />
+              </MiniField>
             </div>
-            <MutedTextarea
-              aria-label={`Card ${i + 1} description`}
-              value={item.description || ""}
-              onChange={(e) => updateItem(i, { description: e.target.value })}
-              placeholder="Description"
-              rows={2}
-            />
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+            <MiniField label="Tags">
               <Input
-                aria-label={`Card ${i + 1} link`}
-                value={item.link || ""}
-                onChange={(e) => updateItem(i, { link: e.target.value })}
-                placeholder="Link URL"
+                aria-label={`Card ${n} tags`}
+                value={(item.tags || []).join(", ")}
+                onChange={(e) => updateItem(i, { tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })}
+                placeholder="Comma separated"
               />
-              <Input
-                aria-label={`Card ${i + 1} link text`}
-                value={item.link_text || ""}
-                onChange={(e) => updateItem(i, { link_text: e.target.value })}
-                placeholder="Link text"
-              />
-            </div>
-            <Input
-              aria-label={`Card ${i + 1} tags`}
-              value={(item.tags || []).join(", ")}
-              onChange={(e) => updateItem(i, { tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })}
-              placeholder="Tags, comma separated"
-            />
+            </MiniField>
 
-            <div
-              role="radiogroup"
-              aria-label={`Card ${i + 1} visual`}
-              className="inline-flex gap-0.5 rounded-full bg-muted/70 p-1"
-            >
-              {[
-                { label: "Icon", checked: useIcon, onSelect: () => updateItem(i, { icon: item.icon || "checkmark", image: "" }) },
-                { label: "Image", checked: !useIcon, onSelect: () => updateItem(i, { image: item.image || "", icon: "" }) },
-              ].map((opt) => (
-                <button
-                  key={opt.label}
-                  type="button"
-                  role="radio"
-                  aria-checked={opt.checked}
-                  onClick={opt.onSelect}
-                  className={cn(
-                    "rounded-full px-4 py-1.5 text-[0.8125rem] font-medium transition-colors",
-                    opt.checked
-                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <MiniField label="Visual">
+              <div
+                role="radiogroup"
+                aria-label={`Card ${n} visual`}
+                className="inline-flex gap-0.5 rounded-full bg-muted/70 p-1"
+              >
+                {[
+                  { label: "Icon", checked: useIcon, onSelect: () => updateItem(i, { icon: item.icon || "checkmark", image: "" }) },
+                  { label: "Image", checked: !useIcon, onSelect: () => updateItem(i, { image: item.image || "", icon: "" }) },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={opt.checked}
+                    onClick={opt.onSelect}
+                    className={cn(
+                      "rounded-full px-4 py-1.5 text-[0.8125rem] font-medium transition-colors",
+                      opt.checked
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </MiniField>
 
             {useIcon ? (
-              <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5">
+              // 36px targets on phones fit six to a row, so 22 icons take four rows, not five.
+              <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1 sm:grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] sm:gap-1.5">
                 {CARD_ICON_NAMES.map((name) => {
                   const selected = item.icon === name;
                   return (
@@ -712,7 +752,7 @@ function CardsSubEditor({
                       title={name}
                       onClick={() => updateItem(i, { icon: name })}
                       className={cn(
-                        "flex size-10 items-center justify-center rounded-full transition-colors [&_svg]:size-5",
+                        "flex size-9 items-center justify-center justify-self-center rounded-full transition-colors sm:size-10 [&_svg]:size-5",
                         selected
                           ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -726,15 +766,16 @@ function CardsSubEditor({
             ) : (
               <div className="min-w-0 space-y-3">
                 <ImagePicker value={item.image || ""} onChange={(v) => updateItem(i, { image: v })} />
-                <Input
-                  aria-label={`Card ${i + 1} image alt text`}
-                  value={item.image_alt || ""}
-                  onChange={(e) => updateItem(i, { image_alt: e.target.value })}
-                  placeholder="Image alt text"
-                />
+                <MiniField label="Image alt text">
+                  <Input
+                    aria-label={`Card ${n} image alt text`}
+                    value={item.image_alt || ""}
+                    onChange={(e) => updateItem(i, { image_alt: e.target.value })}
+                  />
+                </MiniField>
               </div>
             )}
-          </div>
+          </ItemCard>
         );
       })}
       <AddButton onClick={addItem}>Add card</AddButton>
@@ -742,41 +783,62 @@ function CardsSubEditor({
   );
 }
 
+/** A row with exactly one cell per column: missing cells padded, extra cells dropped. */
+function fitRow(row: string[], width: number) {
+  return Array.from({ length: width }, (_, i) => row[i] ?? "");
+}
+
+/**
+ * The comparison table. Columns and rows change together, so every edit is
+ * one `onChange` with both: two separate section updates each start from the
+ * same props, and the second would overwrite the first. Every row is kept
+ * exactly as wide as the column list, because the public table renders every
+ * cell a row holds.
+ */
 function CompareEditor({
   columns,
   rows,
-  onChangeColumns,
-  onChangeRows,
+  onChange,
 }: {
   columns: string[];
   rows: string[][];
-  onChangeColumns: (columns: string[]) => void;
-  onChangeRows: (rows: string[][]) => void;
+  onChange: (patch: { compare_columns: string[]; compare_rows: string[][] }) => void;
 }) {
+  const commit = (nextColumns: string[], nextRows: string[][]) => {
+    onChange({
+      compare_columns: nextColumns,
+      compare_rows: nextRows.map((row) => fitRow(row, nextColumns.length)),
+    });
+  };
+
   const updateColumn = (colIdx: number, value: string) => {
-    onChangeColumns(columns.map((column, idx) => (idx === colIdx ? value : column)));
+    commit(columns.map((column, idx) => (idx === colIdx ? value : column)), rows);
   };
 
   const addColumn = () => {
-    onChangeColumns([...columns, ""]);
-    onChangeRows(rows.map((row) => [...row, ""]));
+    commit([...columns, ""], rows);
   };
 
   const removeColumn = (colIdx: number) => {
-    onChangeColumns(columns.filter((_, idx) => idx !== colIdx));
-    onChangeRows(rows.map((row) => row.filter((_, idx) => idx !== colIdx)));
+    commit(
+      columns.filter((_, idx) => idx !== colIdx),
+      rows.map((row) => fitRow(row, columns.length).filter((_, idx) => idx !== colIdx))
+    );
   };
 
   const updateCell = (rowIdx: number, colIdx: number, value: string) => {
-    onChangeRows(rows.map((r, ri) => (ri === rowIdx ? r.map((c, ci) => (ci === colIdx ? value : c)) : r)));
+    commit(
+      columns,
+      rows.map((row, ri) => (ri === rowIdx ? fitRow(row, columns.length).map((c, ci) => (ci === colIdx ? value : c)) : row))
+    );
   };
 
   const addRow = () => {
-    onChangeRows([...rows, columns.map(() => "")]);
+    commit(columns, [...rows, columns.map(() => "")]);
   };
 
   const removeRow = (i: number) => {
-    onChangeRows(rows.filter((_, idx) => idx !== i));
+    commit(columns, rows.filter((_, idx) => idx !== i));
   };
 
   return (
@@ -805,22 +867,16 @@ function CompareEditor({
         <GroupLabel>Comparison rows</GroupLabel>
         {rows.length === 0 && <p className="text-sm text-muted-foreground">No rows yet.</p>}
         {rows.map((row, ri) => (
-          <div key={ri} className="min-w-0 space-y-3 rounded-2xl bg-muted/30 p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-muted-foreground tabular-nums">Row {ri + 1}</span>
-              <IconAction label={`Remove row ${ri + 1}`} destructive onClick={() => removeRow(ri)}>
-                <Trash2 className="h-4 w-4" aria-hidden />
-              </IconAction>
-            </div>
+          <ItemCard key={ri} title={`Row ${ri + 1}`} onRemove={() => removeRow(ri)}>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {row.map((cell, ci) => (
+              {fitRow(row, columns.length).map((cell, ci) => (
                 <label key={ci} className="block min-w-0 space-y-1.5">
-                  <span className="text-xs text-muted-foreground">{columns[ci] || `Column ${ci + 1}`}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{columns[ci] || `Column ${ci + 1}`}</span>
                   <Input value={cell} onChange={(e) => updateCell(ri, ci, e.target.value)} />
                 </label>
               ))}
             </div>
-          </div>
+          </ItemCard>
         ))}
         <AddButton onClick={addRow}>Add row</AddButton>
       </div>

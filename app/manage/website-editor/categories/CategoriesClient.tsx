@@ -259,6 +259,8 @@ export function CategoriesClient({
                   value={form.parent_id}
                   onValueChange={(v) => setForm({ ...form, parent_id: v })}
                   options={parentOptions}
+                  // The last field: opening upward keeps the list over the form, not past the dialog.
+                  side="top"
                 />
               </Field>
             </div>
@@ -269,7 +271,7 @@ export function CategoriesClient({
               </p>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="sm:justify-center">
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
