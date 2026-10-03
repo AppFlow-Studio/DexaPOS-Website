@@ -41,7 +41,9 @@ import { useKdsSendLedger } from "../hooks/useKdsMirror";
 import {
   CappedItemList,
   KdsNotice,
+  NoticeInfoButton,
   NoticeLead,
+  orderTypeLabel,
   Pill,
   WindowSelect,
 } from "./kds-primitives";
@@ -279,7 +281,9 @@ function SendRow({
         <TableCell className="truncate">
           <span className="font-medium tabular-nums">{orderLabel(entry)}</span>
           {entry.order_type && (
-            <Pill className="ml-2 align-middle">{entry.order_type}</Pill>
+            <Pill className="ml-2 align-middle">
+              {orderTypeLabel(entry.order_type)}
+            </Pill>
           )}
         </TableCell>
         <TableCell
@@ -324,60 +328,53 @@ function SendRow({
 }
 
 /**
- * The same send as a record card, below `md` (§5.3, D-27). Order and send
- * status lead; the pairs are what support acts on. Items on the order and the
- * device id are one tap away in the expanded detail.
+ * The same send as a record card, below `md` (§5.3, D-27). The order leads;
+ * station, status and applied are the pairs; send failures follow as words.
+ * Expanded, it shows the item list alone. The time, the order's item count,
+ * the device id and "Show on board" are on the table (user request
+ * 2026-10-03).
  */
-function SendCard({
-  entry,
-  onShowOnBoard,
-}: {
-  entry: KdsSendLedgerEntry;
-  onShowOnBoard?: (orderId: string) => void;
-}) {
+function SendCard({ entry }: { entry: KdsSendLedgerEntry }) {
   const [expanded, setExpanded] = React.useState(false);
 
   return (
     <RecordCard selected={expanded}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-medium tabular-nums">
-            {orderLabel(entry)}
-            {entry.order_type && (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                · {entry.order_type}
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground" title={entry.created_at}>
-            {format(new Date(entry.created_at), "MMM d, h:mm a")} ·{" "}
-            {formatDistanceToNow(new Date(entry.created_at), {
-              addSuffix: true,
-            })}
-          </p>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-muted-foreground">
-          {ITEM_STATUS_LABEL[entry.item_status] ?? entry.item_status}
-        </span>
-      </div>
+      {/* The order id gets the whole line: the time is on the table, and
+          the status sits beside the station below (user request 2026-10-03). */}
+      <p
+        className="truncate font-medium tabular-nums"
+        title={entry.created_at}
+      >
+        {orderLabel(entry)}
+        {entry.order_type && (
+          <span className="text-xs font-normal text-muted-foreground">
+            {" "}
+            · {orderTypeLabel(entry.order_type)}
+          </span>
+        )}
+      </p>
 
       <CardFields>
-        <CardField
-          label="Applied / requested"
-          value={`${entry.actually_updated_count} / ${entry.requested_count}`}
-        />
         <CardField
           label="Station"
           value={entry.station_name ?? "Unknown station"}
         />
+        <CardField
+          label="Status"
+          value={ITEM_STATUS_LABEL[entry.item_status] ?? entry.item_status}
+        />
+        <CardField
+          label="Applied"
+          value={`${entry.actually_updated_count} of ${entry.requested_count}`}
+        />
       </CardFields>
 
+      {/* Send failures are alarm text (HQ-2) and stay on phones (§13.4). */}
       <div className="mt-3">
         <SendFlags entry={entry} plain />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3">
         <Button
           variant="ghost"
           size="sm"
@@ -390,21 +387,17 @@ function SendCard({
           />
           {expanded ? "Hide items" : "Show items"}
         </Button>
-        {onShowOnBoard && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 px-3"
-            onClick={() => onShowOnBoard(entry.order_id)}
-          >
-            Show on board
-          </Button>
-        )}
       </div>
 
+      {/* Phones get the item list alone: the order's item count, the device
+          id and "Show on board" stay on the table's expanded row. */}
       {expanded && (
         <div className="mt-3">
-          <SendDetail entry={entry} />
+          <SendItemList
+            items={entry.items}
+            label={orderLabel(entry)}
+            compact
+          />
         </div>
       )}
     </RecordCard>
@@ -412,12 +405,10 @@ function SendCard({
 }
 
 /**
- * The expanded detail of one send: the fields the one-line row and the phone
- * card leave out (items on the order, origin station and device), then the
- * per-item routing outcome. The table's expanded row and the record card
- * render this same component, so the two views cannot drift. Only the row
- * passes `onShowOnBoard` (its cell has no room for the link); the card has
- * the action in its footer.
+ * The table row's expanded detail: the fields the one-line row leaves out
+ * (items on the order, origin station and device, "Show on board"), then the
+ * per-item routing outcome. The phone card shows the same `SendItemList`
+ * without this header line.
  */
 function SendDetail({
   entry,
@@ -468,9 +459,12 @@ function sendItemRank(item: KdsSendLedgerItem): number {
 function SendItemList({
   items,
   label,
+  compact = false,
 }: {
   items: KdsSendLedgerItem[];
   label: string;
+  /** Phone card: drop each item's kitchen status and prep station. */
+  compact?: boolean;
 }) {
   if (items.length === 0) {
     return (
@@ -503,12 +497,12 @@ function SendItemList({
                 </span>
               )}
             </span>
-            {item.kitchen_status && (
+            {!compact && item.kitchen_status && (
               <span className="font-mono text-xs text-muted-foreground">
                 {item.kitchen_status}
               </span>
             )}
-            {item.prep_station && <Pill>{item.prep_station}</Pill>}
+            {!compact && item.prep_station && <Pill>{item.prep_station}</Pill>}
             {routed ? (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="sr-only">Routed to</span>
@@ -540,6 +534,46 @@ function SendItemList({
         );
       }}
     />
+  );
+}
+
+const LEDGER_GUIDE_LEAD = "A row here is proof the POS call reached the server.";
+
+/**
+ * How to read the ledger, after its lead sentence. Inline in the notice; each
+ * `<span>` becomes its own paragraph in the phone drop-down.
+ */
+function LedgerGuideBody() {
+  return (
+    <>
+      <span>
+        If the merchant says an order was sent and there is{" "}
+        <NoticeLead>no row</NoticeLead>, the POS never reached us (offline /
+        client error).
+      </span>{" "}
+      <span>
+        A <NoticeLead>partial send</NoticeLead> means some items did not apply.
+      </span>{" "}
+      <span>
+        If items routed (open a row to see the display each item landed on) but
+        the kitchen screen is blank, routing worked and the fault is on the KDS
+        device. Confirm on the Board tab.
+      </span>
+    </>
+  );
+}
+
+/** "How to read this ledger" behind ⓘ beside the tab title, on phones (§13.4). */
+export function SendLedgerInfo() {
+  return (
+    <NoticeInfoButton
+      title="How to read this ledger"
+      description={LEDGER_GUIDE_LEAD}
+      size="inline"
+      className="sm:hidden"
+    >
+      <LedgerGuideBody />
+    </NoticeInfoButton>
   );
 }
 
@@ -718,16 +752,10 @@ export const KdsSendLedger = React.forwardRef<
         />
       </StatRow>
 
-      <KdsNotice icon={ListOrdered}>
+      <KdsNotice icon={ListOrdered} className="max-sm:hidden">
         <p>
-          <NoticeLead>How to read this ledger.</NoticeLead> A row here is proof
-          the POS call reached the server. If the merchant says an order was
-          sent and there is <NoticeLead>no row</NoticeLead>, the POS never
-          reached us (offline / client error). A{" "}
-          <NoticeLead>partial send</NoticeLead> means some items did not apply.
-          If items routed (open a row to see the display each item landed on)
-          but the kitchen screen is blank, routing worked and the fault is on
-          the KDS device — confirm on the Board tab.
+          <NoticeLead>How to read this ledger.</NoticeLead> {LEDGER_GUIDE_LEAD}{" "}
+          <LedgerGuideBody />
         </p>
       </KdsNotice>
 
@@ -808,11 +836,7 @@ export const KdsSendLedger = React.forwardRef<
               <CardGridEmpty title={emptyTitle} hint={emptyHint} />
             ) : (
               pageRows.map((entry) => (
-                <SendCard
-                  key={entry.id}
-                  entry={entry}
-                  onShowOnBoard={onShowOnBoard}
-                />
+                <SendCard key={entry.id} entry={entry} />
               ))
             )}
           </div>

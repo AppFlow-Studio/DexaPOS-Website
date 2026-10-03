@@ -17,19 +17,25 @@ import {
 } from "@/app/manage/transactions/components/ledger-primitives";
 import {
   KdsMirrorControls,
+  MirrorBlindSpotInfo,
   MirrorBlindSpotNotice,
   RealtimeStatus,
 } from "./components/KdsMirrorControls";
-import { KdsSendLedger } from "./components/KdsSendLedger";
+import { KdsSendLedger, SendLedgerInfo } from "./components/KdsSendLedger";
 import {
   KdsUnsentItems,
 } from "./components/KdsUnsentItems";
 import { KdsStationBoard } from "./components/KdsStationBoard";
-import { KdsDisplayHealthCards } from "./components/KdsDisplayHealthCards";
+import { KdsDisplayHealth } from "./components/KdsDisplayHealth";
 import { KdsDeviceTruthTimeline } from "./components/KdsDeviceTruthTimeline";
 import { KdsDivergenceList } from "./components/KdsDivergenceList";
 import { KdsMirrorSkeleton } from "./components/KdsMirrorSkeleton";
-import { KdsNotice, NoticeLead, WindowSelect } from "./components/kds-primitives";
+import {
+  KdsNotice,
+  NoticeInfoButton,
+  NoticeLead,
+  WindowSelect,
+} from "./components/kds-primitives";
 import {
   TIMELINE_WINDOWS,
   type TimelineWindowKey,
@@ -60,19 +66,50 @@ const TABS: { value: KdsTab; label: string }[] = [
  * is not a broken display. NO_DEVICE_DATA is the answer until the POS emitter
  * ships to it, and the UI must keep saying that instead of implying a fault.
  */
-function DeviceTruthBlindSpotNotice() {
+const DEVICE_TRUTH_LEAD = "This is device-attested, reported on the heartbeat.";
+
+/** The notice after its lead; each `<span>` is a paragraph in the phone drop-down. */
+function DeviceTruthBody() {
   return (
-    <KdsNotice icon={Eye}>
-      <p>
-        <NoticeLead>This is device-attested, reported on the heartbeat.</NoticeLead>{" "}
+    <>
+      <span>
         It shows what each tablet says it received and painted, diffed against
-        the server routing log. A display with no device data at all means the
-        emitter has not shipped to it yet —{" "}
+        the server routing log.
+      </span>{" "}
+      <span>
+        A display with no device data at all means the emitter has not shipped
+        to it yet:{" "}
         <NoticeLead>
           absence of device evidence is not evidence of a fault.
         </NoticeLead>
+      </span>
+    </>
+  );
+}
+
+function DeviceTruthBlindSpotNotice() {
+  return (
+    <KdsNotice icon={Eye} className="max-sm:hidden">
+      <p>
+        <NoticeLead>{DEVICE_TRUTH_LEAD}</NoticeLead> <DeviceTruthBody />
       </p>
     </KdsNotice>
+  );
+}
+
+/** A section title with its phone ⓘ beside it (§13.4 "move, don't delete"). */
+function TitleWithInfo({
+  title,
+  info,
+}: {
+  title: string;
+  info: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      {title}
+      {info}
+    </span>
   );
 }
 
@@ -286,7 +323,7 @@ function KdsMirrorPageInner() {
         {/* Pill rail (§4.5). Classes are literal, not tokens (C7). */}
         <div
           ref={tabRailRef}
-          className="thin-scrollbar relative w-full min-w-0 overflow-x-auto pb-1"
+          className="no-scrollbar relative w-full min-w-0 overflow-x-auto pb-1"
         >
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             {TABS.map((tab) => (
@@ -304,10 +341,15 @@ function KdsMirrorPageInner() {
         <TabsContent value="board" className="mt-4">
           <Panel>
             <PanelSection
-              label="Station board"
+              label={
+                <TitleWithInfo
+                  title="Station board"
+                  info={<MirrorBlindSpotInfo />}
+                />
+              }
               caption={
                 selectedDisplay
-                  ? `What the server says ${selectedDisplay.display_name} should be displaying, arranged as the tablet arranges it.`
+                  ? `What the server says ${selectedDisplay.display_name} should be displaying, in the order the tablet shows it.`
                   : "What the server says this location's displays should be showing."
               }
             >
@@ -347,7 +389,9 @@ function KdsMirrorPageInner() {
         <TabsContent value="ledger" className="mt-4">
           <Panel>
             <PanelSection
-              label="Send ledger"
+              label={
+                <TitleWithInfo title="Send ledger" info={<SendLedgerInfo />} />
+              }
               caption="Every order-to-kitchen send attempt the server received from the POS at this location."
             >
               {locationId ? (
@@ -389,9 +433,22 @@ function KdsMirrorPageInner() {
         <TabsContent value="device-truth" className="mt-4">
           <Panel>
             <PanelSection
-              label="Display health"
+              label={
+                <TitleWithInfo
+                  title="Display health"
+                  info={
+                    <NoticeInfoButton
+                      title="About device truth"
+                      description={DEVICE_TRUTH_LEAD}
+                      size="inline"
+                      className="sm:hidden"
+                    >
+                      <DeviceTruthBody />
+                    </NoticeInfoButton>
+                  }
+                />
+              }
               caption="Last 7 days, per display. Pick a display to open its timeline."
-              showCaptionOnMobile
             >
               <div className="space-y-5">
                 <DeviceTruthBlindSpotNotice />
@@ -411,7 +468,7 @@ function KdsMirrorPageInner() {
                       />
                     )}
                     {!healthFailed && (
-                      <KdsDisplayHealthCards
+                      <KdsDisplayHealth
                         rows={deviceHealth.data ?? []}
                         selectedDisplayId={displayId}
                         onSelectDisplay={(id) =>

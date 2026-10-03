@@ -29,7 +29,6 @@ import {
 } from "@/app/manage/actions/kds-mirror";
 import {
   CardField,
-  CardFields,
   CardGridEmpty,
   LoadError,
   RecordCard,
@@ -40,7 +39,9 @@ import { useKdsUnsentItems } from "../hooks/useKdsMirror";
 import {
   CappedItemList,
   KdsNotice,
+  NoticeInfoButton,
   NoticeLead,
+  orderTypeLabel,
   Pill,
   WindowSelect,
 } from "./kds-primitives";
@@ -173,7 +174,9 @@ function UnsentOrderRow({ order }: { order: KdsUnsentOrder }) {
         <TableCell className="truncate">
           <span className="font-medium tabular-nums">{orderLabel(order)}</span>
           {order.order_type && (
-            <Pill className="ml-2 align-middle">{order.order_type}</Pill>
+            <Pill className="ml-2 align-middle">
+              {orderTypeLabel(order.order_type)}
+            </Pill>
           )}
         </TableCell>
         <TableCell className="hidden truncate lg:table-cell">
@@ -225,40 +228,40 @@ function UnsentOrderCard({ order }: { order: KdsUnsentOrder }) {
 
   return (
     <RecordCard selected={expanded}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-medium tabular-nums">
-            {orderLabel(order)}
-            {order.order_type && (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                · {order.order_type}
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground" title={order.order_created_at}>
-            {format(new Date(order.order_created_at), "MMM d, h:mm a")} ·{" "}
-            {formatDistanceToNow(new Date(order.order_created_at), {
-              addSuffix: true,
-            })}
-          </p>
-        </div>
-        <span className="shrink-0 text-xs font-medium text-muted-foreground">
-          {orderStatusLabel(order.order_status)}
-        </span>
-      </div>
+      {/* The order id gets the whole line; the created date is on the table
+          from `xl` and the status sits beside the counts below. */}
+      <p
+        className="truncate font-medium tabular-nums"
+        title={order.order_created_at}
+      >
+        {orderLabel(order)}
+        {order.order_type && (
+          <span className="text-xs font-normal text-muted-foreground">
+            {" "}
+            · {orderTypeLabel(order.order_type)}
+          </span>
+        )}
+      </p>
 
-      <CardFields>
+      <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
         <CardField
           label="Unsent"
           value={`${order.unsent_item_count} of ${order.total_item_count}`}
         />
         <CardField label="Sent" value={order.sent_item_count} />
-      </CardFields>
-
-      <div className="mt-3">
-        <Coverage order={order} plain />
+        <CardField
+          label="Status"
+          value={orderStatusLabel(order.order_status)}
+        />
       </div>
+
+      {/* A partial fire is an HQ-2 alarm and stays; "Nothing sent" is already
+          said by Sent 0, so the card drops it. */}
+      {order.sent_item_count > 0 && (
+        <div className="mt-3">
+          <Coverage order={order} plain />
+        </div>
+      )}
 
       <div className="mt-3">
         <Button
@@ -340,6 +343,38 @@ function UnsentItemList({
         </>
       )}
     />
+  );
+}
+
+/** What "unsent" means: the notice from `sm` up, the ⓘ popover on phones. */
+const UNSENT_LEAD = "An item is unsent when the kitchen never received it.";
+
+/**
+ * The two kinds of unsent order. Inline in the notice; each `<span>` becomes
+ * its own paragraph in the phone panel.
+ */
+function UnsentMeaningBody() {
+  return (
+    <>
+      <span>
+        <NoticeLead>Nothing sent</NoticeLead> = the whole order never fired (a
+        draft nobody sent, or the send never reached the server).
+      </span>{" "}
+      <span>
+        <NoticeLead>Partial fire</NoticeLead> = some items made it to the
+        kitchen but these did not.
+      </span>
+    </>
+  );
+}
+
+/** What "unsent" means: the notice from `sm` up. */
+function UnsentMeaning() {
+  return (
+    <p>
+      <NoticeLead>What &ldquo;unsent&rdquo; means.</NoticeLead> {UNSENT_LEAD}{" "}
+      <UnsentMeaningBody />
+    </p>
   );
 }
 
@@ -451,15 +486,23 @@ export const KdsUnsentItems = React.forwardRef<
         </KdsNotice>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex items-center gap-x-3 gap-y-2 sm:flex-wrap">
         <WindowSelect
           value={windowKey}
           onValueChange={handleWindowChange}
           options={UNSENT_WINDOWS}
         />
-        <span className="text-[0.8125rem] text-muted-foreground">
+        <span className="text-[0.8125rem] text-muted-foreground max-sm:hidden">
           by order created date
         </span>
+        {/* Phones: the explanation below moves behind ⓘ (§13.4). */}
+        <NoticeInfoButton
+          title="What “unsent” means"
+          description={UNSENT_LEAD}
+          className="sm:hidden"
+        >
+          <UnsentMeaningBody />
+        </NoticeInfoButton>
       </div>
 
       <StatRow columns={4}>
@@ -485,15 +528,8 @@ export const KdsUnsentItems = React.forwardRef<
         />
       </StatRow>
 
-      <KdsNotice icon={Clock}>
-        <p>
-          <NoticeLead>What &ldquo;unsent&rdquo; means.</NoticeLead> An item is
-          unsent when the kitchen never received it.{" "}
-          <NoticeLead>Nothing sent</NoticeLead> = the whole order never fired (a
-          draft nobody sent, or the send never reached the server).{" "}
-          <NoticeLead>Partial fire</NoticeLead> = some items made it to the
-          kitchen but these did not.
-        </p>
+      <KdsNotice icon={Clock} className="max-sm:hidden">
+        <UnsentMeaning />
       </KdsNotice>
 
       {unsent.isError && (

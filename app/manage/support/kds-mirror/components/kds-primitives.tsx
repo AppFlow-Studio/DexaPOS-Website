@@ -1,9 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +58,82 @@ export function KdsNotice({
       <div className="min-w-0">{children}</div>
     </div>
   );
+}
+
+/**
+ * The phone form of a `KdsNotice` (§13.4 "move, don't delete"): an ⓘ button
+ * that drops down the same explanation. A tap, not a hover tooltip, because
+ * phones have no hover. Pair it with `max-sm:hidden` on the full notice and
+ * `sm:hidden` on this button.
+ *
+ * A floating drop-down centred under the icon, held 24px off both screen edges
+ * (`collisionPadding`), so it never hugs an edge. The key sentence leads in
+ * bold; body children that are `<span>`s (the notice's sentences, run inline
+ * in the notice) stack as short paragraphs.
+ *
+ * `size="toolbar"` matches a 44px toolbar control; `size="inline"` sits beside
+ * a heading.
+ */
+export function NoticeInfoButton({
+  title,
+  description,
+  children,
+  size = "toolbar",
+  className,
+}: {
+  title: string;
+  description: React.ReactNode;
+  children: React.ReactNode;
+  size?: "toolbar" | "inline";
+  className?: string;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={title}
+          className={cn(
+            // A bare icon, no fill (user request 2026-10-03); the glyph darkens on
+            // hover and while open.
+            "shrink-0 border-0 bg-transparent text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[state=open]:text-foreground",
+            size === "toolbar" ? "size-11" : "size-8",
+            className
+          )}
+        >
+          <Info className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      {/* popover.tsx has no data-slot for the global overlay radius (§4.6). */}
+      <PopoverContent
+        align="center"
+        sideOffset={8}
+        collisionPadding={24}
+        aria-label={title}
+        className="w-[min(20rem,calc(100vw-3rem))] space-y-2 rounded-2xl p-4 text-[0.8125rem] font-normal leading-relaxed tracking-normal text-muted-foreground [&>span]:block"
+      >
+        <p className="font-medium text-foreground">{description}</p>
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * An order type in words. Matches the board's own filter labels ("To Go",
+ * "Dine-In"), so the same order never reads two ways on one page.
+ */
+export function orderTypeLabel(orderType: string | null): string | null {
+  if (!orderType) return null;
+  const t = orderType.toLowerCase();
+  if (t === "delivery") return "Delivery";
+  if (t === "takeout" || t === "to_go" || t === "to go") return "To Go";
+  if (t === "dine_in" || t === "dine in") return "Dine-In";
+  if (t === "qr_dine_in") return "QR Dine-In";
+  const words = t.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** The bold lead of a `KdsNotice`. */
@@ -232,23 +314,90 @@ export function CappedItemList<T>({
 }
 
 /**
+ * The phone form of a short `PillRail` (2–4 options): equal segments that
+ * always fit the width, the label over its count, so nothing scrolls or is
+ * cut off. Same material as the rail: a muted track, the active segment
+ * neutral (§4.5), each segment at least 44px tall (§13.6).
+ */
+export function SegmentedFilter<K extends string>({
+  options,
+  value,
+  onValueChange,
+  ariaLabel,
+  className,
+}: {
+  options: { key: K; label: string; count?: number }[];
+  value: K;
+  onValueChange: (value: K) => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className={cn(
+        "grid gap-0.5 rounded-2xl bg-muted/70 p-1",
+        // Literal classes (C7): one column per option.
+        options.length === 2
+          ? "grid-cols-2"
+          : options.length === 3
+            ? "grid-cols-3"
+            : "grid-cols-4",
+        className
+      )}
+    >
+      {options.map((option) => {
+        const isActive = option.key === value;
+        return (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onValueChange(option.key)}
+            className={cn(
+              "flex min-h-11 min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 text-xs font-medium transition-colors",
+              isActive
+                ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <span className="max-w-full truncate">{option.label}</span>
+            {option.count !== undefined && (
+              <span className="text-[0.8125rem] tabular-nums">
+                {option.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * A row of mutually exclusive filter pills on the tab-rail material (§4.5):
  * the active pill is neutral, never a brand fill. Scrolls sideways inside
- * itself on a narrow screen rather than wrapping.
+ * itself on a narrow screen rather than wrapping, with the scrollbar hidden
+ * (§13.2: the peeking pill is the affordance, not a scrollbar).
  */
 export function PillRail<K extends string>({
   options,
   value,
   onValueChange,
   ariaLabel,
+  className,
 }: {
   options: { key: K; label: string; count?: number }[];
   value: K;
   onValueChange: (value: K) => void;
   ariaLabel: string;
+  className?: string;
 }) {
   return (
-    <div className="thin-scrollbar min-w-0 max-w-full overflow-x-auto pb-1">
+    <div
+      className={cn("no-scrollbar min-w-0 max-w-full overflow-x-auto", className)}
+    >
       <div
         role="group"
         aria-label={ariaLabel}

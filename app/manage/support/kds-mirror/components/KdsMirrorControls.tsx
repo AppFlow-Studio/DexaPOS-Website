@@ -18,7 +18,7 @@ import type {
 } from "@/app/manage/actions/kds-mirror";
 import type { MirrorRealtimeStatus } from "../hooks/useKdsMirrorRealtime";
 import { MerchantPicker } from "./MerchantPicker";
-import { KdsNotice, NoticeLead } from "./kds-primitives";
+import { KdsNotice, NoticeInfoButton, NoticeLead } from "./kds-primitives";
 
 /**
  * Connection status, NOT viewing status.
@@ -76,20 +76,55 @@ export function RealtimeStatus({
  * the kitchen screen is blank. Support staff will draw the wrong conclusion
  * from a healthy-looking mirror unless this sits beside it.
  */
+const MIRROR_BLIND_SPOT_LEAD = "This is server state, not the physical screen.";
+
+/**
+ * The disclaimer after its lead sentence. Inline in the notice; each `<span>`
+ * becomes its own paragraph in the phone panel.
+ */
+function MirrorBlindSpotBody() {
+  return (
+    <>
+      <span>
+        It shows what the server says this station should be displaying,
+        fetched through the same RPC the tablet calls.
+      </span>{" "}
+      <span>
+        It cannot detect a dropped subscription, a crashed app, or a stale cache
+        on the device. In all three cases this board still looks correct while
+        the kitchen sees nothing.
+      </span>{" "}
+      <span>
+        Use it to decide <NoticeLead>server-side or device-side</NoticeLead>,
+        not to confirm what was rendered.
+      </span>
+    </>
+  );
+}
+
+/** The full notice from `sm` up; phones get `MirrorBlindSpotInfo` instead. */
 export function MirrorBlindSpotNotice() {
   return (
-    <KdsNotice icon={Eye}>
+    <KdsNotice icon={Eye} className="max-sm:hidden">
       <p>
-        <NoticeLead>This is server state, not the physical screen.</NoticeLead>{" "}
-        It shows what the server says this station should be displaying, fetched
-        through the same RPC the tablet calls. It cannot detect a dropped
-        subscription, a crashed app, or a stale cache on the device — in all
-        three cases this board still looks correct while the kitchen sees
-        nothing. Use it to decide{" "}
-        <NoticeLead>server-side or device-side</NoticeLead>, not to confirm what
-        was rendered.
+        <NoticeLead>{MIRROR_BLIND_SPOT_LEAD}</NoticeLead>{" "}
+        <MirrorBlindSpotBody />
       </p>
     </KdsNotice>
+  );
+}
+
+/** The same disclaimer behind ⓘ on phones (§13.4 "move, don't delete"). */
+export function MirrorBlindSpotInfo() {
+  return (
+    <NoticeInfoButton
+      title="About this board"
+      description={MIRROR_BLIND_SPOT_LEAD}
+      size="inline"
+      className="sm:hidden"
+    >
+      <MirrorBlindSpotBody />
+    </NoticeInfoButton>
   );
 }
 
@@ -118,8 +153,9 @@ function HealthHint({ health }: { health: KdsRoutingHealth | null }) {
   }
 
   if (problems.length === 0) {
+    // Phones drop the routing-health line (user request 2026-10-03).
     return (
-      <p className="text-[0.8125rem] text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground max-sm:hidden">
         Last 7 days: <span className="tabular-nums">{health.items_fired}</span>{" "}
         items fired, no drops, no divergence. Routing is healthy at this
         location — a &ldquo;missing order&rdquo; complaint here is most likely
@@ -129,7 +165,7 @@ function HealthHint({ health }: { health: KdsRoutingHealth | null }) {
   }
 
   return (
-    <div className="flex items-start gap-2 text-[0.8125rem] font-medium text-foreground">
+    <div className="flex items-start gap-2 text-[0.8125rem] font-medium text-foreground max-sm:hidden">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <p>
         Last 7 days (
@@ -238,7 +274,9 @@ export function KdsMirrorControls({
       {loadError}
 
       {displayId === null && locationId && (
-        <p className="text-[0.8125rem] text-muted-foreground">
+        // Phones drop it (§13.4): the display select above already reads
+        // "All displays (location-wide)".
+        <p className="text-[0.8125rem] text-muted-foreground max-sm:hidden">
           Showing every display at this location combined. No physical screen
           looks like this — pick a specific display to mirror a real station.
         </p>

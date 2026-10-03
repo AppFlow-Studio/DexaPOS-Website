@@ -556,3 +556,14 @@ Two mechanical traps from the same change:
 - **`TableCell` ships `whitespace-nowrap`.** A Valor failure reason rendered inside a cell ran on
   one line and dragged Status, Amount and Actions off the right edge at 1440px. Any cell holding
   free text needs an explicit `max-w-*` plus `whitespace-normal`.
+
+## A `colSpan` wider than the visible header adds a phantom column (2026-10-03)
+Context: KDS send ledger on D-26 tiered columns (`hidden 2xl:table-cell`) with `table-fixed`.
+Mistake: the empty, loading and expanded rows kept `colSpan={columns.length}` (8) while only 7 columns showed at `xl`.
+The browser grew an anonymous 8th column with a share of the width and no header cell, so the header band stopped short
+of the table's right edge. I had noticed this risk while planning the tier work ("colSpan over hidden columns may create
+phantom columns"), judged it "probably fine", and shipped without a browser check. The user caught it from a screenshot.
+Rule: When tiering columns, any full-width row must span only the visible columns. This is now automatic: `Table`
+measures its visible header cells and `TableCell` clamps `colSpan` (`components/ui/table.tsx`).
+Rule: When you spot a layout risk you cannot verify in a browser, write a DOM test for it (happy-dom, as in
+`components/ui/__tests__/table-colspan.test.tsx`) instead of reasoning that it is probably fine.

@@ -13,8 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
  *
  * Mirrors the phone trims (UI-DESIGN-SYSTEM §13.4, §5.4): no subtitle or
  * panel caption below `sm`, the pickers stack full-width like the real
- * controls, and the board is one stacked column below `lg` — tablet columns
- * only from `lg`, as `KdsStationBoard` renders them.
+ * controls, and the board is table rows from `md` and cards below, as
+ * `KdsStationBoard` renders it.
  */
 export function KdsMirrorSkeleton() {
   return (
@@ -54,23 +54,23 @@ export function KdsMirrorSkeleton() {
           <Skeleton className="h-16 w-full rounded-2xl" />
 
           <div className="min-w-0 space-y-4">
-            {/* The board's two pill rails: ticket status, then order type. */}
+            {/* The board's filters: on phones the status segments and the
+                order-type dropdown; from `sm` the two pill rails. */}
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-              <Skeleton className="h-10 w-80 max-w-full rounded-full" />
-              <Skeleton className="h-10 w-72 max-w-full rounded-full" />
+              <Skeleton className="h-[3.25rem] w-full rounded-2xl sm:hidden" />
+              <Skeleton className="h-11 w-full rounded-full sm:hidden" />
+              <Skeleton className="h-10 w-80 max-w-full rounded-full max-sm:hidden" />
+              <Skeleton className="h-10 w-72 max-w-full rounded-full max-sm:hidden" />
             </div>
 
-            <div className="space-y-2 lg:hidden">
+            <div className="hidden space-y-2 md:block">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-12 w-full rounded-2xl" />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
               <Skeleton className="h-32 w-full rounded-2xl" />
               <Skeleton className="h-24 w-full rounded-2xl" />
-            </div>
-            <div className="hidden gap-2 lg:flex">
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="flex-1 space-y-2">
-                  <Skeleton className="h-32 w-full rounded-2xl" />
-                  <Skeleton className="h-24 w-full rounded-2xl" />
-                </div>
-              ))}
             </div>
           </div>
         </div>
