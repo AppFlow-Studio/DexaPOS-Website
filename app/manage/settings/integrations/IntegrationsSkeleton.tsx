@@ -6,24 +6,22 @@ import { cn } from '@/lib/utils'
  * Loading states for /manage/settings/integrations and /manage/nmi-integration
  * (§4.10): skeleton D, one panel per integration, built from the same
  * `PageShell as="div" width="narrow"` and `Panel` as the pages so nothing
- * shifts when they land. Captions follow the real ones: kept on phones only
- * where the page opts them in with `showCaptionOnMobile`.
+ * shifts when they land. Captions are hidden below `sm`, as on the pages,
+ * where they sit behind an info icon beside the heading.
  */
 
-/** A `PanelSection`: brand heading, caption, then its body. */
+/** A `PanelSection`: brand heading, caption (hidden below `sm`), then its body. */
 function SectionBones({
   headingWidth = 'w-56',
-  captionOnMobile = false,
   children,
 }: {
   headingWidth?: string
-  captionOnMobile?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="min-w-0 px-4 py-8 sm:px-6">
       <Skeleton className={cn('h-5 max-w-full', headingWidth)} />
-      <div className={cn('mt-2 space-y-1.5', !captionOnMobile && 'max-sm:hidden')}>
+      <div className="mt-2 space-y-1.5 max-sm:hidden">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-2/3" />
       </div>
@@ -74,7 +72,7 @@ function SubmitBones({ className }: { className?: string }) {
 function RailPanelBones({ fields, fullFirstField = false }: { fields: number; fullFirstField?: boolean }) {
   return (
     <Panel>
-      <SectionBones captionOnMobile>
+      <SectionBones>
         <WellBones items={4} />
       </SectionBones>
       <SectionBones headingWidth="w-28">
@@ -92,7 +90,7 @@ function RailPanelBones({ fields, fullFirstField = false }: { fields: number; fu
 function CutoverPanelBones() {
   return (
     <Panel>
-      <SectionBones headingWidth="w-60" captionOnMobile>
+      <SectionBones headingWidth="w-60">
         <div className="space-y-5">
           <div className="flex items-start gap-3">
             <Skeleton className="mt-0.5 size-4 shrink-0" />

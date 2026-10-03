@@ -9,7 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { PaginationBar } from '@/components/dashboard/PaginationBar'
 import { useClientPagination } from '@/lib/hooks/useClientPagination'
-import { Field, StatusItem, StatusWell, formatTimestamp } from './IntegrationPrimitives'
+import {
+  Field,
+  LabelWithNote,
+  StatusItem,
+  StatusWell,
+  formatTimestamp,
+} from './IntegrationPrimitives'
 import type { PlatformValorSaasConfigSummary } from '@/app/manage/actions/platform-billing-config'
 import {
   setPlatformValorSaasBillingCredentials,
@@ -17,6 +23,12 @@ import {
 } from '@/app/manage/actions/merchant-billing'
 
 type CutoverResult = Awaited<ReturnType<typeof cutoverSubscriptionRailsToCentral>>
+
+const RAIL_NOTE =
+  "The Dexa-owned Valor merchant that charges every merchant's SaaS subscription, so those fees settle to Dexa's bank. Each subscription rail clones these credentials; merchant online-ordering accounts are not changed here."
+
+const CUTOVER_NOTE =
+  "Moves every merchant's subscription rail onto the central credentials: deactivates native schedules on old EPIs, re-points each rail, and invalidates cards vaulted under an old EPI, so those merchants must re-add their card. Rails already on the central EPI are left untouched. Preview with a dry run first."
 
 interface Props {
   config: PlatformValorSaasConfigSummary
@@ -70,11 +82,11 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
 
   return (
     <Panel>
+      {/* Scope: which accounts this rail does and does not touch. Behind the
+          info icon on phones (§13.4). */}
       <PanelSection
-        label="Central SaaS billing (DEXA POS AI)"
-        caption="The Dexa-owned Valor merchant that charges every merchant's SaaS subscription, so those fees settle to Dexa's bank. Each subscription rail clones these credentials; merchant online-ordering accounts are not changed here."
-        /* Scope: which accounts this rail does and does not touch (§13.4). */
-        showCaptionOnMobile
+        label={<LabelWithNote label="Central SaaS billing (DEXA POS AI)" note={RAIL_NOTE} />}
+        caption={RAIL_NOTE}
       >
         <StatusWell>
           <StatusItem term="Status" value={status} note={statusNote} />
@@ -97,7 +109,16 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
           <Field
             id="valor-saas-epi"
             label="Valor EPI"
-            hint="10 digits, starting with 2. On staging, use the sandbox EPI that can process recurring."
+            hint={
+              <>
+                10 digits, starting with 2.
+                {/* The staging note drops on phones; the format stays. */}
+                <span className="max-sm:hidden">
+                  {' '}
+                  On staging, use the sandbox EPI that can process recurring.
+                </span>
+              </>
+            }
             className="md:col-span-2"
           >
             <Input
@@ -125,6 +146,7 @@ export function DexaSaasBillingValorRailCard({ config, canEdit }: Props) {
             id="valor-saas-appkey"
             label="Valor app key"
             hint={config.appKeyConfigured ? 'Leave blank to keep the saved key.' : undefined}
+            hideHintOnMobile
           >
             <Input
               id="valor-saas-appkey"
@@ -202,11 +224,12 @@ export function SubscriptionRailCutoverCard({
 
   return (
     <Panel>
+      {/* It explains what the destructive button does: moved behind the info
+          icon on phones, never dropped (§13.4). The confirm checkbox below
+          still says the consequence in words. */}
       <PanelSection
-        label="Cut over subscription rails"
-        caption="Moves every merchant's subscription rail onto the central credentials: deactivates native schedules on old EPIs, re-points each rail, and invalidates cards vaulted under an old EPI, so those merchants must re-add their card. Rails already on the central EPI are left untouched. Preview with a dry run first."
-        /* It explains what the destructive button does — never trimmed (§13.4). */
-        showCaptionOnMobile
+        label={<LabelWithNote label="Cut over subscription rails" note={CUTOVER_NOTE} />}
+        caption={CUTOVER_NOTE}
       >
         <div className="space-y-5">
           {result && <CutoverResultWell key={runCount} result={result} />}

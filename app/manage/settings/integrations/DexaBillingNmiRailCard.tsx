@@ -5,11 +5,20 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
-import { Field, StatusItem, StatusWell, formatTimestamp } from './IntegrationPrimitives'
+import {
+  Field,
+  LabelWithNote,
+  StatusItem,
+  StatusWell,
+  formatTimestamp,
+} from './IntegrationPrimitives'
 import {
   savePlatformNmiBillingConfig,
   type PlatformNmiBillingConfigSummary,
 } from '@/app/manage/actions/platform-billing-config'
+
+const ACCOUNT_NOTE =
+  'Charges merchant subscriptions and vaults merchant billing cards. Location NMI accounts for online ordering are separate and are not changed here.'
 
 interface Props {
   config: PlatformNmiBillingConfigSummary
@@ -65,12 +74,11 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
 
   return (
     <Panel>
+      {/* Scope, not description: it says which NMI accounts this page does not
+          touch. Behind the info icon on phones (§13.4). */}
       <PanelSection
-        label="Dexa Billing account"
-        caption="Charges merchant subscriptions and vaults merchant billing cards. Location NMI accounts for online ordering are separate and are not changed here."
-        /* Scope, not description: it says which NMI accounts this page does
-           not touch, so it stays on phones (§13.4). */
-        showCaptionOnMobile
+        label={<LabelWithNote label="Dexa Billing account" note={ACCOUNT_NOTE} />}
+        caption={ACCOUNT_NOTE}
       >
         <StatusWell>
           <StatusItem
@@ -86,6 +94,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
             term="Webhook signing"
             value={config.webhookSecretConfigured ? 'Saved' : 'Not set'}
             note={config.webhookSecretConfigured ? undefined : 'Invoice-payment webhooks are rejected until set'}
+            hideNoteOnMobile
           />
           <StatusItem
             term="Last updated"
@@ -113,6 +122,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
             id="dexa-billing-public-key"
             label="Tokenization key"
             hint="Public Collect.js key. Required."
+            hideHintOnMobile
           >
             <Input
               id="dexa-billing-public-key"
@@ -128,6 +138,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
             id="dexa-billing-private-key"
             label="Private API key"
             hint={config.apiKeyConfigured ? 'Leave blank to keep the saved key.' : undefined}
+            hideHintOnMobile
           >
             <Input
               id="dexa-billing-private-key"
@@ -144,6 +155,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
             id="dexa-billing-webhook-secret"
             label="Webhook signing secret"
             hint="Verifies NMI invoice-payment webhooks before invoice status changes."
+            hideHintOnMobile
           >
             <Input
               id="dexa-billing-webhook-secret"

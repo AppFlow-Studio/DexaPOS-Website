@@ -121,6 +121,9 @@ export function OrderOutPushMenuIntegrationCard({
                   'All clear'
                 )
               }
+              /* Only "All clear" drops on phones, where "None unprocessed"
+                 already says it; the review link and the load failure stay. */
+              hideNoteOnMobile={dlqCount === 0}
             />
           </StatusWell>
 
