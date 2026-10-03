@@ -216,15 +216,11 @@ function ManageDevicesPageInner() {
       <DeviceRegistryPageHeader
         title="Fleet inventory"
         description="Track warehouse stock, merchant assignments, and deployment status from one HQ view."
+        showSectionNav={false}
         actions={
-          <>
-            <Button asChild>
-              <Link href="/manage/devices/overview">Open overview</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/manage/device-catalog">Open catalog</Link>
-            </Button>
-          </>
+          <Button asChild>
+            <Link href="/manage/devices/overview">Open overview</Link>
+          </Button>
         }
       />
 

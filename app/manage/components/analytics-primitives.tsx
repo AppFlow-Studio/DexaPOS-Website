@@ -337,12 +337,77 @@ export function CategoryTick({
   width?: number
   maxLines?: number
 }) {
-  const label = String(payload?.value ?? '')
   // ~7px per character at the 12px tick size, minus a 4px breathing gap before
   // the plot. Erring wide matters more than packing tightly: underestimating
   // overflows the gutter and the label gets clipped at the panel edge.
   const perLine = Math.max(5, Math.floor((width - 4) / 7))
+  const lines = wrapTickLabel(String(payload?.value ?? ''), perLine, maxLines)
 
+  // Centre the block on the tick: shift up by half the stack's extra height.
+  const lineHeight = 11
+  const dyStart = -(((lines.length - 1) * lineHeight) / 2)
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="end"
+      fill="var(--muted-foreground)"
+      fontSize={12}
+      dominantBaseline="middle"
+    >
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? dyStart : lineHeight}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
+/**
+ * Wrapping tick for the category axis of a column chart (vertical bars), e.g.
+ * a breakdown drawn as columns on a phone. The label is centred under its
+ * column and wrapped to the column's own slot: the axis width divided by the
+ * number of ticks, both of which Recharts passes to a custom tick. Give the
+ * `XAxis` a `height` of about 36 so two lines fit.
+ */
+export function ColumnTick({
+  x,
+  y,
+  payload,
+  width,
+  visibleTicksCount,
+  maxLines = 2,
+}: {
+  x?: number
+  y?: number
+  payload?: { value?: string | number }
+  width?: number
+  visibleTicksCount?: number
+  maxLines?: number
+}) {
+  const slot = width && visibleTicksCount ? width / visibleTicksCount : 64
+  const perLine = Math.max(4, Math.floor((slot - 4) / 7))
+  const lines = wrapTickLabel(String(payload?.value ?? ''), perLine, maxLines)
+
+  return (
+    <text x={x} y={y} textAnchor="middle" fill="var(--muted-foreground)" fontSize={12}>
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? 12 : 11}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
+/**
+ * Splits a tick label on word boundaries into at most `maxLines` rows of
+ * `perLine` characters. A single word longer than a row is split hard, and
+ * dropped text ends the last row with an ellipsis.
+ */
+function wrapTickLabel(label: string, perLine: number, maxLines: number): string[] {
   const words = label.split(/\s+/).filter(Boolean)
   const lines: string[] = []
   let current = ''
@@ -393,26 +458,7 @@ export function CategoryTick({
       last.length >= perLine ? `${last.slice(0, Math.max(1, perLine - 1))}…` : `${last}…`
   }
 
-  // Centre the block on the tick: shift up by half the stack's extra height.
-  const lineHeight = 11
-  const dyStart = -(((lines.length - 1) * lineHeight) / 2)
-
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor="end"
-      fill="var(--muted-foreground)"
-      fontSize={12}
-      dominantBaseline="middle"
-    >
-      {lines.map((line, i) => (
-        <tspan key={i} x={x} dy={i === 0 ? dyStart : lineHeight}>
-          {line}
-        </tspan>
-      ))}
-    </text>
-  )
+  return lines
 }
 
 /**

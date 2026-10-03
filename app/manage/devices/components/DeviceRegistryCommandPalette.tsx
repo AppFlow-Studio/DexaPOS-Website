@@ -9,11 +9,10 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart3, Boxes, Monitor, Search } from 'lucide-react'
+import { BarChart3, Boxes, Monitor } from 'lucide-react'
 
 import { useDeviceRegistryCommandSearch } from '@/app/manage/hooks/useDeviceRegistry'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   CommandDialog,
@@ -250,24 +249,4 @@ export function useDeviceRegistryCommandPalette() {
   }
 
   return context
-}
-
-export function DeviceRegistryCommandPaletteTrigger() {
-  const { inScope, setOpen } = useDeviceRegistryCommandPalette()
-
-  if (!inScope) {
-    return null
-  }
-
-  return (
-    <Button variant="outline" onClick={() => setOpen(true)} className="justify-between gap-3">
-      <span className="inline-flex items-center gap-2">
-        <Search className="h-4 w-4" />
-        Search
-      </span>
-      <span className="hidden rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
-        Ctrl/Cmd K
-      </span>
-    </Button>
-  )
 }

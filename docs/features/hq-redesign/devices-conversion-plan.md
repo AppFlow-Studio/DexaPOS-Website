@@ -88,7 +88,7 @@ The 2026-09-29 conversion predates the table, card and loading rules added on 20
 
 ### Left as is
 
-- The "Open overview" / "Open catalog" header buttons still duplicate the section rail (Decision 3). Removing navigation was not requested.
+- ~~The "Open overview" / "Open catalog" header buttons still duplicate the section rail (Decision 3).~~ **Decided 2026-10-03:** on `/manage/devices` (inventory) the section rail and the "Open catalog" header button are removed, at the user's request. The rail is turned off with `DeviceRegistryPageHeader showSectionNav={false}`, and the inventory skeleton drops it too. "Open overview" stays. The catalog is still reachable from the sidebar, the command palette and the empty state's "Open catalog" button. The device page (`[deviceId]`) dropped the rail too, the same way. The overview and catalog pages keep it. The status dialog was also trimmed the same day: its three explanatory lines are hidden below `sm`, its footer actions are centred (two equal buttons on phones, as on the dead-letter dialog), and the arrow on each state card moved to the "Available" line so it stays inside the card.
 - `CommandDialog` (shared `components/ui/command.tsx`) still carries `shadow-lg` and does not go full-screen on phones. It is a shared primitive used outside the registry, so it is out of scope here.
 - `lib/constants/device-status.ts` still holds the unused hue maps (see "Found, not changed").
 
@@ -98,3 +98,11 @@ The 2026-09-29 conversion predates the table, card and loading rules added on 20
 - [x] ESLint: the same 5 pre-existing `set-state-in-effect` errors in the palette and the dialog, and nothing new
 - [x] §3.5, §4.6b, §4.10, §5.5, §5.7, §8 and `PageShell as="div"` greps over every registry file: every remaining hit is allowed. The hits are the dialog's `sm:max-h-[85vh]`, the activity feed's `max-h-[min(60vh,32rem)]` (a chronological feed), the palette list, and the tier classes in the skeleton.
 - [ ] Browser check at 1440/1024/768/375 px in both themes: not run, because the Chrome DevTools MCP failed to connect.
+
+### Follow-up trims (2026-10-03)
+
+At the user's request:
+- **Search button removed** from every registry header (inventory, overview, device and catalog). It lived in the shared `DeviceRegistryPageHeader`, and the now-unused `DeviceRegistryCommandPaletteTrigger` is deleted. The palette itself is still mounted in `app/manage/layout.tsx` and still opens with Ctrl/Cmd K. The skeletons drop one action each.
+- **Device page on phones:** the status pill moved onto the serial's row (`titleBadge`), and the identity line (model, category, POS ID, updated) is hidden below `sm`.
+- **Status dialog state cards:** "Decommissioned" broke onto two lines in a three-column grid of about 118px cards. The grid is now `repeat(auto-fill, minmax(10rem, 1fr))`, which gives as many columns as fit. That is two at `lg` inside the dialog, two at `sm`, and one on a phone. No state name breaks, and the hyphenation fallback is removed.
+- **Overview:** the section rail and the "Open catalog" header button are removed, so the rail now shows on `/manage/device-catalog` only. The "Recent registry intake" caption hides on phones. Below `md`, the three breakdown charts (status, category, merchant) draw as columns instead of horizontal bars, through one `BreakdownBarChart`. Their names sit under each column via a new `ColumnTick` in `analytics-primitives.tsx`, which shares its line wrapping with `CategoryTick` (`wrapTickLabel`, a refactor that changes no behaviour). From `md` up the charts are unchanged.

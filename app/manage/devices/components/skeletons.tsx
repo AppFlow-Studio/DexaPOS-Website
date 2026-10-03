@@ -16,12 +16,18 @@ function RegistryHeaderSkeleton({
   back = false,
   subtitle = true,
   meta = false,
-  actions = 3,
+  badge = false,
+  actions = 2,
+  rail = true,
 }: {
   back?: boolean
   subtitle?: boolean
+  /** The identity line under the title; it drops below `sm`, as the page's does. */
   meta?: boolean
+  /** A status pill on the title's row. */
+  badge?: boolean
   actions?: number
+  rail?: boolean
 }) {
   return (
     <div className="min-w-0 space-y-4" aria-hidden>
@@ -29,7 +35,10 @@ function RegistryHeaderSkeleton({
         {back ? <Skeleton className="h-8 w-36 rounded-full" /> : null}
         <div className={back ? 'mt-2 flex flex-wrap items-center justify-between gap-3' : 'flex flex-wrap items-center justify-between gap-3'}>
           <div className="min-w-0 space-y-2">
-            <Skeleton className="h-8 w-48" />
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-48" />
+              {badge ? <Skeleton className="h-6 w-20 rounded-full" /> : null}
+            </div>
             {subtitle ? <Skeleton className="h-4 w-80 max-w-full max-sm:hidden" /> : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -39,12 +48,14 @@ function RegistryHeaderSkeleton({
           </div>
         </div>
       </div>
-      {meta ? <Skeleton className="h-5 w-96 max-w-full" /> : null}
-      <div className="inline-flex w-max gap-0.5 rounded-full bg-muted/70 p-1">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <Skeleton key={index} className="h-9 w-24 rounded-full" />
-        ))}
-      </div>
+      {meta ? <Skeleton className="h-5 w-96 max-w-full max-sm:hidden" /> : null}
+      {rail ? (
+        <div className="inline-flex w-max gap-0.5 rounded-full bg-muted/70 p-1">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-9 w-24 rounded-full" />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -82,12 +93,12 @@ export function InventoryListSkeleton({ rows = 10 }: { rows?: number }) {
   )
 }
 
-/** /manage/devices: header, four stat tiles, then the panel with toolbar and list. */
+/** /manage/devices: header (no rail), four stat tiles, then the panel with toolbar and list. */
 export function InventoryPageSkeleton() {
   return (
     <PageShell as="div">
       <p role="status" className="sr-only">Loading the device inventory</p>
-      <RegistryHeaderSkeleton />
+      <RegistryHeaderSkeleton actions={1} rail={false} />
       <Panel padded>
         <StatRow columns={4}>
           {Array.from({ length: 4 }).map((_, index) => (
@@ -144,18 +155,18 @@ export function OverviewPageSkeleton() {
   return (
     <PageShell as="div">
       <p role="status" className="sr-only">Loading the fleet overview</p>
-      <RegistryHeaderSkeleton />
+      <RegistryHeaderSkeleton back actions={0} rail={false} />
       <OverviewBodySkeleton />
     </PageShell>
   )
 }
 
-/** /manage/devices/[deviceId]: skeleton C — back pill, serial, identity row, rail, two panels, feed. */
+/** /manage/devices/[deviceId]: skeleton C — back pill, serial, identity row (no rail), two panels, feed. */
 export function DeviceDetailSkeleton() {
   return (
     <PageShell as="div">
       <p role="status" className="sr-only">Loading the device</p>
-      <RegistryHeaderSkeleton back subtitle={false} meta />
+      <RegistryHeaderSkeleton back subtitle={false} badge meta rail={false} />
       <div className="grid min-w-0 items-start gap-6 lg:grid-cols-3" aria-hidden>
         <Skeleton className="h-[300px] w-full rounded-2xl lg:col-span-2" />
         <Skeleton className="h-[300px] w-full rounded-2xl" />

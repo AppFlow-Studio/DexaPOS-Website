@@ -109,6 +109,7 @@ function DeviceDetailPageInner() {
       <DeviceRegistryPageHeader
         title={device.serial_number}
         backHref={backHref}
+        showSectionNav={false}
         backLabel="Back to inventory"
         actions={
           <>
@@ -116,11 +117,15 @@ function DeviceDetailPageInner() {
             <DeviceStatusTransitionDialog device={device} />
           </>
         }
+        titleBadge={
+          <Badge variant="outline" className="w-fit px-2.5 text-xs font-medium">
+            {formatDeviceStatus(device.status)}
+          </Badge>
+        }
         meta={
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-            <Badge variant="outline" className="w-fit px-2.5 text-xs font-medium">
-              {formatDeviceStatus(device.status)}
-            </Badge>
+          // Phones keep only the serial and its status on the title row; this
+          // identity line (model, category, POS ID, update time) drops below `sm`.
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground max-sm:hidden">
             <span className="min-w-0">{model}</span>
             <span>{formatDeviceCategory(device.device_category)}</span>
             {device.pos_id ? <span className="tabular-nums">POS ID {device.pos_id}</span> : null}

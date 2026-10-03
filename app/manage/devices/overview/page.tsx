@@ -29,6 +29,7 @@ import {
   AnalyticsTooltip,
   CATEGORY_AXIS_WIDTH,
   CategoryTick,
+  ColumnTick,
   valueAxisWidthMobile,
 } from '@/app/manage/components/analytics-primitives'
 import {
@@ -65,7 +66,6 @@ export default function DeviceRegistryOverviewPage() {
   const overviewQuery = useAdminDeviceOverview()
   const overview = overviewQuery.data
   const isMobile = useIsMobile()
-  const categoryAxisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : CATEGORY_AXIS_WIDTH.desktop
 
   // Single-series charts: every bar is the same measure, so one colour
   // (`var(--brand)`, §6.1). A hue per status or per category encoded nothing.
@@ -96,16 +96,9 @@ export default function DeviceRegistryOverviewPage() {
       <DeviceRegistryPageHeader
         title="Fleet overview"
         description="HQ summary of current fleet posture, warranty exposure, ownership distribution, and recent intake."
-        actions={
-          <>
-            <Button asChild>
-              <Link href="/manage/devices">Open inventory</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/manage/device-catalog">Open catalog</Link>
-            </Button>
-          </>
-        }
+        backHref="/manage/devices"
+        backLabel="Back to inventory"
+        showSectionNav={false}
       />
 
       {overviewQuery.isLoading ? (
@@ -194,26 +187,7 @@ export default function DeviceRegistryOverviewPage() {
                       hint="Statuses will appear here once units are tracked."
                     />
                   ) : (
-                    <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
-                      <BarChart data={statusChartData} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
-                        <CartesianGrid {...CHART_GRID} horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
-                        <YAxis
-                          dataKey="label"
-                          type="category"
-                          width={categoryAxisWidth}
-                          tickLine={false}
-                          axisLine={false}
-                          interval={0}
-                          tick={<CategoryTick width={categoryAxisWidth} />}
-                        />
-                        <Tooltip
-                          cursor={{ fill: CHART_CURSOR_FILL }}
-                          content={<AnalyticsTooltip formatter={unitsLabel} />}
-                        />
-                        <Bar dataKey="value" name="Devices" fill="var(--brand)" radius={[0, 6, 6, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <BreakdownBarChart data={statusChartData} name="Devices" isMobile={isMobile} />
                   )}
                 </AnalyticsPanel>
 
@@ -225,26 +199,7 @@ export default function DeviceRegistryOverviewPage() {
                       hint="Categories will appear here once units are tracked."
                     />
                   ) : (
-                    <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
-                      <BarChart data={categoryChartData} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
-                        <CartesianGrid {...CHART_GRID} horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
-                        <YAxis
-                          dataKey="label"
-                          type="category"
-                          width={categoryAxisWidth}
-                          tickLine={false}
-                          axisLine={false}
-                          interval={0}
-                          tick={<CategoryTick width={categoryAxisWidth} />}
-                        />
-                        <Tooltip
-                          cursor={{ fill: CHART_CURSOR_FILL }}
-                          content={<AnalyticsTooltip formatter={unitsLabel} />}
-                        />
-                        <Bar dataKey="value" name="Devices" fill="var(--brand)" radius={[0, 6, 6, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <BreakdownBarChart data={categoryChartData} name="Devices" isMobile={isMobile} />
                   )}
                 </AnalyticsPanel>
               </div>
@@ -253,7 +208,6 @@ export default function DeviceRegistryOverviewPage() {
                 <AnalyticsPanel
                   title="Recent registry intake"
                   caption="Physical units added to the registry over the last six months."
-                  showCaptionOnMobile
                 >
                   {isEmptySeries(registrationTrend, (row) => row.value) ? (
                     <ChartEmpty
@@ -306,26 +260,12 @@ export default function DeviceRegistryOverviewPage() {
                     hint="Merchants will appear here once units are allocated."
                   />
                 ) : (
-                  <ResponsiveContainer width="100%" height={Math.max(BAR_CHART_HEIGHT, merchantChartData.length * 40)}>
-                    <BarChart data={merchantChartData} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
-                      <CartesianGrid {...CHART_GRID} horizontal={false} />
-                      <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
-                      <YAxis
-                        dataKey="label"
-                        type="category"
-                        width={categoryAxisWidth}
-                        tickLine={false}
-                        axisLine={false}
-                        interval={0}
-                        tick={<CategoryTick width={categoryAxisWidth} />}
-                      />
-                      <Tooltip
-                        cursor={{ fill: CHART_CURSOR_FILL }}
-                        content={<AnalyticsTooltip formatter={unitsLabel} />}
-                      />
-                      <Bar dataKey="value" name="Assigned" fill="var(--brand)" radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <BreakdownBarChart
+                    data={merchantChartData}
+                    name="Assigned"
+                    isMobile={isMobile}
+                    desktopHeight={Math.max(BAR_CHART_HEIGHT, merchantChartData.length * 40)}
+                  />
                 )}
               </AnalyticsPanel>
             </>
@@ -333,5 +273,77 @@ export default function DeviceRegistryOverviewPage() {
         </>
       )}
     </PageShell>
+  )
+}
+
+/**
+ * One single-series breakdown, in `var(--brand)` (§6.1). From `md` up the bars
+ * run horizontally with the names in a wrapping gutter. On phones they stand
+ * as columns, the names wrapped beneath each one, so the chart uses the full
+ * width instead of giving a third of it to the label gutter.
+ */
+function BreakdownBarChart({
+  data,
+  name,
+  isMobile,
+  desktopHeight = BAR_CHART_HEIGHT,
+}: {
+  data: Array<{ label: string; value: number }>
+  name: string
+  isMobile: boolean
+  desktopHeight?: number
+}) {
+  const tooltip = (
+    <Tooltip cursor={{ fill: CHART_CURSOR_FILL }} content={<AnalyticsTooltip formatter={unitsLabel} />} />
+  )
+
+  if (isMobile) {
+    const max = Math.max(0, ...data.map((row) => row.value))
+    return (
+      <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid {...CHART_GRID} vertical={false} />
+          <XAxis
+            dataKey="label"
+            type="category"
+            interval={0}
+            tickLine={false}
+            axisLine={false}
+            height={36}
+            tick={<ColumnTick />}
+          />
+          <YAxis
+            type="number"
+            allowDecimals={false}
+            tick={CHART_TICK}
+            tickLine={false}
+            axisLine={false}
+            width={valueAxisWidthMobile(String(max).length)}
+          />
+          {tooltip}
+          <Bar dataKey="value" name={name} fill="var(--brand)" radius={[6, 6, 0, 0]} maxBarSize={48} />
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={desktopHeight}>
+      <BarChart data={data} layout="vertical" margin={{ left: 0, right: 24 }}>
+        <CartesianGrid {...CHART_GRID} horizontal={false} />
+        <XAxis type="number" allowDecimals={false} tick={CHART_TICK} tickLine={false} axisLine={false} />
+        <YAxis
+          dataKey="label"
+          type="category"
+          width={CATEGORY_AXIS_WIDTH.desktop}
+          tickLine={false}
+          axisLine={false}
+          interval={0}
+          tick={<CategoryTick width={CATEGORY_AXIS_WIDTH.desktop} />}
+        />
+        {tooltip}
+        <Bar dataKey="value" name={name} fill="var(--brand)" radius={[0, 6, 6, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   )
 }

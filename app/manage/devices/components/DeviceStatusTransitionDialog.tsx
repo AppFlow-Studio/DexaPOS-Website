@@ -154,7 +154,8 @@ export function DeviceStatusTransitionDialog({
         <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-4xl sm:rounded-3xl">
           <DialogHeader className="shrink-0 px-6 pb-2 pr-14 pt-6 text-left">
             <DialogTitle className="text-xl">Status transition</DialogTitle>
-            <DialogDescription>
+            {/* Explanatory lines drop on phones (§13.4); the form says the same by itself. */}
+            <DialogDescription className="max-sm:hidden">
               Move {device.serial_number} through the approved lifecycle states. Only valid next states are selectable.
             </DialogDescription>
           </DialogHeader>
@@ -173,12 +174,14 @@ export function DeviceStatusTransitionDialog({
                 <div className="space-y-3">
                   <div>
                     <h3 className="font-medium">Select next state</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground max-sm:hidden">
                       Disabled states are not reachable from the current lifecycle step.
                     </p>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Columns at least 10rem wide: as many as fit, so the longest state
+                      ("Decommissioned") always sits on one line in its card. */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
                     {ALL_DEVICE_STATUSES.map((status) => {
                       const isCurrent = status === device.status
                       const isValid = validStatuses.includes(status)
@@ -193,21 +196,23 @@ export function DeviceStatusTransitionDialog({
                           onClick={() => setSelectedStatus(status)}
                           className={cn(
                             // Selection is a ring, not a brand fill (§3.5, §5.3).
-                            'rounded-2xl p-4 text-left transition-colors',
+                            'min-w-0 rounded-2xl p-4 text-left transition-colors',
                             isSelected ? 'bg-muted ring-1 ring-border' : 'bg-muted/45',
                             !isSelected && isValid && 'hover:bg-muted',
                             !isValid && 'cursor-not-allowed opacity-40'
                           )}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium">{formatDeviceStatus(status)}</span>
-                            {isValid && !isCurrent ? (
-                              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            ) : null}
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
+                          {/* The label takes the card's full width; the arrow sits on the
+                              availability line, inside the card. */}
+                          <span className="block font-medium">
+                            {formatDeviceStatus(status)}
+                          </span>
+                          <span className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                             {isCurrent ? 'Current' : isValid ? 'Available' : 'Unavailable'}
-                          </p>
+                            {isValid && !isCurrent ? (
+                              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+                            ) : null}
+                          </span>
                         </button>
                       )
                     })}
@@ -218,7 +223,7 @@ export function DeviceStatusTransitionDialog({
               <div className="min-w-0 space-y-4">
                 <div>
                   <h3 className="font-medium">Transition details</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground max-sm:hidden">
                     The backend enforces the actual state machine and assignment rules.
                   </p>
                 </div>
@@ -361,7 +366,8 @@ export function DeviceStatusTransitionDialog({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 px-6 pb-6 pt-4">
+          {/* Centred actions, as on the dead-letter dialog: two equal buttons on phones. */}
+          <DialogFooter className="grid shrink-0 grid-cols-2 px-6 pb-6 pt-4 sm:flex sm:justify-center">
             <Button variant="outline" onClick={() => setOpen(false)} disabled={assignMutation.isPending}>
               Cancel
             </Button>

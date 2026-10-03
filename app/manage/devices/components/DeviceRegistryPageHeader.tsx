@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react'
 
-import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
 import { PageHeader } from '@/components/dashboard/shell'
 
@@ -12,11 +11,12 @@ interface DeviceRegistryPageHeaderProps {
   actions?: ReactNode
   backHref?: string
   backLabel?: string
-  /**
-   * An identity row under the title — status, model, record ids. Unlike the
-   * description it stays on phones: it is scope, not decoration (§13.4).
-   */
+  /** Rendered on the title's row — e.g. the device's status pill. */
+  titleBadge?: ReactNode
+  /** An identity row under the title — model, category, record ids. */
   meta?: ReactNode
+  /** The section rail under the header. Only the catalog page still shows it. */
+  showSectionNav?: boolean
 }
 
 /**
@@ -29,7 +29,9 @@ export function DeviceRegistryPageHeader({
   actions,
   backHref,
   backLabel,
+  titleBadge,
   meta,
+  showSectionNav = true,
 }: DeviceRegistryPageHeaderProps) {
   return (
     <div className="min-w-0 space-y-4">
@@ -38,15 +40,11 @@ export function DeviceRegistryPageHeader({
         subtitle={description}
         backHref={backHref}
         backLabel={backLabel}
-        actions={
-          <>
-            <DeviceRegistryCommandPaletteTrigger />
-            {actions}
-          </>
-        }
+        titleBadge={titleBadge}
+        actions={actions}
       />
       {meta}
-      <DeviceRegistrySectionNav />
+      {showSectionNav ? <DeviceRegistrySectionNav /> : null}
     </div>
   )
 }

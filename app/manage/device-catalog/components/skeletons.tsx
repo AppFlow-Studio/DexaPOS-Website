@@ -85,7 +85,7 @@ export function CatalogListSkeleton({ rows = 10 }: { rows?: number }) {
 }
 
 /**
- * /manage/device-catalog: the registry header (title, subtitle, four actions,
+ * /manage/device-catalog: the registry header (title, subtitle, three actions,
  * the three-pill rail), four stat tiles, the callout, then the list panel.
  */
 export function CatalogPageSkeleton() {
@@ -100,7 +100,7 @@ export function CatalogPageSkeleton() {
             <Skeleton className="h-4 w-96 max-w-full max-sm:hidden" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {Array.from({ length: 4 }).map((_, index) => (
+            {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-9 w-28 rounded-full" />
             ))}
           </div>
