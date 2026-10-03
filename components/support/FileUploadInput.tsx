@@ -104,6 +104,11 @@ interface FileUploadInputProps {
    * send button. Chips stay inline when omitted.
    */
   chipsContainer?: HTMLElement | null;
+  /**
+   * `compact` only: extra classes on the paperclip button itself (`className`
+   * lands on its wrapper), so a composer can match it to its send button.
+   */
+  buttonClassName?: string;
 }
 
 export default function FileUploadInput({
@@ -116,6 +121,7 @@ export default function FileUploadInput({
   onUploadStateChange,
   variant = "dropzone",
   chipsContainer,
+  buttonClassName,
 }: FileUploadInputProps) {
   const { getToken } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -700,7 +706,8 @@ export default function FileUploadInput({
             className={cn(
               "inline-flex size-9 shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground",
               isDragging && "bg-muted text-foreground",
-              (disabled || !canAddMore) && "opacity-40 cursor-not-allowed"
+              (disabled || !canAddMore) && "opacity-40 cursor-not-allowed",
+              buttonClassName
             )}
           >
             <Paperclip className="h-4 w-4" />
@@ -734,8 +741,11 @@ export default function FileUploadInput({
             )}
           >
             <Paperclip className="h-4 w-4 text-muted-foreground transition-colors" />
+            {/* Phones can't drag a file in, so they get the shorter tap wording. */}
             <p className="text-xs text-center text-muted-foreground">
-              Drag files here or click to browse ({files.length}/{MAX_FILES} used)
+              <span className="max-sm:hidden">Drag files here or click to browse</span>
+              <span className="sm:hidden">Tap to add files</span>{" "}
+              <span className="tabular-nums">({files.length}/{MAX_FILES} used)</span>
             </p>
             <p className="text-[11px] text-center text-muted-foreground/80">
               Images/PDF up to {NON_VIDEO_MAX_SIZE_MB} MB; video up to{" "}

@@ -145,8 +145,9 @@ export default function NewHQSupportTicketPage() {
         backLabel="Back to Support"
       />
 
-      {/* Callout recipe (§3.5): muted well, no border, bare icon with no plate. */}
-      <div className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3">
+      {/* Callout recipe (§3.5): muted well, no border, bare icon with no plate.
+          Background, not instruction, so phones drop it (§13.4). */}
+      <div className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 max-sm:hidden">
         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
           <p className="text-sm font-medium">DEXA HQ developer ticket</p>
@@ -157,7 +158,12 @@ export default function NewHQSupportTicketPage() {
         </div>
       </div>
 
-      <Panel padded>
+      {/* On phones the form sits straight on the page: a bordered panel inside
+          the page gutter cost every field ~32px of width and boxed a box. */}
+      <Panel
+        padded
+        className="max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:px-0 max-sm:py-0"
+      >
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid min-w-0 gap-5 sm:grid-cols-2">
             <div className="min-w-0 space-y-2">
@@ -239,7 +245,7 @@ export default function NewHQSupportTicketPage() {
                 .
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground max-sm:hidden">
                 Select one or more developers from the configured support
                 notification list. Notifications still go to the entire list.
               </p>
@@ -257,7 +263,7 @@ export default function NewHQSupportTicketPage() {
               required
               placeholder="Short description of the work or bug"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground max-sm:hidden">
               Use a specific title that developers can recognize in the inbox.
             </p>
           </div>
@@ -273,17 +279,14 @@ export default function NewHQSupportTicketPage() {
               minLength={10}
               maxLength={3000}
               required
-              className="min-h-48 resize-y border-0 bg-muted/60 shadow-none focus-visible:bg-background dark:bg-muted/60 dark:focus-visible:bg-background"
+              className="min-h-32 resize-y sm:min-h-48 border-0 bg-muted/60 shadow-none focus-visible:bg-background dark:bg-muted/60 dark:focus-visible:bg-background"
               placeholder="Describe the problem, reproduction steps, expected behavior, and useful context."
             />
           </div>
 
           <div className="space-y-2">
+            {/* The drop zone states the size and count limits itself. */}
             <Label>Screenshots or files (optional)</Label>
-            <p className="text-xs text-muted-foreground">
-              Images/PDFs up to 5 MB; video (MP4, MOV, WebM) up to 100 MB.
-              Maximum 3 files.
-            </p>
             <FileUploadInput
               onUploadsChange={setAttachments}
               onUploadStateChange={setIsUploading}
