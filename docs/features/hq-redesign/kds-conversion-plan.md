@@ -283,3 +283,26 @@ Verification: scoped `tsc` on `page.tsx`: 0 errors in `kds-mirror/**`; `eslint` 
 Verification: scoped `tsc` on `page.tsx`: 0 errors in `kds-mirror/**`; `eslint` clean. **Not browser-checked**.
 
 - [x] (2026-10-03) Send ledger phone card: expanded items drop their kitchen status ("preparing") and prep-station pill ("Coffee") via `SendItemList compact`; the table's expanded row keeps both.
+
+## Follow-up 12 (2026-10-03): Routed vs seen and Divergences audit
+
+Checked against the rules and this week's patterns (ⓘ beside titles, lean phone views, no repetition):
+
+- [x] **Routed vs seen title:** plain "Routed vs seen" with the heartbeat note behind ⓘ on phones (it was a caption,
+      which phones hide, so the note was lost there). The display name moved from the title into the caption from
+      `sm`; on phones the display picker already names it. "Pick a health card" wording now says Display health
+- [x] **Server lane:** rows no longer repeat "Routed to display" (the lane says so); they lead with the item and
+      order. A non-routed entry says "Not routed (…)"
+- [x] **Device lane:** rows now name the item and order (joined from the window's items by `order_item_id`), so the
+      lanes read against each other. Clock skew shows on a row only when it is 5s or more ("clock 7s off"); the exact
+      value is in the tooltip
+- [x] **Phones:** one lane at a time behind a `SegmentedFilter` (Server lane · Device lane, with counts), so there is
+      one scroll well, not two stacked 60vh wells (§5.7). The lane's own header hides below `md` (the segment says it)
+- [x] **Empty:** one sentence for an empty window instead of two empty lanes and a hint that described the layout
+      (§4.9); it says how to get data (widen the window, check the display is online)
+- [x] **Divergences:** one count line ("3 of 40 items where the server and the device disagree" / "All 40 items in
+      this window"); the footer that repeated the hidden count and the chip's label is gone; "(s)" plurals fixed.
+      Phone card drops Kitchen status (a wide-screen column) and gives Device the full row
+
+Verification: scoped `tsc` on `page.tsx`: 0 errors in `kds-mirror/**`; `eslint` clean; §3.5/§5.5 greps clean.
+**Not browser-checked**.

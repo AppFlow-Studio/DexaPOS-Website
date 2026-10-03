@@ -82,7 +82,8 @@ function deviceLabel(item: KdsDeviceTruthItem): string {
  * because "offline" is not a bug and "no device data" is not even evidence —
  * support should not have to remember which is which.
  *
- * Verdicts are neutral pills (§4.6b). A NEVER_SHOWED row is marked by weight.
+ * Verdicts are neutral pills (§4.6b). Rows whose verdict needs attention
+ * (never showed, render suspect, ghost) are marked by weight.
  */
 export function KdsDivergenceList({
   items,
@@ -166,10 +167,11 @@ export function KdsDivergenceList({
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[0.8125rem] text-muted-foreground">
-          {!showAll
-            ? `${divergences.length} item(s) where the server and the device disagree`
-            : `${items.length} item(s) routed or reported in this window`}
+        {/* One count line; the chip says how to see the rest. */}
+        <p className="text-[0.8125rem] text-muted-foreground tabular-nums">
+          {showAll
+            ? `All ${items.length} ${items.length === 1 ? "item" : "items"} in this window`
+            : `${divergences.length} of ${items.length} ${items.length === 1 ? "item" : "items"} where the server and the device disagree`}
         </p>
         {/* A filter chip (DS-CTL-03): tinted and borderless, pressed state
             said by aria-pressed and the label. */}
@@ -262,8 +264,9 @@ export function KdsDivergenceList({
       </Table>
 
       {/*
-        §5.3 (D-27): item and verdict lead, then four pairs. There is no
-        per-item detail view, so the card keeps its four.
+        §5.3 (D-27): item and verdict lead, then the table's other essentials:
+        order, when the server routed it, and what the device said. Kitchen
+        status is a wide-screen column, so the phone card drops it.
       */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {pageRows.map((item) => {
@@ -288,12 +291,12 @@ export function KdsDivergenceList({
               </div>
               <CardFields>
                 <CardField label="Order" value={item.order_number ?? "—"} />
-                <CardField
-                  label="Kitchen status"
-                  value={item.kitchen_status ?? "—"}
-                />
                 <CardField label="Server routed" value={serverFiredLabel(item)} />
-                <CardField label="Device" value={deviceLabel(item)} />
+                <CardField
+                  label="Device"
+                  value={deviceLabel(item)}
+                  className="col-span-2"
+                />
               </CardFields>
             </RecordCard>
           );
@@ -306,15 +309,6 @@ export function KdsDivergenceList({
         itemLabel="items"
       />
 
-      {!showAll && items.length > divergences.length && (
-        <p className="text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            {items.length - divergences.length}
-          </span>{" "}
-          confirmed / expected item(s) hidden. Use &ldquo;Show all items&rdquo;
-          to see them.
-        </p>
-      )}
     </div>
   );
 }

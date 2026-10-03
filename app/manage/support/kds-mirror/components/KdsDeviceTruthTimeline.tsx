@@ -13,6 +13,7 @@ import type {
   KdsDeviceTruthItem,
 } from "@/app/manage/actions/kds-device-truth";
 import { CardGridEmpty } from "@/app/manage/transactions/components/ledger-primitives";
+import { SegmentedFilter } from "./kds-primitives";
 
 /**
  * A lane renders at most this many entries and reveals the rest on demand.
@@ -20,6 +21,13 @@ import { CardGridEmpty } from "@/app/manage/transactions/components/ledger-primi
  * them all at once is a wall of DOM for a view whose job is "spot the gap".
  */
 const TIMELINE_PAGE_SIZE = 100;
+
+/**
+ * Clock skew is said on a row only when it is large enough to matter; a few
+ * milliseconds on every device row is noise. The exact value is always in the
+ * row's tooltip.
+ */
+const SKEW_NOTE_MS = 5000;
 
 /**
  * Event labels. There is no per-event colour (UI-DESIGN-SYSTEM §3.5): the
@@ -40,7 +48,8 @@ const EVENT_LABEL: Record<string, { label: string; key: boolean }> = {
 interface TimelineEntry {
   ts: string;
   lane: "server" | "device";
-  label: string;
+  /** What happened. Null for a routed server entry: the lane already says so. */
+  label: string | null;
   isKey: boolean;
   itemName: string | null;
   orderNumber: string | null;
@@ -55,8 +64,8 @@ function serverEntries(window: KdsDisplayTruthWindow): TimelineEntry[] {
       lane: "server",
       label:
         item.server_outcome === "routed"
-          ? "Routed to display"
-          : `Routing: ${item.server_outcome ?? "unknown"}`,
+          ? null
+          : `Not routed (${item.server_outcome ?? "unknown"})`,
       isKey: item.server_outcome === "routed",
       itemName: item.item_name,
       orderNumber: item.order_number,
@@ -65,6 +74,11 @@ function serverEntries(window: KdsDisplayTruthWindow): TimelineEntry[] {
 }
 
 function deviceEntries(window: KdsDisplayTruthWindow): TimelineEntry[] {
+  // Name the item on each device row too, so the two lanes read against each
+  // other: the event carries only the order item id.
+  const itemById = new Map(
+    window.items.map((item) => [item.order_item_id, item] as const)
+  );
   return window.device_events.map<TimelineEntry>(
     (event: KdsDeviceTruthEvent) => {
       const meta = EVENT_LABEL[event.event_type] ?? {
@@ -78,8 +92,8 @@ function deviceEntries(window: KdsDisplayTruthWindow): TimelineEntry[] {
         lane: "device",
         label: meta.label,
         isKey: meta.key,
-        itemName: null,
-        orderNumber: null,
+        itemName: itemById.get(event.order_item_id)?.item_name ?? null,
+        orderNumber: itemById.get(event.order_item_id)?.order_number ?? null,
         skewMs: event.clock_skew_ms,
       };
     }
@@ -101,6 +115,7 @@ function Lane({
   visibleCount,
   emptyText,
   onShowMore,
+  className,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -109,13 +124,15 @@ function Lane({
   visibleCount: number;
   emptyText: string;
   onShowMore: () => void;
+  className?: string;
 }) {
   const shown = entries.slice(0, visibleCount);
   const remaining = entries.length - visibleCount;
 
   return (
-    <div className="min-w-0 rounded-2xl bg-muted/45">
-      <div className="flex items-center gap-2 px-4 pt-4">
+    <div className={cn("min-w-0 rounded-2xl bg-muted/45", className)}>
+      {/* Phones name the lane and its count in the segmented switch above. */}
+      <div className="flex items-center gap-2 px-4 pt-4 max-md:hidden">
         {icon}
         <span className="text-sm font-medium">{title}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
@@ -144,17 +161,22 @@ function Lane({
                     <span className="w-px flex-1 bg-border" />
                   )}
                 </div>
-                <div className="min-w-0">
+                <div
+                  className="min-w-0"
+                  title={
+                    entry.skewMs !== null
+                      ? `Device clock skew ${entry.skewMs} ms vs server`
+                      : undefined
+                  }
+                >
                   <p className="text-xs font-medium tabular-nums">
                     {format(new Date(entry.ts), "HH:mm:ss")}
-                    {entry.skewMs !== null && (
-                      <span
-                        className="ml-1 text-[10px] font-normal text-muted-foreground"
-                        title={`Device clock skew ${entry.skewMs} ms vs server`}
-                      >
-                        (skew {entry.skewMs} ms)
-                      </span>
-                    )}
+                    {entry.skewMs !== null &&
+                      Math.abs(entry.skewMs) >= SKEW_NOTE_MS && (
+                        <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                          (clock {Math.round(entry.skewMs / 1000)}s off)
+                        </span>
+                      )}
                   </p>
                   <p
                     className={cn(
@@ -164,9 +186,13 @@ function Lane({
                         : "text-muted-foreground"
                     )}
                   >
-                    {entry.label}
-                    {entry.itemName ? ` · ${entry.itemName}` : ""}
-                    {entry.orderNumber ? ` · #${entry.orderNumber}` : ""}
+                    {[
+                      entry.label,
+                      entry.itemName,
+                      entry.orderNumber && `#${entry.orderNumber.replace(/^#+/, "")}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Unnamed item"}
                   </p>
                 </div>
               </li>
@@ -217,6 +243,12 @@ export function KdsDeviceTruthTimeline({
   const [serverVisible, setServerVisible] = React.useState(TIMELINE_PAGE_SIZE);
   const [deviceVisible, setDeviceVisible] = React.useState(TIMELINE_PAGE_SIZE);
 
+  // Phones show one lane at a time: two stacked scroll wells, each up to 60vh,
+  // would trap the thumb (§5.7). From `md` both lanes sit side by side.
+  const [phoneLane, setPhoneLane] = React.useState<"server" | "device">(
+    "server"
+  );
+
   const [prevWindow, setPrevWindow] = React.useState(window);
   if (prevWindow !== window) {
     setPrevWindow(window);
@@ -233,46 +265,69 @@ export function KdsDeviceTruthTimeline({
     );
   }
 
-  if (!window) {
+  const server = window
+    ? serverEntries(window).sort((a, b) => a.ts.localeCompare(b.ts))
+    : [];
+  const device = window
+    ? deviceEntries(window).sort((a, b) => a.ts.localeCompare(b.ts))
+    : [];
+
+  // One sentence for an empty window, not two empty lanes (§4.9).
+  if (!window || (server.length === 0 && device.length === 0)) {
     return (
       <CardGridEmpty
-        title="No truth timeline for this display"
-        hint="The server lane and the device lane are drawn side by side so a gap on the right is visible at a glance."
+        title="Nothing routed or reported in this window"
+        hint={
+          window && !window.has_any_device_data
+            ? "This display has never reported, so only the server lane can fill in. Widen the window to look further back."
+            : "Widen the window to look further back, or check that the display is online."
+        }
       />
     );
   }
 
-  const server = serverEntries(window).sort((a, b) => a.ts.localeCompare(b.ts));
-  const device = deviceEntries(window).sort((a, b) => a.ts.localeCompare(b.ts));
-  const hasDeviceData =
-    window.has_any_device_data && device.length > 0;
+  const hasDeviceData = window.has_any_device_data && device.length > 0;
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-      <Lane
-        title="Server lane"
-        icon={<Server className="h-4 w-4 text-muted-foreground" />}
-        entries={server}
-        visibleCount={serverVisible}
-        emptyText="Nothing in the routing log for this display in the window."
-        onShowMore={() =>
-          setServerVisible((v) => v + TIMELINE_PAGE_SIZE)
-        }
+    <div className="space-y-3">
+      <SegmentedFilter
+        ariaLabel="Timeline lane"
+        value={phoneLane}
+        onValueChange={setPhoneLane}
+        options={[
+          { key: "server", label: "Server lane", count: server.length },
+          { key: "device", label: "Device lane", count: device.length },
+        ]}
+        className="md:hidden"
       />
-      <Lane
-        title="Device lane"
-        icon={<Radio className="h-4 w-4 text-muted-foreground" />}
-        entries={device}
-        visibleCount={deviceVisible}
-        emptyText={
-          hasDeviceData
-            ? "The device is reporting, but reported nothing in this window."
-            : "This display has never reported — the POS emitter has not shipped to it yet."
-        }
-        onShowMore={() =>
-          setDeviceVisible((v) => v + TIMELINE_PAGE_SIZE)
-        }
-      />
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <Lane
+          className={cn(phoneLane !== "server" && "max-md:hidden")}
+          title="Server lane"
+          icon={<Server className="h-4 w-4 text-muted-foreground" />}
+          entries={server}
+          visibleCount={serverVisible}
+          emptyText="Nothing in the routing log for this display in the window."
+          onShowMore={() =>
+            setServerVisible((v) => v + TIMELINE_PAGE_SIZE)
+          }
+        />
+        <Lane
+          className={cn(phoneLane !== "device" && "max-md:hidden")}
+          title="Device lane"
+          icon={<Radio className="h-4 w-4 text-muted-foreground" />}
+          entries={device}
+          visibleCount={deviceVisible}
+          emptyText={
+            hasDeviceData
+              ? "The device is reporting, but reported nothing in this window."
+              : "This display has never reported — the POS emitter has not shipped to it yet."
+          }
+          onShowMore={() =>
+            setDeviceVisible((v) => v + TIMELINE_PAGE_SIZE)
+          }
+        />
+      </div>
     </div>
   );
 }

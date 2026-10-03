@@ -97,6 +97,11 @@ function DeviceTruthBlindSpotNotice() {
   );
 }
 
+const TIMELINE_LEAD =
+  "Device events are reported on the POS heartbeat (60s) and kept for 30 days.";
+const TIMELINE_LAG =
+  "A device lane entry can lag the server lane by up to one heartbeat.";
+
 /** A section title with its phone ⓘ beside it (§13.4 "move, don't delete"). */
 function TitleWithInfo({
   title,
@@ -453,7 +458,7 @@ function KdsMirrorPageInner() {
               <div className="space-y-5">
                 <DeviceTruthBlindSpotNotice />
                 {!locationId ? (
-                  <PickScope hint="The health cards cover every KDS display at the location; the timeline and divergence list are per display." />
+                  <PickScope hint="Display health covers every KDS display at the location; the timeline and divergences are per display." />
                 ) : (
                   <>
                     {deviceHealth.isError && (
@@ -486,8 +491,24 @@ function KdsMirrorPageInner() {
               (displayId ? (
                 <>
                   <PanelSection
-                    label={`Routed vs seen — ${selectedDisplay?.display_name ?? "this display"}`}
-                    caption="Device events are reported on the POS heartbeat (60s) and kept for 30 days. A device lane entry can lag the server lane by up to one heartbeat."
+                    // The display is named once: in the caption from `sm`,
+                    // and by the display picker above on phones.
+                    label={
+                      <TitleWithInfo
+                        title="Routed vs seen"
+                        info={
+                          <NoticeInfoButton
+                            title="About the timeline"
+                            description={TIMELINE_LEAD}
+                            size="inline"
+                            className="sm:hidden"
+                          >
+                            <span>{TIMELINE_LAG}</span>
+                          </NoticeInfoButton>
+                        }
+                      />
+                    }
+                    caption={`${selectedDisplay?.display_name ?? "This display"}. ${TIMELINE_LEAD} ${TIMELINE_LAG}`}
                     action={
                       <WindowSelect
                         value={truthWindowKey}
@@ -541,7 +562,7 @@ function KdsMirrorPageInner() {
                 <PanelSection label="Routed vs seen">
                   <CardGridEmpty
                     title="Pick a KDS display"
-                    hint="The timeline and divergence list are per display — choose one above, or pick a health card."
+                    hint="The timeline and divergences are per display. Choose one above, or pick a row in Display health."
                   />
                 </PanelSection>
               ))}
