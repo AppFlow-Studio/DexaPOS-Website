@@ -119,7 +119,7 @@ export function PlanPricingDialog({
       </FormGroup>
 
       <FormGroup title="Station pricing">
-        <FormField id="plan-base" label="Base price" hint="Per month. Covers the included stations.">
+        <FormField id="plan-base" label="Base price" hint="Per month. Covers the included stations." hideHintOnMobile>
           <AffixedNumberInput
             id="plan-base"
             affix="$"
@@ -146,6 +146,7 @@ export function PlanPricingDialog({
           id="plan-extra"
           label="Each extra station"
           hint={`Per month, for every station beyond ${included}.`}
+          hideHintOnMobile
         >
           <AffixedNumberInput
             id="plan-extra"

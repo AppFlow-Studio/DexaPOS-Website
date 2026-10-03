@@ -1,5 +1,7 @@
 'use client'
 
+import { createContext, useContext, useState } from 'react'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -29,7 +31,7 @@ import { cn } from '@/lib/utils'
  * ⚠️ Classes are literal strings in this .tsx on purpose (C7).
  */
 
-/** Changes are forward-only; every editor says so where a phone still shows it. */
+/** Changes are forward-only; the plan and service editors say so from `sm` up. */
 export const FORWARD_ONLY_NOTE =
   'Changes apply to future billing. Invoices already issued keep their prices.'
 
@@ -56,9 +58,13 @@ export function CatalogFormDialog({
   onSubmit: () => void
   children: React.ReactNode
 }) {
+  // The dialog element, so a select inside it can keep its list within the panel.
+  const [panel, setPanel] = useState<HTMLDivElement | null>(null)
+
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent
+        ref={setPanel}
         className={cn(
           'flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:rounded-3xl',
           size === 'sm' && 'sm:max-w-md',
@@ -68,7 +74,8 @@ export function CatalogFormDialog({
       >
         <DialogHeader className="shrink-0 px-6 pb-2 pt-6 text-left">
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {/* Phones drop the subtitle (§13.4); screen readers still get it via aria-describedby. */}
+          <DialogDescription className="max-sm:hidden">{description}</DialogDescription>
         </DialogHeader>
 
         <form
@@ -79,11 +86,11 @@ export function CatalogFormDialog({
           }}
         >
           <div className="thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-4">
-            {children}
+            <CatalogPanelContext.Provider value={panel}>{children}</CatalogPanelContext.Provider>
           </div>
 
           {/* 44px targets on phones (§13.6). Busy is a label, never a spinner (§4.10). */}
-          <DialogFooter className="shrink-0 px-6 pb-6 pt-2">
+          <DialogFooter className="shrink-0 px-6 pb-6 pt-2 sm:justify-center">
             <Button
               type="button"
               variant="outline"
@@ -125,12 +132,15 @@ export function FormField({
   id,
   label,
   hint,
+  hideHintOnMobile = false,
   className,
   children,
 }: {
   id: string
   label: string
   hint?: React.ReactNode
+  /** Drop a descriptive hint below `sm` (§13.4). Leave instructions visible. */
+  hideHintOnMobile?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -138,7 +148,9 @@ export function FormField({
     <div className={cn('min-w-0 space-y-2', className)}>
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && (
+        <p className={cn('text-xs text-muted-foreground', hideHintOnMobile && 'max-sm:hidden')}>{hint}</p>
+      )}
     </div>
   )
 }
@@ -200,6 +212,42 @@ export function MutedSelectTrigger({
   )
 }
 
+const CatalogPanelContext = createContext<HTMLDivElement | null>(null)
+
+/**
+ * A select's list that stays inside the editor panel. The dialog is the
+ * popper's collision boundary, so the list's available height (and whether
+ * it flips above the trigger) is measured against the panel, not the viewport.
+ * Its width matches the trigger; long options truncate rather than widen it.
+ */
+export function CatalogSelectContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectContent>) {
+  const panel = useContext(CatalogPanelContext)
+  return (
+    <SelectContent
+      collisionBoundary={panel}
+      collisionPadding={16}
+      className={cn('w-[var(--radix-select-trigger-width)]', className)}
+      {...props}
+    />
+  )
+}
+
+/** An option whose label truncates to one line inside `CatalogSelectContent`. */
+export function CatalogSelectItem({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectItem>) {
+  return (
+    <SelectItem className={cn('*:[span]:last:min-w-0', className)} {...props}>
+      <span className="min-w-0 truncate">{children}</span>
+    </SelectItem>
+  )
+}
+
 /**
  * Active / Inactive as a word in a select. A switch or checkbox would render
  * its checked state in `--primary`, which is violet inside a dialog portal
@@ -219,10 +267,10 @@ export function StatusSelect({
       <MutedSelectTrigger id={id}>
         <SelectValue />
       </MutedSelectTrigger>
-      <SelectContent>
-        <SelectItem value="active">Active</SelectItem>
-        <SelectItem value="inactive">Inactive</SelectItem>
-      </SelectContent>
+      <CatalogSelectContent>
+        <CatalogSelectItem value="active">Active</CatalogSelectItem>
+        <CatalogSelectItem value="inactive">Inactive</CatalogSelectItem>
+      </CatalogSelectContent>
     </Select>
   )
 }

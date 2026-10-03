@@ -144,7 +144,6 @@ export function CatalogPanelsSkeleton() {
         <PanelSection
           label="Station plan"
           caption={<InlineBar className="w-48" />}
-          showCaptionOnMobile
           action={<Skeleton className="h-9 w-32 rounded-full max-sm:h-11" />}
         >
           <StatRow columns={4}>

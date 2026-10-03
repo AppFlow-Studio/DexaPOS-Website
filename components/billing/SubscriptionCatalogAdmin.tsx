@@ -170,7 +170,7 @@ export function SubscriptionCatalogAdmin() {
       <Panel>
         <PanelSection
           label="Station plan"
-          // The plan's name, code and state say which plan the figures belong to — scope, so it stays on phones.
+          // The plan's name, code and state. Hidden on phones by PanelSection's default (§13.4).
           caption={
             plan ? (
               <>
@@ -179,7 +179,6 @@ export function SubscriptionCatalogAdmin() {
               </>
             ) : undefined
           }
-          showCaptionOnMobile
           action={
             plan && (
               <div className="flex flex-wrap items-center gap-2">

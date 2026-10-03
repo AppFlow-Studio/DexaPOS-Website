@@ -3,14 +3,16 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 
-import { Select, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
 import {
   upsertDeviceBillingServiceMapping,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
 } from '@/app/manage/actions/subscription-billing'
+import { Select, SelectValue } from '@/components/ui/select'
 import {
   CatalogFormDialog,
+  CatalogSelectContent,
+  CatalogSelectItem,
   FormField,
   FormGroup,
   MutedSelectTrigger,
@@ -85,19 +87,20 @@ export function DeviceMappingDialog({
             <MutedSelectTrigger id="mapping-service">
               <SelectValue placeholder={services.length ? 'Choose a service' : 'No services in the catalog'} />
             </MutedSelectTrigger>
-            <SelectContent>
+            {/* The list stays inside the panel and scrolls there (CatalogSelectContent). */}
+            <CatalogSelectContent>
               {orphanedCode && (
-                <SelectItem value={orphanedCode}>
+                <CatalogSelectItem value={orphanedCode}>
                   <span className="font-mono text-xs">{orphanedCode}</span> · not in catalog
-                </SelectItem>
+                </CatalogSelectItem>
               )}
               {services.map((service) => (
-                <SelectItem key={service.id} value={service.service_code}>
+                <CatalogSelectItem key={service.id} value={service.service_code}>
                   {service.display_name}
                   {!service.is_active && ' · Inactive'}
-                </SelectItem>
+                </CatalogSelectItem>
               ))}
-            </SelectContent>
+            </CatalogSelectContent>
           </Select>
         </FormField>
         <FormField id="mapping-status" label="Status">
@@ -107,3 +110,4 @@ export function DeviceMappingDialog({
     </CatalogFormDialog>
   )
 }
+

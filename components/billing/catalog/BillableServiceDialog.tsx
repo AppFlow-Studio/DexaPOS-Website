@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
+import { Select, SelectValue } from '@/components/ui/select'
 import {
   upsertBillableService,
   type BillableServiceRecord,
@@ -12,6 +12,8 @@ import {
 import {
   AffixedNumberInput,
   CatalogFormDialog,
+  CatalogSelectContent,
+  CatalogSelectItem,
   FORWARD_ONLY_NOTE,
   FormField,
   FormGroup,
@@ -142,13 +144,13 @@ export function BillableServiceDialog({
             <MutedSelectTrigger id="service-category">
               <SelectValue />
             </MutedSelectTrigger>
-            <SelectContent>
+            <CatalogSelectContent>
               {Object.entries(SERVICE_CATEGORY_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
+                <CatalogSelectItem key={value} value={value}>
                   {label}
-                </SelectItem>
+                </CatalogSelectItem>
               ))}
-            </SelectContent>
+            </CatalogSelectContent>
           </Select>
         </FormField>
         <FormField id="service-status" label="Status">
@@ -165,13 +167,13 @@ export function BillableServiceDialog({
             <MutedSelectTrigger id="service-model">
               <SelectValue />
             </MutedSelectTrigger>
-            <SelectContent>
+            <CatalogSelectContent>
               {Object.entries(PRICING_MODEL_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
+                <CatalogSelectItem key={value} value={value}>
                   {label}
-                </SelectItem>
+                </CatalogSelectItem>
               ))}
-            </SelectContent>
+            </CatalogSelectContent>
           </Select>
         </FormField>
         <FormField id="service-base" label="Base monthly price">
